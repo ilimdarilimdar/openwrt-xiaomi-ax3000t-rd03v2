@@ -16,8 +16,8 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 113 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 113 insertions(+)
+ ecm_db/ecm_db.c | 123 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 123 insertions(+)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
@@ -34,7 +34,7 @@ index c97f625..0000000 100644
  #include <linux/inet.h>
  #include <linux/in.h>
 
-@@ -469,9 +473,93 @@
+@@ -469,9 +473,103 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -63,25 +63,35 @@ index c97f625..0000000 100644
 + */
 +static void ecm_db_fib_rule_work_fn(struct work_struct *work)
 +{
++	bool ipv4_pending;
++#ifdef ECM_IPV6_ENABLE
++	bool ipv6_pending;
++#endif
++
 +	(void)work;
 +
 +	/*
-+	 * Rule ADD/DEL callbacks run inside the RTNL-protected rule update. ADD is
-+	 * notified before list insertion; DEL is notified before RTNL is released.
-+	 * Wait for the update to commit, but do not hold RTNL during the DB walk.
++	 * Rule ADD/DEL callbacks run inside the RTNL-protected rule update.
++	 * Snapshot and clear pending bits while holding RTNL. Events after the
++	 * unlock set fresh bits and queue a later pass. Do not hold RTNL during
++	 * the ECM database walk.
 +	 */
 +	rtnl_lock();
++	ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
++#ifdef ECM_IPV6_ENABLE
++	ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
++#endif
 +	rtnl_unlock();
 +
-+	if (test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)) {
-+		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
++	if (ipv4_pending) {
++		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\\n");
 +		ecm_front_end_ipv4_stop_temp(1);
 +		ecm_db_connection_defunct_ip_version(4);
 +		ecm_front_end_ipv4_stop_temp(0);
 +	}
 +#ifdef ECM_IPV6_ENABLE
-+	if (test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending)) {
-+		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\n");
++	if (ipv6_pending) {
++		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\\n");
 +		ecm_front_end_ipv6_stop_temp(1);
 +		ecm_db_connection_defunct_ip_version(6);
 +		ecm_front_end_ipv6_stop_temp(0);
@@ -128,7 +138,7 @@ index c97f625..0000000 100644
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
 
-@@ -763,4 +851,18 @@
+@@ -763,4 +861,18 @@
  	}
  #endif
 +
@@ -147,7 +157,7 @@ index c97f625..0000000 100644
 +
  	return ret;
 
-@@ -785,9 +887,20 @@
+@@ -785,9 +897,20 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");
