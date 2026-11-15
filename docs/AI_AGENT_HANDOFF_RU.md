@@ -6,7 +6,8 @@
 **Последнее обновление журнала CI:** 2026-11-15, примерно 07:55 UTC  
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
-**Последний подтверждённый firmware source/config commit:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`  
+**Последний baseline source/config commit до экспериментального ECM notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`  
+**Текущий экспериментальный source delta:** feed overlay patch `9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`; статус NOT TESTED до pinned archive preflight и компиляции.  
 **Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`  
 **Последующие commits:** `4a0a9146086cebd4b8c8471870187c6986ae1de3` и `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7` меняют только CI workflow; `50b15707fedc0354a6ac175352ba21a3f1985f9a`, `0a5ea92c8f80dd2e045954b2e225ea1d7c6b5501`, `16b01367564d62091a3e966b56c8629fd3ff94f0` и `bcfad8813a164a38f59444534cd7f4983d9d345` обновляют CI-документацию; `8039a4795cc66434e17deca5f76d0e9e8a1d4fc8`, `331ce2f8328c900bd777b426e098c2450e2f0c06` и `7b55792f980412afd6678e2539cd78496dbc0940` создали/уточнили handoff и ссылку README. Ни один из этих commits не меняет firmware source, kernel, NSS code patches или WAN config.
 
@@ -93,28 +94,26 @@ GitHub compare от 2026-11-15 подтверждает: `main` находитс
 
 ## 5. Состояние CI при последней подтверждённой проверке
 
-Проверка GitHub Actions обновлена 2026-11-15 около 07:45 UTC.
+Проверка GitHub Actions обновлена 2026-11-15 около 08:15 UTC.
 
 | Workflow | Commit | Последний известный результат |
 |---|---|---|
 | #15 | `c5a64af9a23996401eb22c2a275023c419bbe547` | Static PASS; PREPARE_ONLY PASS; artifact inspected |
 | #16 | `5bcad81cfe911b91f4ac928e53f424e1580ddfd7` | Static PASS; full build step IN PROGRESS |
-| #29 | `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb` | CANCELLED by newer pushes |
-| #34 | `4a0a9146086cebd4b8c8471870187c6986ae1de3` | CANCELLED by subsequent workflow fix |
-| #35 | `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7` | WAITING behind #16 |
+| #43–#46 | разные промежуточные commits | CANCELLED новыми push до завершения |
+| #47 | `004279dcd96056d203045c3dc870548840041ea7` | WAITING behind #16; содержит полный ECM notifier candidate/preflight |
 
 Подробности:
 
-- Артефакт #15: ID `14150612353`, `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547`. Извлечены `defconfig.log`, `config.final.txt`, `diffconfig.txt`, feed logs.
-- В #15 `defconfig.log` подтвердил NSS цикл: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. В том же логе есть Qt5, fwknopd и squeezelite recursive diagnostics. Это реальный результат старой ветки, а не догадка.
-- Проверено, что #15 выполнялся на commit `c5a64af`, где патча `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch` ещё не существовало. Поэтому #15 **не** проверяет устранение NSS цикла патчем 0014.
-- #15 также содержал override warnings для `ATH11K_MEM_PROFILE_256M` и `NSS_MEM_PROFILE_LOW`; в актуальном firmware config эти два выбора уже оставлены upstream-фрагменту `256m.config`, локально остаётся отдельный `ATH11K_NSS_MEM_PROFILE_256M`.
-- В #16 checkout, runner resource check и генерация временного CI signing key завершились успешно. Job `Build and run verify-v2` всё ещё `in_progress`; лог недоступен до завершения, артефактов пока нет. Не объявлять сборку зависшей только из-за длительности: timeout настроен на 360 минут.
-- #29 был отменён новыми push до получения подтверждённого артефакта актуального PREPARE_ONLY.
-- В workflow найден и исправлен статический path typo: раньше проверка ссылалась на несуществующий `0014-luci-app-nss-use-ipq50xx-runtime.patch`; теперь путь совпадает с реальным именем `0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`. Исправление — commit `472ed0c`.
-- Patch 0014 вручную проверен против файла `package/nss/luci-app-nss/Makefile` из upstream commit `c36db6321c11595dc45a160cdab36b5c2d787744`: его Git blob SHA `c7ac95edeb9c5147b9728573af9760d4b038d2f1` совпадает с индексом `c7ac95e` в patch; `git apply --check` PASS, применение без fuzz, итоговая зависимость `+luci-base +nss-tools-dwmac`. Это подтверждает применимость контекста, но не заменяет PREPARE_ONLY/Kconfig-проверку.
-- Добавлен `paths-ignore` для Markdown и `docs/**` на push и pull_request. Смешанные изменения документации вместе с кодом всё равно запускают CI. Это должно прекратить расходование сериализованного слота на одни только README/мануалы.
-- Workflow #35 на commit #472ed0c ожидает окончания #16; следующий запуск должен проверить исправленный static check и выполнить актуальный PREPARE_ONLY. Последующие документационные изменения не меняют firmware code.
+- Артефакт #15: ID `14150612353`, `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547`. Он подтвердил прежний NSS Kconfig цикл `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. Коммит #15 предшествует патчу 0014, поэтому не проверяет устранение цикла.
+- В #16 checkout, runner resource check и временная CI-подпись прошли. `Build and run verify-v2` продолжает выполняться; лог/артефакты не доступны до завершения. Тайм-аут — 360 минут. Не отменять этот запуск лишь из-за длительности.
+- #43–#46 были отменены последовательными push, прежде чем успели завершить текущий PREPARE_ONLY. Их `cancelled` — не ошибка компиляции.
+- Последняя запись очереди #47 относится к commit `004279d`; она ожидает окончания #16. Этот run наследует текущий branch tree, включая candidate patch 9002, preflight script, workflow step и `verify-v2` marker gate.
+- Исправлен статический путь к patch 0014; docs-only Markdown изменения исключены через `paths-ignore`. Смешанные source/config/docs изменения продолжают запускать CI.
+- Ручная проверка patch 0014 против точного upstream `Makefile` прошла: Git blob SHA `c7ac95edeb9c5147b9728573af9760d4b038d2f1` совпадает с индексом patch, `git apply --check` PASS. Kconfig effect ещё требует свежего PREPARE_ONLY.
+- В feed overlay добавлен экспериментальный ECM notifier patch 9002. Он использует v2 `*_stop_temp()` counters, выполняет defunct в workqueue, снимает FIB notifier и дожидается `cancel_work_sync()` до завершения DB. Patch пока **не подтверждён на pinned archive, не скомпилирован и не испытан на железе**.
+- PREPARE_ONLY теперь вызывает `tools/test-ecm-fib-rule-patch.sh`: скрипт получает archive fields из pinned feed Makefile, скачивает QSDK archive, сверяет PKG_HASH, применяет patch в throwaway source и проверяет события, worker и teardown.
+- `verify-v2.sh` проверяет marker регистрации notifier непосредственно внутри `ecm.ko`, извлечённого из root squashfs sysupgrade image. Также ECM patch fingerprints ищутся по всему исходному дереву, а не только в `frontends`.
 - CI full-build использует disposable key и `example.invalid`, поэтому не является пользовательским образом. Аппаратной валидации нашей Dual-WAN-ветки нет.
 
 Ссылки:
@@ -122,10 +121,9 @@ GitHub compare от 2026-11-15 подтверждает: `main` находитс
 - [Actions workflow](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/workflows/rd03v2-validation.yml)
 - [Run #15 — PREPARE_ONLY artifact](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686096014)
 - [Run #16 — full build](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656)
-- [Run #35 — corrected workflow](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43690850704)
+- [Run #47 — current ECM preflight / PREPARE_ONLY queue entry](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43692560000)
 
-**Первое действие следующего агента:** проверить окончание #16, затем run #35. Скачать PREPARE_ONLY artifact #35 и убедиться, что NSS recursive cycle исчез, а оставшиеся warnings объяснены. Не начинать вторую полную сборку и не трогать основной роутер.
-
+**Первое действие следующего агента:** дождаться завершения #16; затем изучить #47. Если PREPARE_ONLY и hash/apply preflight завершились PASS, открыть artifact, проверить исчезновение NSS Kconfig цикла, затем выполнить отдельную компиляцию `qca-nss-ecm` и проверить marker в итоговом `ecm.ko`. Не включать установку на основной роутер в этот этап.
 ## 6. Подпись, CI и безопасность артефактов
 
 Полная CI-сборка намеренно не использует постоянный пользовательский ключ:
@@ -278,7 +276,12 @@ CI-образ на temporary key/`example.invalid` годится как док�
 - Эти документационные commits меняют только документацию; firmware source state на момент аудита оставался `f5e828f`.
 - Patch 0014: ручная проверка `git apply --check` против точного upstream Makefile из `c36db6321c` завершилась PASS без fuzz; Kconfig-результат пока NOT TESTED.
 - Обновлён `docs/CI_BUILD.md` с фактической проверкой применимости patch 0014 (commit `16b0136`).
-- Следующий шаг: проверить окончание #16 и run #35; получить свежий PREPARE_ONLY artifact после patch 0014; доказать исчезновение NSS цикла и классифицировать оставшиеся Kconfig diagnostics.
+- Создан кандидат ECM patch 9002 в `feed-overlay/nss/qca-nss-ecm/patches/`; он использует v2 temporary frontend stop helpers и deferred worker. Статус: NOT TESTED до pinned archive preflight и compile.
+- Создан `tools/test-ecm-fib-rule-patch.sh`: проверяет PKG_HASH, `git apply --check`/apply и assertions for callback/worker/teardown. Workflow PREPARE_ONLY вызывает этот script.
+- `verify-v2.sh` проверяет runtime notifier marker внутри `ecm.ko` в финальном sysupgrade rootfs; ECM patch fingerprints проверяются по всему source tree.
+- CI snapshot: #16 ещё IN PROGRESS; #43–#46 отменены новыми push; #47 (`004279d`) ожидает #16 и содержит candidate/preflight chain.
+- Обновлены `docs/ecm-policy-routing-port.md`, `docs/CI_BUILD.md`, `docs/DEVELOPMENT_MANUAL_RU.md` и этот handoff.
+- Следующий шаг: завершить #16, затем #47; получить свежий PREPARE_ONLY + source patch preflight; доказать исчезновение NSS cycle, проверить patch 9002 на точном QSDK archive, затем отдельно собрать `qca-nss-ecm`.
 
 
 
