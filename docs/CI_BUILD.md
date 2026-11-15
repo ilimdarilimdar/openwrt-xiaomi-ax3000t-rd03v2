@@ -66,7 +66,7 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
-## Current validation snapshot — 2026-11-15
+## Historical validation snapshot — 2026-11-15
 _Last live GitHub Actions check: 2026-11-15._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
@@ -104,3 +104,35 @@ _Last live GitHub Actions check: 2026-11-15._
 6. Do not flash the primary router. CI full-build uses a disposable signing key and `example.invalid`; it uploads logs only and never publishes a usable release image.
 
 Hardware validation remains **NOT TESTED**. A successful source preflight, build or `verify-v2.sh` is not a hardware stability claim.
+
+## Current validation snapshot — 2026-11-16
+
+Live status for branch `work/rd03v2-dualwan-mwan3-baseline`, code/test
+HEAD `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`:
+
+- **Static checks: PASS** — repository ancestry/whitespace, shell syntax,
+  Python tools, signing-key helper, RD03v2 config/manifest and private-key guard.
+- **PREPARE_ONLY: PASS** — pinned sources/feeds, defconfig and exact QSDK
+  source preflight.
+- **ECM preflight: PASS** — the SHA-256-checked QSDK source accepts patch 9002
+  with the real `patch -f -p1` operation, both on the pristine source and after
+  the complete sorted queue of 32 ECM feed patches. Lifecycle ordering,
+  worker drain and atomic callback guards pass.
+- PREPARE_ONLY artifact `14181217573` confirms the RD03v2
+  `qualcommax/ipq50xx` target and expected mwan3/NSS package selections.
+  Three unrelated Kconfig recursive-dependency diagnostics remain for
+  Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three packages are
+  unset in final `.config`. The selected NSS cycle is absent after patch 0014.
+- The userspace `conntrack` CLI is not selected; selective mark-aware cleanup
+  is not implemented.
+- **Full build / verify-v2: IN PROGRESS** in
+  [run #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141).
+  The actual `qca-nss-ecm` C compilation, built `ecm.ko` marker, image
+  generation and final `verify-v2` result remain **NOT CONFIRMED**.
+- CI uses a temporary P-256 key and `example.invalid`, and uploads
+  logs/configuration only. CI artifacts are not user-installable releases.
+- Dual-WAN/NSS hardware validation remains **NOT TESTED**; the primary home
+  router remains on stock MiWiFi.
+
+Report these stages separately. PREPARE_ONLY and a successful patch preflight
+are not a full firmware build, final image verification or hardware test.
