@@ -310,14 +310,12 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
 --- a/frontends/include/ecm_front_end_ipv4.h
 +++ b/frontends/include/ecm_front_end_ipv4.h
-+++ b/frontends/include/ecm_front_end_ipv4.h
 @@ -19,3 +19,2 @@
  extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
 -extern atomic_t ecm_front_end_ipv4_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
  
 diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_front_end_ipv6.h
 --- a/frontends/include/ecm_front_end_ipv6.h
-+++ b/frontends/include/ecm_front_end_ipv6.h
 +++ b/frontends/include/ecm_front_end_ipv6.h
 @@ -19,3 +19,2 @@
  extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */

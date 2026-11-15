@@ -118,6 +118,83 @@ PY
 [[ -s "$MAKEFILE" ]] || die "prepared qca-nss-ecm Makefile not found: $MAKEFILE"
 [[ -s "$PATCH_FILE" ]] || die "feed overlay patch not found: $PATCH_FILE"
 
+# Validate patch envelope and every unified-diff hunk before downloading/applying source.
+python3 - "$PATCH_FILE" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text().splitlines()
+diff_starts = [i for i, line in enumerate(lines) if line.startswith("diff --git ")]
+if not diff_starts:
+    sys.exit("FAIL: patch contains no diff --git sections")
+if len(diff_starts) != 9:
+    sys.exit(f"FAIL: expected 9 file sections, found {len(diff_starts)}")
+
+hunk_re = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: .*)?$")
+checked_hunks = 0
+
+for n, start in enumerate(diff_starts):
+    end = diff_starts[n + 1] if n + 1 < len(diff_starts) else len(lines)
+    section = lines[start:end]
+    match = re.fullmatch(r"diff --git a/(.+) b/(.+)", section[0])
+    if not match or match.group(1) != match.group(2):
+        sys.exit(f"FAIL: malformed diff --git paths at line {start + 1}")
+    relpath = match.group(1)
+    first_hunk = next((i for i, line in enumerate(section) if line.startswith("@@ ")), -1)
+    if first_hunk < 0:
+        sys.exit(f"FAIL: no hunks for {relpath}")
+    metadata = section[1:first_hunk]
+    old_headers = [line for line in metadata if line.startswith("--- ")]
+    new_headers = [line for line in metadata if line.startswith("+++ ")]
+    if len(old_headers) != 1 or len(new_headers) != 1:
+        sys.exit(f"FAIL: {relpath} must have exactly one --- and one +++ header")
+    if old_headers[0] != f"--- a/{relpath}" or new_headers[0] != f"+++ b/{relpath}":
+        sys.exit(f"FAIL: file header paths do not match diff --git for {relpath}")
+    for line in metadata:
+        if line.startswith(("--- ", "+++ ", "index ")):
+            continue
+        sys.exit(f"FAIL: unexpected metadata line in {relpath}: {line!r}")
+
+    i = first_hunk
+    while i < len(section):
+        header = section[i]
+        hm = hunk_re.fullmatch(header)
+        if not hm:
+            sys.exit(f"FAIL: unexpected line outside a hunk in {relpath}: {header!r}")
+        old_expected = int(hm.group(2) or "1")
+        new_expected = int(hm.group(4) or "1")
+        old_seen = new_seen = 0
+        i += 1
+        while old_seen < old_expected or new_seen < new_expected:
+            if i >= len(section):
+                sys.exit(f"FAIL: truncated hunk in {relpath}: {header}")
+            line = section[i]
+            if line.startswith(" "):
+                old_seen += 1
+                new_seen += 1
+            elif line.startswith("-"):
+                old_seen += 1
+            elif line.startswith("+"):
+                new_seen += 1
+            elif line == r"\ No newline at end of file":
+                pass
+            else:
+                sys.exit(f"FAIL: unmarked/empty line in {relpath} hunk at local line {i + 1}: {line!r}")
+            if old_seen > old_expected or new_seen > new_expected:
+                sys.exit(f"FAIL: hunk exceeds declared line counts in {relpath}: {header}")
+            i += 1
+        while i < len(section) and section[i] == r"\ No newline at end of file":
+            i += 1
+        checked_hunks += 1
+
+print(f"PASS: patch envelope has {len(diff_starts)} unique file sections")
+print(f"PASS: {checked_hunks} unified-diff hunks have valid headers and exact line counts")
+PY
+
+echo "PASS: patch structure is valid before source preflight"
+
 get_make_var() {
   local name=$1
   local value
