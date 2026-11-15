@@ -324,3 +324,13 @@ CI-образ на temporary key/`example.invalid` годится как док�
 
 
 **Примечание к документационным обновлениям:** этот файл намеренно является живой записью. Любой следующий агент должен сохранять исторические SHA как контрольные точки, но всегда запрашивать актуальные refs и CI state из GitHub. Последующий сдвиг branch HEAD от обновления этого же файла — ожидаемый docs-only commit, не доказательство изменения firmware code.
+
+### 2026-11-15 — дополнительная проверка upstream FIB notifier API (Linux 6.18)
+
+- Повторно сверены первоисточники Linux v6.18: `net/core/fib_notifier.c`, `kernel/notifier.c`, `net/core/fib_rules.c`, `net/ipv4/fib_notifier.c` и `net/ipv6/fib6_notifier.c`.
+- Подтверждено: FIB notifier использует `atomic_notifier_call_chain()`; callback обязан быть неблокирующим. В patch 9002 callback только устанавливает pending bit и вызывает `schedule_work()`, что соответствует atomic-context контракту.
+- Подтверждено: изменения fib rules отправляются через путь с `ASSERT_RTNL_NET(net)`. Worker берёт RTNL только для snapshot/очистки pending bits и освобождает его до обхода ECM DB; по исходникам это согласуется с порядком завершения rule update.
+- Подтверждено: `unregister_fib_notifier()` в итоге вызывает `atomic_notifier_chain_unregister()`, а та выполняет `synchronize_rcu()`; последующий `cancel_work_sync()` дожидается завершения отложенной работы. Это подтверждает ожидаемую синхронизацию callback/work при teardown на Linux v6.18.
+- **Нюанс, который надо тестировать:** `register_fib_notifier()` сначала вызывает initial FIB dump. IPv4/IPv6 dump включает существующие policy rules как `FIB_EVENT_RULE_ADD`; текущий callback patch 9002 не отличает initial dump от реального изменения и поэтому может поставить один общий defunct pass при инициализации ECM. Вероятно, это безвредно при обычной загрузке до появления accelerated flows, но следует проверить порядок и побочные эффекты при старте/перезагрузке ECM; не объявлять это дефектом без теста.
+- Статус: **source/API review PASS для изученных контрактов; compile/runtime/hardware остаются NOT TESTED**. Проверка основана на upstream Linux v6.18, но не заменяет сборку точного pinned QSDK ECM source и аппаратный тест.
+- Источники: https://github.com/torvalds/linux/blob/v6.18/net/core/fib_notifier.c ; https://github.com/torvalds/linux/blob/v6.18/kernel/notifier.c ; https://github.com/torvalds/linux/blob/v6.18/net/core/fib_rules.c ; https://github.com/torvalds/linux/blob/v6.18/net/ipv4/fib_notifier.c ; https://github.com/torvalds/linux/blob/v6.18/net/ipv6/fib6_notifier.c .
