@@ -10,7 +10,9 @@ The FIB notifier callback is atomic, so it only sets a pending family bit and
 queues work. The worker uses the v2 temporary frontend stop API around the
 existing process-context connection defunct routine. The pinned QSDK source
 implements that API as a plain 0/1 assignment, so this patch makes it a
-reference-counted atomic gate before adding another concurrent caller. Teardown unregisters the
+reference-counted atomic gate. After closing the gates, the worker calls
+`synchronize_net()` to wait for pre-existing Netfilter hook readers before
+walking the ECM database. Teardown unregisters the
 notifier and drains the worker before the database is freed.
 
 This is a broad invalidation: existing accelerated flows may briefly return to
@@ -18,7 +20,7 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 140 ++++++++++++++++++++++++++++++
+ ecm_db/ecm_db.c | 154 +++++++++++++++++++++++++++++++++++
  ecm_db/ecm_db.h | 1 +
  ecm_init.c | 4 ++++
  frontends/cmn/ecm_ipv4.c | 6 +++---
@@ -27,7 +29,7 @@ conntrack/NAT sessions across a public-WAN change.
  frontends/ecm_front_end_ipv6.c | 8 ++++++--
  frontends/include/ecm_front_end_ipv4.h | 4 +++-
  frontends/include/ecm_front_end_ipv6.h | 4 +++-
- 9 files changed, 169 insertions(+), 12 deletions(-)
+ 9 files changed, 183 insertions(+), 12 deletions(-)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
@@ -41,6 +43,7 @@ index c97f625..0000000 100644
 +#include <linux/bitops.h>
 +#include <linux/workqueue.h>
 +#include <linux/rtnetlink.h>
++#include <linux/netdevice.h>
  #include <linux/inet.h>
  #include <linux/in.h>
 @@ -469,9 +473,123 @@
@@ -73,6 +76,7 @@ index c97f625..0000000 100644
 +static void ecm_db_fib_rule_work_fn(struct work_struct *work)
 +{
 +	bool ipv4_pending;
++	bool any_pending;
 +#ifdef ECM_IPV6_ENABLE
 +	bool ipv6_pending;
 +#endif
@@ -83,7 +87,7 @@ index c97f625..0000000 100644
 +	 * Rule ADD/DEL callbacks run inside init_net's per-net RTNL update.
 +	 * Snapshot and clear pending bits while holding RTNL. Events after the
 +	 * unlock set fresh bits and queue a later pass. Do not hold RTNL during
-+	 * the ECM database walk.
++	 * the ECM database walk or network grace period.
 +	 */
 +	rtnl_net_lock(&init_net);
 +	ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
@@ -92,16 +96,41 @@ index c97f625..0000000 100644
 +#endif
 +	rtnl_net_unlock(&init_net);
 +
++	any_pending = ipv4_pending;
++#ifdef ECM_IPV6_ENABLE
++	any_pending |= ipv6_pending;
++#endif
++
++	/*
++	 * Close every affected frontend before waiting, so new Netfilter hooks
++	 * cannot start ECM processing while pre-existing hooks are draining.
++	 */
++	if (ipv4_pending) {
++		ecm_front_end_ipv4_stop_temp(1);
++	}
++#ifdef ECM_IPV6_ENABLE
++	if (ipv6_pending) {
++		ecm_front_end_ipv6_stop_temp(1);
++	}
++#endif
++
++	/*
++	 * nf_hook() holds rcu_read_lock() across the complete hook chain.
++	 * synchronize_net() waits for those pre-existing readers to finish.
++	 * We dropped init_net's RTNL lock above, so this wait is sleepable.
++	 */
++	if (any_pending) {
++		synchronize_net();
++	}
++
 +	if (ipv4_pending) {
 +		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
-+		ecm_front_end_ipv4_stop_temp(1);
 +		ecm_db_connection_defunct_ip_version(4);
 +		ecm_front_end_ipv4_stop_temp(0);
 +	}
 +#ifdef ECM_IPV6_ENABLE
 +	if (ipv6_pending) {
 +		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\n");
-+		ecm_front_end_ipv6_stop_temp(1);
 +		ecm_db_connection_defunct_ip_version(6);
 +		ecm_front_end_ipv6_stop_temp(0);
 +	}
