@@ -5,6 +5,14 @@ QCN6122 5 GHz radio, 256 MB RAM and 128 MB NAND. It installs permanently on NAND
 supports all four Ethernet ports, both Wi-Fi bands, the status LED, the NFC tag and LuCI,
 with Qualcomm NSS hardware offload for routing and Wi-Fi.
 
+## AI authorship and project transparency
+
+This fork is developed with AI assistance (ChatGPT/Codex). **All project-specific materials added for this fork—including code changes, configuration, build and test scripts, patch proposals, technical analyses, descriptions, and manuals—are created with AI assistance.** The repository owner defines the goals, directs the work, and is responsible for reviewing and deciding which changes are accepted, tested, merged, or installed.
+
+**Upstream attribution:** this repository is a fork of the ADCDS project. The inherited upstream OpenWrt/NSS code, device support, drivers, third-party packages, and contributions remain the work of their original authors. They are not claimed as AI-generated. Original copyright notices, author credits, and licenses remain in force.
+
+AI-generated output is not presumed correct. Unless a change is explicitly marked as compiled and hardware-tested, treat it as unverified. Test status must be reported honestly (PASS, FAIL, NOT TESTED, or INCONCLUSIVE).
+
 **RD03v2 only.** The MediaTek RD03/RD23 revisions use different hardware and incompatible
 firmware. Check your hardware revision before flashing.
 
