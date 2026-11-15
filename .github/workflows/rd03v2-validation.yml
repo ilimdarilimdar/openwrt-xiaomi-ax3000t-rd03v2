@@ -67,7 +67,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          patch=tree-patches/0014-luci-app-nss-use-ipq50xx-runtime.patch
+          patch=tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch
           test -s "$patch"
           grep -qxF '+LUCI_DEPENDS:=+luci-base +nss-tools-dwmac' "$patch"
           if grep -q '^+.*+!TARGET_qualcommax_ipq50xx:nss-tools' "$patch"; then
