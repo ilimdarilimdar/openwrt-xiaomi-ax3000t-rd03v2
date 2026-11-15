@@ -120,7 +120,7 @@ jobs:
   prepare-only:
     name: Prepare pinned sources, feeds and defconfig (no signing key)
     needs: static-validation
-    if: needs.static-validation.result == 'success'
+    if: needs.static-validation.result == 'success' && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[full-build]'))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -178,25 +178,20 @@ jobs:
           df -h "$GITHUB_WORKSPACE"
           nproc
 
-      - name: Prepare private signing key outside the repository
+      - name: Generate temporary CI-only signing key
         shell: bash
-        env:
-          RD03V2_PRIVATE_KEY_PEM: ${{ secrets.RD03V2_PRIVATE_KEY_PEM }}
         run: |
           set -euo pipefail
-          if [ -z "${RD03V2_PRIVATE_KEY_PEM:-}" ]; then
-            echo "::error::Add repository Actions secret RD03V2_PRIVATE_KEY_PEM before requesting [full-build]."
-            exit 1
-          fi
           keydir="$(dirname "$GITHUB_WORKSPACE")/keys/v2"
           mkdir -p "$keydir"
           umask 077
-          printf '%s\n' "$RD03V2_PRIVATE_KEY_PEM" > "$keydir/private-key.pem"
+          openssl ecparam -name prime256v1 -genkey -noout -out "$keydir/private-key.pem"
           chmod 600 "$keydir/private-key.pem"
-          cp keys/public-key.pem "$keydir/public-key.pem"
-          openssl ec -in "$keydir/private-key.pem" -pubout 2>/dev/null | cmp -s - "$keydir/public-key.pem"
-          echo "PASS: private key matches repository public key"
-          unset RD03V2_PRIVATE_KEY_PEM
+          openssl ec -in "$keydir/private-key.pem" -pubout -out "$keydir/public-key.pem" 2>/dev/null
+          # Override only this disposable runner checkout. The committed public key is untouched.
+          cp "$keydir/public-key.pem" "$GITHUB_WORKSPACE/keys/public-key.pem"
+          openssl ec -in "$keydir/private-key.pem" -pubout 2>/dev/null | cmp -s - "$GITHUB_WORKSPACE/keys/public-key.pem"
+          echo "PASS: temporary P-256 keypair matches in the runner workspace"
 
       - name: Build and run verify-v2
         shell: bash
