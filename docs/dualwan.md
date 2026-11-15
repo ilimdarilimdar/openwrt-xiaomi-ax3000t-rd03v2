@@ -18,18 +18,22 @@ firmware. The image has not been built or tested on hardware from this branch.
   the pinned-source preflight. CI runs #96-#101 all failed before raw apply or
   during patch structure/context validation. No full ECM build has run.
 - Workflow [#100](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43727888918)
-  passed static checks and PREPARE_ONLY source/config preparation, but its ECM
+  passed static checks and PREPARE_ONLY source/config preparation, but ECM
   preflight failed in the local unified-diff validator: the IPv4 helper hunk's
   declared counts did not cover all context lines.
 - Workflow [#101](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728125583)
   passed static checks and PREPARE_ONLY preparation, then failed at the same
-  structural check. It tests the older 5b709d0 patch revision.
-- Commits `e1a6818` and `3637215` adjusted deletion-hunk sizes, added a guard
-  that temporary-stop counters have one source owner, and added the final
-  IPv6-lock context. Commit `552f134` then corrected the last IPv6 common-lock
-  hunk size. Workflow [#103](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728459690)
-  tests the 3637215 revision; [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
-  is queued for the latest 552f134 revision.
+  structural check. It tested the older 5b709d0 patch revision.
+- Commit `e1a6818` corrected IPv4/IPv6 deletion-hunk sizes and added a
+  single-owner guard for temporary-stop counters. Commit `3637215` added the
+  final IPv6 common-lock context, but workflow
+  [#103](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728459690)
+  failed its structural validator: the IPv6 common-lock hunk was truncated
+  because its declared count was one context line too large.
+- Commit `552f134` corrected that final IPv6 common-lock hunk size. Workflow
+  [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
+  is testing this latest patch revision (Static PASS; PREPARE_ONLY source/config
+  preparation still running at last check).
 - Do not treat structural diff validation as proof of source compatibility.
   The gate is raw apply to the pinned archive **and** the full pinned ECM feed
   patch series, followed by compilation and hardware validation.
