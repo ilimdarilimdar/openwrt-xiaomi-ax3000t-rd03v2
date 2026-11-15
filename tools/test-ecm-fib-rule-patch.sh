@@ -78,7 +78,7 @@ grep -qF 'rtnl_net_lock(&init_net);' "$ECM_DB" ||
   die "worker does not wait for the RTNL-protected rule update to finish"
 grep -qF 'rtnl_net_unlock(&init_net);' "$ECM_DB" ||
   die "worker does not release RTNL before walking the ECM database"
-grep -qF 'Rule ADD/DEL callbacks run inside init_net\'s per-net RTNL update.' "$ECM_DB" ||
+grep -qF "Rule ADD/DEL callbacks run inside init_net's per-net RTNL update." "$ECM_DB" ||
   die "RTNL barrier rationale is missing"
 
 python3 - "$ECM_DB" <<'PY'
