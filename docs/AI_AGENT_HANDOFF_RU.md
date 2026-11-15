@@ -2,11 +2,11 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-16, после запуска CI #124.
+**Последняя сверка:** 2026-11-16, после прохождения PREPARE_ONLY и старта full build в CI #124.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 **Текущий code/test HEAD:** `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10` (test-only commit с full-build trigger).
 **Текущая ревизия ECM patch 9002:** commit `c875a7f71c28209118f5668ae823d78e4e1433d5`; hunk `ecm_exit()` расширен до восьми строк контекста, escape-последовательности совпадают с pinned QSDK source.
-**Последний подтверждённый результат:** CI #123 Static и PREPARE_ONLY PASS; raw QSDK apply PASS; вся очередь из 32 ECM-патчей PASS; lifecycle и atomic-callback guards PASS, включая точный порядок FIB worker drain перед conntrack/frontend teardown. CI #124: Static PASS; PREPARE_ONLY выполняется; full-build условно активируется после его PASS.
+**Последний подтверждённый результат:** CI #123 Static/PREPARE_ONLY и все ECM preflight/lifecycle guards PASS. CI #124: Static PASS, PREPARE_ONLY PASS, raw QSDK apply PASS, полная очередь 32 ECM-патчей и lifecycle guards PASS; отдельный Full signed-image build and verify-v2 job выполняется.
 
 ## Текущая контрольная точка
 
@@ -30,8 +30,10 @@
 - [#122](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762283467), HEAD `693e8f5`: Static **PASS**, PREPARE_ONLY preparation **PASS**, raw QSDK patch 9002 **PASS**, full sorted ECM queue of 32 patches **PASS**; lifecycle guard **FAIL**: FIB worker stop was still not placed before normal frontend shutdown. Full build skipped.
 - Исправление в commit `c875a7f71c28209118f5668ae823d78e4e1433d5`: hunk расширен до восьми исходных строк вокруг `ecm_exit()`; в DEBUG_INFO contexts оставлен один обратный слеш перед `n`, как в QSDK source. Это исключает зависимость от полностью проигнорированного контекста при GNU patch fuzz до 2. Требуется подтвердить CI.
 - [#123](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762558933), HEAD `c875a7f`: Static **PASS**, PREPARE_ONLY preparation **PASS**, raw QSDK patch 9002 **PASS**, полная очередь 32 ECM-патчей **PASS**; FIB notifier init/unwind/normal-exit ordering **PASS**; worker drain перед frontend teardown **PASS**; atomic-callback guards **PASS**. Это подтверждает применение и source-level lifecycle guards, но не C-компиляцию ECM.
-- [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), HEAD `bb3d25b`: Static checks **PASS**, включая новую проверку, что FIB worker drain стоит непосредственно перед conntrack notifier shutdown. PREPARE_ONLY выполняется; commit message содержит `[full-build]`, поэтому full build/verify-v2 будет запущен workflow только после успешного PREPARE_ONLY.
+- [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), HEAD `bb3d25b`: Static **PASS** и PREPARE_ONLY **PASS**, включая raw QSDK 9002 apply, все 32 ECM patches и lifecycle guards. Full signed-image build job **IN PROGRESS**, step `Build and run verify-v2` выполняется. Build logs появятся после завершения job; C-компиляция ECM и конечный verifier пока **NOT CONFIRMED**.
 - Preflight воспроизводит pinned `scripts/patch-kernel.sh`: `${PATCH:-patch} -f -p1` отдельно к чистому QSDK archive и последовательно после всей сортированной очереди ECM feed patches. Оба пути и все lifecycle guards прошли в #123.
+- История full-build [#16](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656): image generation и package assembly завершились; старый `verify-v2` показал 6 отказов. Artifact logs установили причины: watchdog harness остановился с `qemu-aarch64 is needed`; migration host-shell прогнал 8 тестов PASS, а target BusyBox прогнал 8 ERROR из-за отсутствующего `qemu-aarch64`; 4 DTB checks не нашли `fdtget`. Это ошибки host verification environment, не компиляции ECM и не утверждение о неверном поведении функций.
+- В текущем workflow #124 шаг `Install image verification host tools` завершён PASS; workflow YAML устанавливает `qemu-user` и `device-tree-compiler` до `./build.sh`. Это закрывает конкретные зависимости из #16. Нужно дождаться фактического `verify-v2` #124; не считать эти исправления уже проверенным PASS.
 - Kconfig продолжает выводить три unrelated recursive-dependency diagnostics (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); `defconfig` завершается, эти пакеты не выбраны. Это не причина отказа 9002.
 - Полная C-компиляция ECM, marker в собранном `ecm.ko`, image generation, `verify-v2`, загрузка модуля и Dual-WAN/NSS hardware tests пока **NOT TESTED**. Главный домашний роутер остаётся на штатной MiWiFi.
 
@@ -52,7 +54,7 @@
 
 ### Next actions
 
-1. Получить результат [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141). Сначала проверить PASS PREPARE_ONLY и повторного ECM preflight, затем дождаться отдельного full-build/verify-v2 job.
+1. Дождаться завершения [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), затем скачать build-log artifact и проверить package logs именно для `qca-nss-ecm`, конечный образ и каждую строку `verify-v2.sh`. Отдельно убедиться, что новые `qemu-user`/`device-tree-compiler` host dependencies дали PASS.
 2. Во время full build проверить компиляцию именно `qca-nss-ecm`, notifier marker в собранном `ecm.ko`, kernel config, rootfs/image manifest и полный итог `verify-v2.sh`. CI images не публикуются и не предназначены для прошивки.
 3. Не считать PREPARE_ONLY или Static checks сборкой прошивки. Не выпускать и не прошивать образ до отдельного контроля target/profile, package manifest, kernel/module versions, hashes, signing и recovery.
 4. Только после успешной сборки подготовить отдельное второе RD03v2 и recovery-метод. Проверять module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, conntrack marks, NSS/ECM counters, throughput, CPU, latency и packet loss.
