@@ -27,40 +27,47 @@
 
 | Этап | Результат |
 |---|---|
-| Статические проверки workflow #100, commit `5b709d0` | **PASS** |
-| PREPARE_ONLY workflow #99, commit `b85c511` | Подготовка sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
-| PREPARE_ONLY workflow #100, commit `5b709d0` | **IN PROGRESS**; preflight ещё не запущен |
-| Raw apply ECM patch 9002 к чистому pinned QSDK, workflow #96–#99 | **FAIL** |
-| ECM patch 9002 в workflow #100 | **NOT CONFIRMED** |
-| Диагностический workflow #101, commit `55171b1` | **QUEUED** за workflow #100 |
+| Статические проверки workflow #103, commit `3637215` | **PASS** |
+| PREPARE_ONLY workflow #100, commit `5b709d0` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
+| PREPARE_ONLY workflow #101, commit `55171b1` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
+| ECM structural preflight #100/#101 | **FAIL**: body IPv4 deletion hunk содержал больше строк, чем объявлял заголовок |
+| Workflow #102, commit `e1a6818` | **CANCELLED** |
+| Workflow #103, commit `3637215` | Static **PASS**; PREPARE_ONLY выполняется |
+| Workflow #104, commit `552f134` | **PENDING**; тестирует последнюю правку размера IPv6 common-lock hunk |
 | Полная компиляция ECM/NSS и образ | **NOT STARTED** |
 | `verify-v2.sh` для этой ветки | **NOT TESTED** |
 | Испытание на RD03v2 | **NOT TESTED** |
 | Испытание Dual-WAN/NSS | **NOT TESTED** |
-| ECM FIB-rule notifier для v2 | Кандидатный patch 9002 написан; применимость к pinned QSDK пока не подтверждена |
-| Статический тест signing-key resume и NSS dependency guard | **PASS** в workflow #100 |
+| ECM FIB-rule notifier для v2 | Кандидатный patch 9002; raw apply и полный pinned feed-series preflight ещё не подтверждены |
 
 ### Что известно о блокировке ECM
 
 Закреплённый QSDK 14.0 source archive загружается с ожидаемым SHA-256
 `a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`.
-Структурная проверка подтверждает корректные заголовки и количества строк
-19 unified-diff hunks, но это не доказывает, что patch применяется к исходникам.
+Проблема пока не в загрузке исходников и не в статической конфигурации:
+workflow #100 и #101 прошли подготовку pinned sources/feeds/defconfig, а
+статические проверки всех перечисленных запусков завершились успешно.
 
-Workflow #96–#99 дошли до ECM preflight и завершились ошибками применения
-patch 9002 к чистому исходнику. В частности, затрагивались
-`frontends/ecm_front_end_ipv4.c`,
-`frontends/ecm_front_end_ipv6.c` и
-`frontends/cmn/ecm_ipv6.c`. Workflow #99 подтвердил, что одной коррекции
-координат hunk недостаточно. Коммит `5b709d0` добавил контекстные строки
-в hunks и проходит статические проверки; его raw-source preflight пока
-ожидает завершения workflow #100. Коммит `55171b1` добавил byte-exact
-вывод source/patch и verbose `git apply` на случай повторного отказа.
+В #100 и #101 локальный структурный валидатор остановился на IPv4 frontend
+deletion hunk: после объявленного количества строк оставалась строка
+контекста `ecm_front_end_ipv4_init()`. Это ошибка самого unified diff,
+не доказательство ошибки C-функциональности. Commit `e1a6818` скорректировал
+размеры двух IPv4/IPv6 deletion hunks и добавил проверку, что временный
+stop-counter имеет ровно одного владельца в исходниках ECM. Commit
+`3637215` добавил последний контекст IPv6 common-lock hunk. Его заголовок
+затем был уточнён в `552f134` по фактическому числу строк.
 
-**Критерий следующего PASS:** patch 9002 проходит `git apply --check` на
-чистом архиве QSDK 14.0, затем успешно применяется полный закреплённый feed
-patch series. Только после этого переходить к полной компиляции. Даже этот
-PASS не подтверждает корректность модуля или работу на роутере.
+Текущие проверки:
+- [Workflow #103](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728459690)
+  тестирует commit `3637215`; Static PASS, PREPARE_ONLY ещё выполняется.
+- [Workflow #104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
+  ожидает очередь и тестирует последнюю правку `552f134`.
+
+**Критерий следующего PASS:** структурный валидатор проходит, затем
+`git apply --check` проходит на чистом архиве QSDK 14.0, а затем успешно
+применяется полный закреплённый ECM feed patch series. Только после этого
+переходить к полной компиляции. Даже этот PASS не подтверждает корректность
+модуля или работу на роутере.
 
 ### Ограничения CI и конфигурации
 
