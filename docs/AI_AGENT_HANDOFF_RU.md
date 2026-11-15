@@ -2,11 +2,11 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-16, после запуска CI #123.
+**Последняя сверка:** 2026-11-16, после запуска CI #124.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Текущий code/test HEAD:** `c875a7f71c28209118f5668ae823d78e4e1433d5`.
-**Текущая ревизия ECM patch 9002:** commit `c875a7f71c28209118f5668ae823d78e4e1433d5`; hunk `ecm_exit()` расширен до восьми строк исходного контекста, escape-последовательности приведены к QSDK source.
-**Последний подтверждённый результат:** CI #122 Static/PREPARE_ONLY preparation PASS, raw QSDK apply PASS и полная очередь из 32 ECM-патчей PASS; lifecycle guard FAIL из-за неверного порядка teardown. CI #123: Static checks выполняются.
+**Текущий code/test HEAD:** `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10` (test-only commit с full-build trigger).
+**Текущая ревизия ECM patch 9002:** commit `c875a7f71c28209118f5668ae823d78e4e1433d5`; hunk `ecm_exit()` расширен до восьми строк контекста, escape-последовательности совпадают с pinned QSDK source.
+**Последний подтверждённый результат:** CI #123 Static и PREPARE_ONLY PASS; raw QSDK apply PASS; вся очередь из 32 ECM-патчей PASS; lifecycle и atomic-callback guards PASS, включая точный порядок FIB worker drain перед conntrack/frontend teardown. CI #124: Static PASS; PREPARE_ONLY выполняется; full-build условно активируется после его PASS.
 
 ## Текущая контрольная точка
 
@@ -29,8 +29,9 @@
 - Исправление в commit `693e8f593bea05a0a6f56266d7c7b60e0622c494`: двухстрочный hunk всё ещё дал неправильный порядок normal-exit teardown; кроме того, его DEBUG_INFO context содержал двойное экранирование newline и не совпадал с исходником.
 - [#122](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762283467), HEAD `693e8f5`: Static **PASS**, PREPARE_ONLY preparation **PASS**, raw QSDK patch 9002 **PASS**, full sorted ECM queue of 32 patches **PASS**; lifecycle guard **FAIL**: FIB worker stop was still not placed before normal frontend shutdown. Full build skipped.
 - Исправление в commit `c875a7f71c28209118f5668ae823d78e4e1433d5`: hunk расширен до восьми исходных строк вокруг `ecm_exit()`; в DEBUG_INFO contexts оставлен один обратный слеш перед `n`, как в QSDK source. Это исключает зависимость от полностью проигнорированного контекста при GNU patch fuzz до 2. Требуется подтвердить CI.
-- [#123](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762558933), HEAD `c875a7f`: Static checks выполняются; PREPARE_ONLY и ECM preflight ещё впереди.
-- Preflight воспроизводит pinned `scripts/patch-kernel.sh`: `${PATCH:-patch} -f -p1` отдельно к чистому QSDK archive и последовательно после всей сортированной очереди ECM feed patches. Требуется PASS обоих путей и всех lifecycle guards.
+- [#123](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762558933), HEAD `c875a7f`: Static **PASS**, PREPARE_ONLY preparation **PASS**, raw QSDK patch 9002 **PASS**, полная очередь 32 ECM-патчей **PASS**; FIB notifier init/unwind/normal-exit ordering **PASS**; worker drain перед frontend teardown **PASS**; atomic-callback guards **PASS**. Это подтверждает применение и source-level lifecycle guards, но не C-компиляцию ECM.
+- [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), HEAD `bb3d25b`: Static checks **PASS**, включая новую проверку, что FIB worker drain стоит непосредственно перед conntrack notifier shutdown. PREPARE_ONLY выполняется; commit message содержит `[full-build]`, поэтому full build/verify-v2 будет запущен workflow только после успешного PREPARE_ONLY.
+- Preflight воспроизводит pinned `scripts/patch-kernel.sh`: `${PATCH:-patch} -f -p1` отдельно к чистому QSDK archive и последовательно после всей сортированной очереди ECM feed patches. Оба пути и все lifecycle guards прошли в #123.
 - Kconfig продолжает выводить три unrelated recursive-dependency diagnostics (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); `defconfig` завершается, эти пакеты не выбраны. Это не причина отказа 9002.
 - Полная C-компиляция ECM, marker в собранном `ecm.ko`, image generation, `verify-v2`, загрузка модуля и Dual-WAN/NSS hardware tests пока **NOT TESTED**. Главный домашний роутер остаётся на штатной MiWiFi.
 
@@ -51,8 +52,8 @@
 
 ### Next actions
 
-1. Получить финальный результат [CI #123](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762558933). Подтвердить корректное размещение FIB worker stop перед conntrack/frontend teardown, raw QSDK apply, полную feed patch series и все lifecycle guards.
-2. Только после PASS PREPARE_ONLY запустить отдельный full build/verify с `[full-build]` в commit message. Компиляция должна подтвердить именно `qca-nss-ecm`, затем проверить notifier marker в собранном `ecm.ko`, образ и `verify-v2.sh`.
+1. Получить результат [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141). Сначала проверить PASS PREPARE_ONLY и повторного ECM preflight, затем дождаться отдельного full-build/verify-v2 job.
+2. Во время full build проверить компиляцию именно `qca-nss-ecm`, notifier marker в собранном `ecm.ko`, kernel config, rootfs/image manifest и полный итог `verify-v2.sh`. CI images не публикуются и не предназначены для прошивки.
 3. Не считать PREPARE_ONLY или Static checks сборкой прошивки. Не выпускать и не прошивать образ до отдельного контроля target/profile, package manifest, kernel/module versions, hashes, signing и recovery.
 4. Только после успешной сборки подготовить отдельное второе RD03v2 и recovery-метод. Проверять module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, conntrack marks, NSS/ECM counters, throughput, CPU, latency и packet loss.
 5. Основной домашний маршрутизатор оставить на stock MiWiFi. Никакие CI артефакты не прошивать.
