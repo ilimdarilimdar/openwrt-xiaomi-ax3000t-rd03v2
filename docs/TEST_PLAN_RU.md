@@ -22,29 +22,58 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Снимок состояния на 15.11.2026:
+Снимок состояния на 15.11.2026 по GitHub Actions и рабочей ветке
+`work/rd03v2-dualwan-mwan3-baseline`:
 
 | Этап | Результат |
 |---|---|
-| Статические проверки workflow #15 | PASS |
-| PREPARE_ONLY workflow #15 | PASS |
-| Итоговый .config | Получен и проверен по обязательным символам |
-| Полная сборка workflow #16 | IN PROGRESS на момент последней проверки |
-| verify-v2 для нашей сборки | NOT CONFIRMED |
-| Загрузка sysupgrade/factory образов | Не предусмотрена текущим CI |
-| Испытание на RD03v2 | NOT TESTED |
-| Испытание Dual-WAN | NOT TESTED |
-| ECM FIB-rule notifier для v2 | Не реализован |
-| Локальный тест безопасного resume PREPARE_ONLY | PASS (временные ключи, 4 сценария); CI ожидает запуска |
-| Новый NSS dependency guard patch 0014 | Добавлен; PREPARE_ONLY-проверка ещё ожидается |
+| Статические проверки workflow #100, commit `5b709d0` | **PASS** |
+| PREPARE_ONLY workflow #99, commit `b85c511` | Подготовка sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
+| PREPARE_ONLY workflow #100, commit `5b709d0` | **IN PROGRESS**; preflight ещё не запущен |
+| Raw apply ECM patch 9002 к чистому pinned QSDK, workflow #96–#99 | **FAIL** |
+| ECM patch 9002 в workflow #100 | **NOT CONFIRMED** |
+| Диагностический workflow #101, commit `55171b1` | **QUEUED** за workflow #100 |
+| Полная компиляция ECM/NSS и образ | **NOT STARTED** |
+| `verify-v2.sh` для этой ветки | **NOT TESTED** |
+| Испытание на RD03v2 | **NOT TESTED** |
+| Испытание Dual-WAN/NSS | **NOT TESTED** |
+| ECM FIB-rule notifier для v2 | Кандидатный patch 9002 написан; применимость к pinned QSDK пока не подтверждена |
+| Статический тест signing-key resume и NSS dependency guard | **PASS** в workflow #100 |
 
-### Важные ограничения текущего CI
+### Что известно о блокировке ECM
 
-Полный CI-build использует одноразовый P-256 signing key, URL пакетов `example.invalid` и сохраняет только логи. Это безопасная проверка возможности сборки, но не пользовательский релиз. Такой CI-образ нельзя рассматривать как готовый образ для установки или обновления.
+Закреплённый QSDK 14.0 source archive загружается с ожидаемым SHA-256
+`a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`.
+Структурная проверка подтверждает корректные заголовки и количества строк
+19 unified-diff hunks, но это не доказывает, что patch применяется к исходникам.
 
-PREPARE_ONLY завершился успешно, однако в `defconfig.log` были сообщения Kconfig о циклических зависимостях. В последнем подтверждённом артефакте были циклы Qt5 GUI, fwknopd, NSS и squeezelite-custom. Три сторонних пакета не присутствовали в итоговом `.config`; NSS UI и NSS kernel stack были выбраны.
+Workflow #96–#99 дошли до ECM preflight и завершились ошибками применения
+patch 9002 к чистому исходнику. В частности, затрагивались
+`frontends/ecm_front_end_ipv4.c`,
+`frontends/ecm_front_end_ipv6.c` и
+`frontends/cmn/ecm_ipv6.c`. Workflow #99 подтвердил, что одной коррекции
+координат hunk недостаточно. Коммит `5b709d0` добавил контекстные строки
+в hunks и проходит статические проверки; его raw-source preflight пока
+ожидает завершения workflow #100. Коммит `55171b1` добавил byte-exact
+вывод source/patch и verbose `git apply` на случай повторного отказа.
 
-Проверка исходников показала, что закреплённый upstream уже содержит исправление OpenWrt #25091 в `scripts/package-metadata.pl`; переносить его повторно нельзя. NSS-цикл связан с условным fallback на legacy `nss-tools`, который конфликтует с `nss-tools-dwmac`. Добавлен кандидатный patch `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`, оставляющий для единственной цели RD03v2/IPQ50xx только `nss-tools-dwmac`. Его результат пока не подтверждён новой подготовкой. Следующий PREPARE_ONLY должен загрузить `tmp/.config-package.in`, чтобы подтвердить исчезновение конкретного цикла и не потерять остальные диагностики.
+**Критерий следующего PASS:** patch 9002 проходит `git apply --check` на
+чистом архиве QSDK 14.0, затем успешно применяется полный закреплённый feed
+patch series. Только после этого переходить к полной компиляции. Даже этот
+PASS не подтверждает корректность модуля или работу на роутере.
+
+### Ограничения CI и конфигурации
+
+Полный CI-build использует одноразовый P-256 signing key, URL пакетов
+`example.invalid` и сохраняет только логи. Такой образ не является
+пользовательским релизом и не должен устанавливаться на домашний роутер.
+
+PREPARE_ONLY в предыдущих запусках успешно собирал pinned sources/feeds и
+генерировал итоговую конфигурацию, однако Kconfig-циклы Qt5 GUI, fwknopd и
+squeezelite-custom требуют классификации по сохранённым логам. NSS dependency
+guard patch 0014 ограничивает зависимость LuCI NSS на целевой IPQ50xx
+конфигурации до `nss-tools-dwmac`; workflow проверяет этот guard статически.
+Не удалять предупреждения из логов ради формально чистого отчёта.
 
 ## 3. Этап A — проверка исходников и конфигурации
 
