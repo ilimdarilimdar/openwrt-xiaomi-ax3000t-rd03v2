@@ -158,13 +158,29 @@ for n, start in enumerate(diff_starts):
         sys.exit(f"FAIL: unexpected metadata line in {relpath}: {line!r}")
 
     i = first_hunk
+    sum_delta = 0
     while i < len(section):
         header = section[i]
         hm = hunk_re.fullmatch(header)
         if not hm:
             sys.exit(f"FAIL: unexpected line outside a hunk in {relpath}: {header!r}")
+        old_start = int(hm.group(1))
         old_expected = int(hm.group(2) or "1")
+        new_start = int(hm.group(3))
         new_expected = int(hm.group(4) or "1")
+        delta_before = sum_delta
+        if old_expected == 0:
+            expected_new_start = old_start + delta_before + 1
+        elif new_expected == 0:
+            expected_new_start = old_start + delta_before - 1
+        else:
+            expected_new_start = old_start + delta_before
+        if new_start != expected_new_start:
+            sys.exit(
+                f"FAIL: {relpath} hunk coordinates inconsistent: "
+                f"old {old_start},{old_expected} -> new {new_start},{new_expected}; "
+                f"expected new start {expected_new_start} after prior hunks"
+            )
         old_seen = new_seen = 0
         i += 1
         while old_seen < old_expected or new_seen < new_expected:
@@ -187,6 +203,7 @@ for n, start in enumerate(diff_starts):
             i += 1
         while i < len(section) and section[i] == r"\ No newline at end of file":
             i += 1
+        sum_delta += new_expected - old_expected
         checked_hunks += 1
 
 print(f"PASS: patch envelope has {len(diff_starts)} unique file sections")

@@ -266,12 +266,12 @@ diff --git a/ecm_init.c b/ecm_init.c
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
-@@ -60,4 +60,0 @@
+@@ -60,4 +59,0 @@
 -/*
 - * Temporary operational control
 - */
 -atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
-@@ -430,13 +426,0 @@
+@@ -430,13 +425,0 @@
 -/*
 - * ecm_front_end_ipv4_stop_temp()
 - */
@@ -288,12 +288,12 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 --- a/frontends/ecm_front_end_ipv6.c
 +++ b/frontends/ecm_front_end_ipv6.c
-@@ -61,4 +61,0 @@
+@@ -61,4 +60,0 @@
 -/*
 - * Temporary operational control
 - */
 -atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
-@@ -505,13 +501,0 @@
+@@ -505,13 +500,0 @@
 -/*
 - * ecm_front_end_ipv6_stop_temp()
 - */
@@ -331,7 +331,7 @@ diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/kthread.h>
-@@ -107,7 +108,20 @@
+@@ -96,7 +97,20 @@
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
   */
  DEFINE_SPINLOCK(ecm_ipv4_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
@@ -361,7 +361,7 @@ diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/debugfs.h>
-@@ -113,7 +114,20 @@
+@@ -102,7 +103,20 @@
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
   */
  DEFINE_SPINLOCK(ecm_ipv6_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
