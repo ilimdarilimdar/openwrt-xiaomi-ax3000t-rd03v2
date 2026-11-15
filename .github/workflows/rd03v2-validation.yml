@@ -186,6 +186,12 @@ jobs:
           # GitHub artifact upload excludes dotfiles by default; copy final Kconfig to a visible name.
           cp openwrt-v2/.config openwrt-v2/config.final.txt
 
+      - name: Preflight ECM FIB-rule patch against pinned QSDK source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./tools/test-ecm-fib-rule-patch.sh
+
       - name: Upload preparation logs and config only
         if: always()
         uses: actions/upload-artifact@v4
