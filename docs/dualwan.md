@@ -14,8 +14,19 @@ firmware. The image has not been built or tested on hardware from this branch.
 - Adds a separate RD03v2 ECM patch 9002 for FIB policy-rule ADD/DEL events.
 - The candidate defers rule-change handling from the atomic notifier callback
   to a work item, then invalidates accelerated connections by address family.
-- Patch application has passed the pinned-source and feed-series preflight;
-  compilation and hardware behavior remain unverified.
+- Patch 9002 is a candidate implementation, but it has **not** passed the
+  pinned-source preflight yet. CI runs #96-#99 failed at raw application to the
+  pristine QSDK 14.0 source; no full ECM build has run.
+- Commit `5b709d0` adds exact context to the stop-state hunks. Workflow
+  [#100](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43727888918)
+  is testing that revision (Static PASS; PREPARE_ONLY still in progress at last
+  check). Commit `55171b1` adds byte-exact diagnostics if the next apply still
+  fails; workflow
+  [#101](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728125583)
+  is queued behind #100.
+- Do not treat structural diff validation as proof of source compatibility.
+  The gate is raw apply to the pinned archive **and** the full pinned ECM feed
+  patch series, followed by compilation and hardware validation.
 - Does not preconfigure WANs. First identify the actual netifd logical interface
   names and DSA port mapping on the target router.
 
