@@ -145,6 +145,8 @@ jobs:
         run: |
           set -euo pipefail
           ./build.sh
+          # GitHub artifact upload excludes dotfiles by default; copy final Kconfig to a visible name.
+          cp openwrt-v2/.config openwrt-v2/config.final.txt
 
       - name: Upload preparation logs and config only
         if: always()
@@ -155,7 +157,7 @@ jobs:
             openwrt-v2/feeds-update.log
             openwrt-v2/feeds-install.log
             openwrt-v2/defconfig.log
-            openwrt-v2/.config
+            openwrt-v2/config.final.txt
             openwrt-v2/diffconfig.txt
           if-no-files-found: warn
           retention-days: 14
