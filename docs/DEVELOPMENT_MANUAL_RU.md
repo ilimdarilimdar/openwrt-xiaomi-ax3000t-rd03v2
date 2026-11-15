@@ -20,23 +20,23 @@
 > Это инженерный план, а не сертификат готовности прошивки. На 15.11.2026 CI #77 прошёл Static и PREPARE_ONLY, но full build завершился ошибкой в `qca-nss-ecm`; подробный per-package log не попал в старый artifact. CI #78 прошёл Static, PREPARE_ONLY и ECM preflight для lifecycle revision `3614994`, но full build ещё выполняется. Source commit `e80f964` дополнительно согласовал RTNL lock worker с API Linux 6.18; его проверка ожидает CI #82. На устройстве наша ветка не испытывалась. CI-сборка использует временный ключ и `example.invalid`, поэтому её результат не является пользовательским релизом и не предназначен для установки. Основной роутер не прошивать.
 
 
-### Live CI checkpoint — 2026-11-15, актуальнее исторических записей ниже
+### Live CI checkpoint — 2026-11-15
 
-- CI #77 (ac4ee43): Static PASS; PREPARE_ONLY PASS; full build FAIL в
-  package/feeds/nss/qca-nss-ecm. Точный compiler error пока не восстановлен,
-  поскольку artifact не включал OpenWrt per-package log.
-- CI #78 (3614994): Static PASS, PREPARE_ONLY PASS, ECM preflight PASS;
-  full-build ещё выполнялся на последней live-проверке.
-- Source commit e80f964 меняет worker на `rtnl_net_lock(&init_net)`/
-  `rtnl_net_unlock(&init_net)`. CI #82 ожидает запуска с обновлёнными
-  assertions и Bash quoting.
-- Workflow настроен загружать `openwrt-v2/logs/package/feeds/nss/**`, чтобы
-  следующая полная сборка сохраняла диагностические логи NSS/ECM пакетов.
-- Не переносить test image на primary router. Требуются ECM compile, marker
-  в ecm.ko, verify-v2.sh и контролируемые испытания на втором устройстве.
+- Current branch HEAD: `a0e72ce6fa04a243849a96825f4891e0f0608b39`.
+- Firmware-source revision: `006e14a5d0348528a021943b1fd595cc233451db`. Commits `eba9d02` and `a0e72ce` update regression tests only; they do not change the ECM C patch.
+- Pinned OpenWrt/NSS tree: `c36db6321c11595dc45a160cdab36b5c2d787744`; kernel package version is **Linux 6.18.55**.
+- Pinned QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`; NSS/packages feed pins are recorded in `upstream.lock` and `feeds.lock`.
+- Workflow #106: Static **PASS**, PREPARE_ONLY **PASS**, raw QSDK source apply and full 31-patch ECM feed-series preflight **PASS**. The preflight checks all 19 diff hunks, source archive SHA-256, temporary-stop lock alignment, RTNL pending-bit snapshot, stop-gate/`synchronize_net()` ordering, notifier init/unwind/exit and worker drain.
+- Workflow #107: Static **PASS**, PREPARE_ONLY **PASS**; the atomic-callback regression guard also passed. Full signed-image build and `verify-v2.sh` are **IN PROGRESS** at the latest live check.
+- Workflow #108: **PENDING** behind #107. It adds a stricter test requiring the atomic notifier callback to contain only `set_bit()` operations and `schedule_work()`; it is not a new firmware-code revision.
+- PREPARE_ONLY confirms `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper and nft-backed iptables packages are selected. Kernel config fragments enable `CONFIG_FIB_RULES`, `CONFIG_IP_MULTIPLE_TABLES` and, through the project config, `CONFIG_IPV6_MULTIPLE_TABLES`; the final kernel config check is part of `verify-v2.sh`.
+- Three unrelated Kconfig recursive-dependency diagnostics remain (Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom). These packages are unset in the generated final `.config`; the former selected NSS dependency cycle is absent after tree patch 0014. Keep the warnings visible and re-check the generated config on future feed changes.
+- Runtime module loading, FIB churn, mwan3 failover, NSS counters/throughput and all hardware tests remain **NOT TESTED**.
+
+The full-build CI job uses a disposable signing key and an `example.invalid` package repository URL. It uploads logs, not a usable release image. Do not flash a CI artifact; keep the primary router on stock MiWiFi.
 
 ---
-
+ 
 ## 1. Цель проекта
 
 Развивать отдельную сборку OpenWrt для **Xiaomi Mi Router AX3000T аппаратной ревизии RD03v2** с приоритетами:
@@ -103,21 +103,15 @@ pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
 
 ### 2.3. Подтверждённые результаты CI на 15.11.2026
 
-- Workflow #15, commit `c5a64af9a23996401eb22c2a275023c419bbe547`: статические проверки — PASS; `PREPARE_ONLY` — PASS; артефакт подготовки создан. Полная сборка в этом запуске была пропущена по условию workflow.
-- По выгруженному `config.final.txt` сохранены целевая плата RD03v2, NSS-профиль 256 MiB/LOW, `mwan3`, `luci-app-mwan3`, nft-backed iptables, ipset и предусмотренные пакеты WireGuard/AmneziaWG.
-- В `defconfig.log` присутствовали четыре Kconfig recursive-dependency diagnostics: Qt5 GUI, fwknopd, NSS и squeezelite-custom. Три сторонних пакета не были выбраны в итоговом `.config`; NSS UI и NSS kernel stack были выбраны.
-- В pinned upstream `scripts/package-metadata.pl` уже есть исправление OpenWrt #25091 (commit `87215b42ce7cfd2f43a9423788184a74e09917f0`); повторно переносить этот patch нельзя.
-- Добавлен локальный tree-patch 0014, удаляющий только ненужный legacy `nss-tools` fallback из `luci-app-nss` для RD03v2/IPQ50xx. Он должен убрать найденный cycle; статус пока NOT TESTED до следующего PREPARE_ONLY и анализа `tmp/.config-package.in`.
-- Тест `tools/test-install-v2-signing-key.sh` локально прошёл четыре сценария. CI-проверка этого теста ещё не завершена.
-- Workflow #16 (полная сборка на более раннем commit) оставался IN PROGRESS на последней проверке; последний branch workflow ожидал освобождения сериализованного runner.
-- Workflow #16, commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`: статические проверки — PASS; полная сборка запущена и на момент последней проверки ещё выполнялась. Итог `make` и `verify-v2.sh` пока не подтверждён.
-- Добавлен экспериментальный ECM patch 9002: FIB rule ADD/DEL уведомления ставят в очередь family-specific defunct работу; worker использует v2 `ecm_front_end_ipv*_stop_temp()`, не legacy v1 stop API. Teardown снимает notifier и дожидается worker до DB termination.
-- `tools/test-ecm-fib-rule-patch.sh` проверяет точный pinned QSDK archive по PKG_HASH, затем применимость patch и наличие worker/teardown. Workflow PREPARE_ONLY запускает этот preflight.
-- `tools/verify-v2.sh` проверяет runtime notifier marker внутри `ecm.ko` из root squashfs и применимость ECM patch fingerprints по полному ECM source tree.
-- Candidate 9002 использует RTNL publication barrier и снимает IPv4/IPv6 pending bits под RTNL, затем отпускает RTNL до обхода ECM DB. Это предотвращает обработку нового rule event старым проходом worker.
-- Candidate 9002 пока NOT TESTED: pinned archive apply, compile, and hardware checks должны пройти. На последней сверке #16 full build оставался IN PROGRESS на более раннем commit без 9002, а #57 ожидал старта с актуальным кодом. См. [docs/ecm-policy-routing-port.md](ecm-policy-routing-port.md) и [docs/CI_BUILD.md](CI_BUILD.md).
-
-Подробный порядок приёмки: [docs/TEST_PLAN_RU.md](TEST_PLAN_RU.md). Общая схема CI: [docs/CI_BUILD.md](CI_BUILD.md).
+- #105 (`d51baa7`): Static, PREPARE_ONLY and ECM source preflight **PASS**.
+- #106 (`006e14a`): Static and PREPARE_ONLY **PASS**; raw patch 9002 apply and complete pinned ECM feed-series check **PASS**.
+- #106 preflight downloaded the hash-verified QSDK archive, validated 9 file sections / 19 hunks, then applied patch 9002 after all 31 pinned ECM feed patches including 9001. Lifecycle/order, packet-hook stop locking, atomic pending-bit snapshot and Netfilter hook quiescence assertions passed.
+- #107 (`eba9d02`, test-only): Static **PASS**, PREPARE_ONLY **PASS**, atomic FIB callback guard **PASS**; full build and `verify-v2.sh` remain **IN PROGRESS**.
+- #108 (`a0e72ce`, test-only): **PENDING** behind #107. It tightens the static callback check; no firmware C source changed.
+- The pinned kernel is Linux **6.18.55**. Its generic config fragment enables `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` and `CONFIG_IP_MULTIPLE_TABLES`; the project config enables `CONFIG_IPV6_MULTIPLE_TABLES`. `verify-v2.sh` checks the final built kernel config.
+- The latest PREPARE_ONLY result selects `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC and nft-backed iptables packages.
+- Three recursive-dependency diagnostics remain for optional Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom symbols. None of these packages is selected in the generated final `.config`. The selected NSS Kconfig cycle is absent after patch 0014.
+- Full ECM compilation, notifier marker in built `ecm.ko`, final image verification, module load and hardware Dual-WAN/NSS testing are not yet confirmed. Hardware status remains **NOT TESTED**.
 
 ### 2.4. Текущие pinned source revisions
 
@@ -127,7 +121,7 @@ pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
 - NSS feed: `57c0fa18f847f6cb23992ff3493c6a9131246f4c`
 - `qca-nss-ecm`: `7894b769eeb64f1c44fde547a107a8b866997590`
 - ECM source line: QSDK 14.0, 2026-09-06
-- Kernel line: Linux 6.18
+- Kernel line: Linux 6.18.55
 - mwan3 package pin: 2.12.5 (проверять фактический feed lock и Makefile при обновлении)
 
 Эти pins — исходная точка, не рекомендация автоматически обновить их до последних версий. Любой bump требует повторной проверки патчей, API, зависимостей и сборки.
@@ -187,18 +181,19 @@ mwan3 выполняет policy routing, распределение **отдел
 
 ### 4.2. Текущий v2 статус
 
-В документации проекта v2.1.3 указано, что текущий ECM не содержит такого FIB-rule notifier и что полноценный стенд mwan3 + PPPoE нужен для проверки. Поэтому:
+В рабочей ветке уже подготовлен экспериментальный ECM patch 9002, который переносит FIB-rule invalidation в текущий v2/QSDK 14.0 ECM lifecycle. На 15.11.2026 raw apply к SHA-256-проверенному QSDK source и применение после всей pinned feed patch series прошли в CI #106. Статические проверки callback, worker, lock pairing и teardown проходят в #106/#107.
 
-- не копировать v1 patch 0030 напрямую;
-- сначала скачать исходный архив, сверить SHA-256 из pinned Makefile;
-- выполнить `patch --dry-run` с v1 patch как предварительную проверку, не как доказательство совместимости;
-- при несовпадении контекста изучить функции и жизненный цикл текущего ECM;
-- портировать notifier с учётом Linux 6.18 API, atomic context, workqueue, module init/exit и unregister/cancel;
-- компилировать ECM отдельно;
-- проверить регистрацию notifier в runtime;
-- только после стендовых тестов включать кандидатный патч в образ.
+Это подтверждает **source/preflight PASS**, но не compile PASS. Полная сборка #107 ещё выполняется. Остаются обязательные gates:
 
-Документ с текущей процедурой: [docs/ecm-policy-routing-port.md](ecm-policy-routing-port.md).
+1. Полная компиляция `kmod-qca-nss-ecm` на текущей функциональной ревизии.
+2. Наличие ожидаемого notifier marker в собранном `ecm.ko`.
+3. Успешный `verify-v2.sh` на итоговом rootfs/image.
+4. Runtime module load/unload и контроль FIB rule churn на отдельном втором RD03v2.
+5. Аппаратные проверки mwan3 failover, новых/существующих conntrack flows, NSS counters, CPU, latency и packet loss.
+
+Patch 9002 использует atomic notifier callback только для установки pending bits и постановки work; worker берёт per-net RTNL для согласованного снимка событий, затем отпускает его до `synchronize_net()` и обхода ECM DB. При teardown сначала unregister notifier (atomic notifier unregister дожидается RCU readers), затем `cancel_work_sync()`. Это проверено на исходниках Linux 6.18 и статическими guard-assertions, но точная компиляция и runtime остаются отдельными gates.
+
+См. [docs/ecm-policy-routing-port.md](ecm-policy-routing-port.md), [docs/TEST_PLAN_RU.md](TEST_PLAN_RU.md) и [docs/CI_BUILD.md](CI_BUILD.md).
 
 ### 4.3. Что notifier не обещает
 
@@ -561,10 +556,9 @@ README проекта описывает in-place `sysupgrade` с сохране
 - Начать с failover, не с балансировки.
 
 ### P2 — ECM
-- Получить точный ECM archive и проверить SHA-256.
-- Сверить v1 patch с v2 исходниками.
-- Портировать notifier только при необходимости.
-- Скомпилировать модуль и провести контрольные тесты.
+- Patch 9002 подготовлен и прошёл raw source apply + full pinned ECM feed-series preflight.
+- Завершить full build, подтвердить компиляцию `kmod-qca-nss-ecm`, notifier marker в `ecm.ko` и `verify-v2.sh`.
+- Затем проверить module lifecycle, FIB rule churn и mwan3 failover на втором RD03v2.
 
 ### P3 — оптимизация
 - Измерить NSS throughput, CPU, RAM и latency.
