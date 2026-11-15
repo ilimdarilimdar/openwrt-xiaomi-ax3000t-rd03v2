@@ -68,13 +68,14 @@ This is a targeted hypothesis, not yet a proven fix. The next PREPARE_ONLY artif
 
 ## Current validation snapshot
 
-Snapshot refreshed 2026-11-15 around 08:10 UTC; re-check the live workflow before relying on these statuses:
+Snapshot refreshed 2026-11-15 around 08:35 UTC; re-check the live workflow before relying on these statuses:
 
 - Workflow #15 (commit `c5a64af9a23996401eb22c2a275023c419bbe547`): static checks PASS and PREPARE_ONLY PASS. Its artifact `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547` was downloaded and inspected.
 - That #15 `defconfig.log` confirms the earlier NSS recursive dependency cycle: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. The source commit predates patch 0014, so this artifact does not test the fix.
 - Workflow #16 (commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`): static checks PASS; full build remains IN PROGRESS at `Build and run verify-v2`. Logs and artifacts are unavailable while the job is active; timeout is 360 minutes. Do not cancel it merely because it takes time.
 - Runs #43–#46 were superseded/cancelled by newer pushes before yielding a complete current-source PREPARE_ONLY result.
 - Workflow #57 (commit `6878d6d16ab9858a136a6c4d224e0b53d07942cc`) is PENDING; GitHub has not started its jobs yet. It contains the current ECM candidate patch, the RTNL pending-bit snapshot order assertion, pinned-source preflight, and the full-image marker gate. Run #16 remains IN PROGRESS on the earlier commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`, which does not contain patch 9002. Cancelled runs #43–#56 were superseded by newer pushes, not classified as source/build failures. Re-query the newest run before relying on this snapshot.
+- The latest source commit in #57 also corrects C `\n` escaping in the worker's two `DEBUG_TRACE` strings; this does not change pending-bit, RTNL, or defunct behavior. The patch contents were inspected after that commit. The pinned-archive preflight remains NOT RUN until #57 starts.
 - Candidate ECM patch: `feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`. It uses the v2 `*_stop_temp()` helpers, defers the atomic FIB callback to a workqueue, unregisters the notifier and drains work before DB teardown. It is **NOT YET APPLY-VALIDATED, NOT COMPILED, NOT HARDWARE-TESTED**.
 - The candidate worker includes an RTNL publication barrier and snapshots/clears pending AF bits while RTNL is held. It releases RTNL before the ECM database walk. This ordering prevents a new rule event from being swallowed by a prior worker pass. The exact Linux 6.18 event ordering and `rtnl_net_lock()` implementation are linked in `docs/ecm-policy-routing-port.md`; preflight asserts the operation order.
 - PREPARE_ONLY now runs `tools/test-ecm-fib-rule-patch.sh`: read the pinned source fields from the prepared qca-nss-ecm Makefile, download the exact archive, verify its SHA-256, apply-check/apply patch 9002, and check callback/worker/teardown assertions.
