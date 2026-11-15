@@ -67,39 +67,33 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
 ## Current validation snapshot — 2026-11-15
+_Last live GitHub Actions check: 2026-11-15 13:26 UTC._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Latest source-code commit: `36149940c8eb00df46d14b7bb10e747ec9666f3b`.
-- Workflow #77,
-  [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463),
-  uses the previous source commit `ac4ee43c79879c8bb557a26c252eb442aa5a3654`.
-  Static validation and PREPARE_ONLY passed, including SHA-256 verification,
-  clean-source patch application, full 31-patch ECM feed-series application,
-  and the `ecm_db_init()` route-notifier error guard. Its full-build job is
-  still running at `Build and run verify-v2`; no final compile/image result
-  is available yet.
-- Commit `36149940c8eb00df46d14b7bb10e747ec9666f3b` adds a common
-  `ecm_db_fib_rule_notifier_stop()` hook. It unregisters the FIB notifier,
-  waits for notifier callbacks to quiesce, and drains the queued worker before
-  front-end shutdown in normal module exit and init-unwind paths. The existing
-  `ecm_db_exit()` call is retained as an idempotent fallback.
-- Workflow #78,
-  [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665),
-  was triggered for that lifecycle change and is PENDING behind #77 because
-  the workflow serializes runs for this branch. Its PREPARE_ONLY preflight and
-  full build have not run yet.
-- The PREPARE_ONLY artifact from #77 (ID `14159587339`) was inspected.
-  It has no selected NSS recursive-dependency diagnostic after tree patch
-  0014. Three remaining Kconfig diagnostics concern Qt5 GUI,
-  fwknopd/LuCI fwknopd and squeezelite-custom; those package choices are
-  unset in the final `.config`. The same artifact's `diffconfig.txt` confirms
-  the IPQ50xx AX3000T v2 target, the 256M ath11k NSS memory profile,
-  NSS/ECM modules, mwan3, nft-backed iptables/ip6tables and ipset.
+- Latest ECM patch/source revision: `e80f964efb78331be0c5c8c26c29a724f0c668cb`. It changes the worker's RTNL barrier to Linux 6.18's `rtnl_net_lock(&init_net)` / `rtnl_net_unlock(&init_net)` API.
+- The branch's later HEAD at this check is `70f92cc24098933a252c803403368534e97ec587`. Changes after `e80f964` are documentation and the static-test quoting correction; they do not alter patch 9002 itself.
 
-Do not treat #77 as proof that the latest lifecycle revision compiles: it uses
-`ac4ee43`, not `3614994`. The revised patch must pass #78 PREPARE_ONLY,
-ECM package compilation, marker inspection in `ecm.ko`, and final
-`verify-v2.sh`. Hardware validation is still NOT TESTED. CI full-builds use
-an ephemeral signing key and `example.invalid` repository URL, upload logs
-only, and do not publish installable firmware. Keep the primary router on
-stock firmware.
+### Workflow results
+
+- Workflow #77, [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463), used source revision `ac4ee43c79879c8bb557a26c252eb442aa5a3654`. Static checks and PREPARE_ONLY passed. The full build failed at `package/feeds/nss/qca-nss-ecm`. Its uploaded artifact contained only top-level logs, so the actual compiler diagnostic was not captured. The precise cause remains **UNKNOWN**; do not classify it as a source-code defect or a runner resource failure without the package log.
+- Workflow #78, [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665), uses lifecycle revision `36149940c8eb00df46d14b7bb10e747ec9666f3b`. Static checks and PREPARE_ONLY completed successfully, including the pinned-source and complete ECM feed-series preflight. At the last live check, its full-build job was still running at `Build and run verify-v2`. This run does **not** include the later `e80f964` per-net RTNL change.
+- Workflow #82, [run 43715272931](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43715272931), was triggered for HEAD `70f92cc`. At the last live check it was **Waiting** for #78 to complete because the workflow serializes runs on this branch. It will exercise the `e80f964` per-net RTNL revision and the corrected static assertion.
+
+The current workflow now uploads the package-specific NSS logs under `openwrt-v2/logs/package/feeds/nss/**` in addition to top-level build logs. This path was verified against the pinned OpenWrt `include/subdir.mk` logging layout: `BUILD_LOG=1` stores a package's compile output beneath `logs/package/<feed>/<package>/`. Therefore a later full build should expose the actual ECM compiler output if that package fails again.
+
+### Source-level findings
+
+- Linux v6.18 defines `rtnl_net_lock()` and `rtnl_net_unlock()`; FIB rule changes assert the matching per-net RTNL lock before notifier dispatch. The worker snapshots/clears pending family bits under `init_net`'s lock, then releases it before walking the ECM database.
+- Linux v6.18 workqueue code clears the work item's pending bit before invoking its function and handles a requeued work item without running it concurrently with itself. This supports the patch's design in which a new rule event during the database walk schedules another worker pass.
+- These are source/API checks only. They do not prove successful ECM compilation, module load safety, NSS offload behavior or Dual-WAN correctness.
+- FIB notifier registration replays existing rules as ADD events. As documented in `ecm-policy-routing-port.md`, loading/reloading ECM can therefore cause a broad per-family defunct/re-acceleration pass. It is not session preservation across WAN address changes.
+
+### Required gates still open
+
+1. A successful full build of the latest `e80f964` revision.
+2. Confirmation that the built `ecm.ko` contains the expected notifier marker.
+3. Successful final `verify-v2.sh` checks against the generated image/root filesystem.
+4. Controlled second-router tests: ECM load/unload, FIB rule churn, mwan3 restart and cable-pull failover, IPv4/IPv6 separately, NSS/ECM counters, throughput, CPU, latency and packet loss.
+5. No primary-router flashing until all source, build/image and second-router hardware gates pass.
+
+The CI full-build job uses a disposable signing key and an `example.invalid` repository URL. It uploads logs only and does not publish a usable release image. Hardware validation remains **NOT TESTED**; keep the primary router on stock firmware.
