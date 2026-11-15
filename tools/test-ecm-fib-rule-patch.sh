@@ -54,6 +54,10 @@ ECM_DB=$(find "$SOURCE_DIR" -type f -path '*/ecm_db/ecm_db.c' -print -quit)
 [[ -n "$ECM_DB" ]] || die "ecm_db/ecm_db.c not found in source archive"
 ECM_ROOT=${ECM_DB%/ecm_db/ecm_db.c}
 
+# Preserve a pristine copy for the full feed-series test before raw 9002 is applied.
+SERIES_ROOT="$WORK/series-source"
+cp -a "$ECM_ROOT" "$SERIES_ROOT"
+
 echo "Checking patch against QSDK $QSDK_VERSION source $PKG_SOURCE_VERSION"
 git -C "$ECM_ROOT" apply --whitespace=error-all --check "$PATCH_FILE"
 git -C "$ECM_ROOT" apply --whitespace=error-all "$PATCH_FILE"
@@ -141,8 +145,6 @@ fi
 # order (ls | sort). Verify that 9002 applies after every pinned feed patch
 # and our earlier 9001 patch, not only against the pristine source archive.
 PATCH_DIR=$(dirname "$PATCH_FILE")
-SERIES_ROOT="$WORK/series-source"
-cp -a "$ECM_ROOT" "$SERIES_ROOT"
 mapfile -t FEED_PATCHES < <(cd "$PATCH_DIR" && LC_ALL=C ls | LC_ALL=C sort)
 series_count=0
 found_9001=0
