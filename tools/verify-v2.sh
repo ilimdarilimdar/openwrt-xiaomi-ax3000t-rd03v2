@@ -102,6 +102,14 @@ if [ -f "$X/etc/rd03v2-release" ] && [ -f "$X/lib/apk/db/installed" ]; then
 		*) [ "$(grep -c "^$n - " "$M")" = 1 ] && echo "PASS image has $n" || echo "FAIL image lacks $n" ;;
 		esac
 	done > "$W/must-have"; cat "$W/must-have"; fail=$((fail + $(grep -c '^FAIL' "$W/must-have")))
+	# The image must carry the ECM module built with the RD03v2 FIB policy-rule notifier.
+	ecm_ko=$(find "$X/lib/modules" -type f -name 'ecm.ko' -print -quit 2>/dev/null)
+	if [ -n "$ecm_ko" ]; then
+		chk "ECM FIB policy-rule notifier compiled into image module" \
+			"$(strings "$ecm_ko" | grep -Fc 'ECM: policy routing rule changes defunct accelerated connections')" 1
+	else
+		echo "FAIL ECM module ecm.ko not found in image"; fail=$((fail + 1))
+	fi
 	chk "release stamp: base" "${RD03V2_BASE:-}" "kuncy7/openwrt-nss-edma $RELEASE $COMMIT"
 	D=$X/etc/apk/repositories.d/distfeeds.list
 	{
