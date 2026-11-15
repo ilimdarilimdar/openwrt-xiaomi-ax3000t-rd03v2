@@ -258,6 +258,7 @@ Primary Linux 6.18 source references:
 applies every preceding ECM feed patch in lexical/quilt order (including 9001),
 then applies 9002 to the resulting tree. CI #77 passed the current
 pre-shutdown revision against both clean source and the complete feed series.
+Its separate full-build job later failed at `package/feeds/nss/qca-nss-ecm`.
 
 The latest source commit
 `36149940c8eb00df46d14b7bb10e747ec9666f3b` extends patch 9002 with
@@ -274,9 +275,13 @@ The latest source commit
   pinned source and the fully feed-patched source.
 
 This newest shutdown-order revision has **not yet passed CI**. Workflow #78
-is pending behind #77. Run #77 passed Static and PREPARE_ONLY for the previous
-revision and is still executing the full build; it must not be counted as a
-compile result for commit `3614994`.
+is now `in_progress`: Static checks passed, while PREPARE_ONLY was still
+running and the revised preflight had not yet started at the last live check.
+Run #77 must not be counted as a compile result for commit `3614994`.
+Its full build failed in `qca-nss-ecm`; the summary artifact omitted the
+per-package compiler log. The workflow now includes
+`openwrt-v2/logs/feeds/nss/**` in the build artifact so a subsequent run can
+expose the detailed NSS/ECM diagnostics.
 
 Even a green source-apply test does not prove that `ecm.ko` compiles or runs.
 Required gates remain: revised preflight, complete `kmod-qca-nss-ecm`

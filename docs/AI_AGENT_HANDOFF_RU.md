@@ -8,31 +8,36 @@
 ## Актуальная контрольная точка — 2026-11-15
 
 - Source-code HEAD: `36149940c8eb00df46d14b7bb10e747ec9666f3b`.
-- CI #77, run `43708414463`, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS
-  (проверены pinned QSDK SHA-256 и применение 9002 после 31 feed-патча).
-  Полная сборка ещё выполняется; этот run не содержит нового shutdown hook.
+- CI #77, run `43708414463`, source `ac4ee43`: Static PASS и PREPARE_ONLY
+  PASS; точный QSDK 14.0 archive hash и применение 9002 после 31 pinned
+  feed-патча подтверждены. Полная сборка завершилась **FAIL** на
+  `package/feeds/nss/qca-nss-ecm`. Краткий `build.log` указывает пакет,
+  но не содержит compiler diagnostics.
 - Артефакт PREPARE_ONLY #77: ID `14159587339`. Проверка `defconfig.log`
   показала отсутствие прежнего NSS Kconfig recursive dependency; остались
-  только три предупреждения для Qt5 GUI, fwknopd/LuCI fwknopd и
+  три предупреждения для Qt5 GUI, fwknopd/LuCI fwknopd и
   squeezelite-custom. Все три соответствующих package choices выключены
   в итоговом `.config`.
 - `diffconfig.txt` артефакта #77 подтверждает выбранный IPQ50xx AX3000T v2
   target, `ATH11K_NSS_MEM_PROFILE_256M`, `kmod-qca-nss-drv`,
   `kmod-qca-nss-ecm`, `mwan3`, `luci-app-mwan3`, `iptables-nft`,
   `ip6tables-nft` и `ipset`. Это проверка конфигурации, не runtime/offload test.
-- CI #78, run `43709621665`, source `3614994`: PENDING за #77 из-за
-  сериализации workflow. Этот run должен проверить новый lifecycle patch.
+- Причина package-level build failure пока не установлена: workflow #77
+  выгрузил верхнеуровневые `*.log`, но пропустил подробный OpenWrt build
+  log из `openwrt-v2/logs/feeds/nss/qca-nss-ecm/`. Workflow обновлён
+  включать эту NSS package-log папку в следующие build artifacts.
+- CI #78, run `43709621665`, source `3614994`: на последней live-проверке
+  `in_progress`; Static PASS, PREPARE_ONLY job выполнялся, ECM preflight
+  ещё ожидал своего шага. Этот run проверяет новый lifecycle patch.
 - В patch 9002 добавлен `ecm_db_fib_rule_notifier_stop()`: notifier
   unregister + RCU callback quiescence + `cancel_work_sync()` выполняются
   до frontend teardown в обычном `ecm_exit()` и init error-unwind paths.
   `ecm_db_exit()` сохраняет fallback stop перед DB termination.
-- `tools/test-ecm-fib-rule-patch.sh` теперь проверяет порядок stop hook на
-  чистом pinned source и после полной очереди feed-патчей. Для commit
-  `3614994` эти новые assertions ещё не прошли CI.
+- `tools/test-ecm-fib-rule-patch.sh` на #77 прошёл для предыдущей ревизии.
+  Новые shutdown-order assertions для commit `3614994` должны пройти в #78.
 - Не считать проект готовым к прошивке. Последовательность проверки:
-  CI #78 Static/PREPARE_ONLY, ECM compile, `ecm.ko` marker, `verify-v2.sh`,
-  затем контролируемые тесты на втором RD03v2. Основной роутер остаётся
-  на штатной прошивке.
+  revised preflight, ECM compile, `ecm.ko` marker, `verify-v2.sh`, затем
+  контролируемые тесты на втором RD03v2. Основной роутер остаётся на штатной прошивке.
 
 Исторические записи ниже сохранены как журнал; при расхождении использовать
 эту контрольную точку и актуальное состояние GitHub.
@@ -40,7 +45,7 @@
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
 **Baseline source/config до эксперимента ECM FIB notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`.
-**Текущий source state:** firmware source HEAD `36149940c8eb00df46d14b7bb10e747ec9666f3b` включает candidate patch 9002 и lifecycle shutdown hook. CI #77 подтвердил применение предыдущей ревизии patch 9002 к точному pinned QSDK archive и полной feed-series; это PASS для preflight, но не для компиляции. Изменения shutdown hook из `3614994` ждут своего CI #78. Полная компиляция ECM и hardware tests остаются NOT TESTED.
+**Текущий source state:** firmware source HEAD `36149940c8eb00df46d14b7bb10e747ec9666f3b` включает candidate patch 9002 и lifecycle shutdown hook. CI #77 подтвердил preflight, но full build завершился на `qca-nss-ecm`; compiler diagnostics не попали в artifact. CI #78 сейчас проверяет новую lifecycle revision. Ни одна ревизия 9002 пока не имеет подтверждённой успешной компиляции и hardware tests.
 **Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`.
 **История изменений:** после baseline добавлены source patch 9002 и lifecycle изменения в commit `3614994`; отдельные commits изменяли CI workflow и документацию. Не считать старую формулировку ниже, что после baseline были только docs/CI, актуальной.
 
