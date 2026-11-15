@@ -31,6 +31,8 @@ families = {
         "header": root / "frontends/include/ecm_front_end_ipv4.h",
         "counter": "ecm_front_end_ipv4_stopped_temp",
         "stop_fn": "ecm_front_end_ipv4_stop_temp(int num)",
+        "lock": "ecm_ipv4_lock",
+        "prototype": "extern void ecm_front_end_ipv4_stop_temp(int num);",
     },
     "ipv6": {
         "front": root / "frontends/ecm_front_end_ipv6.c",
@@ -38,6 +40,8 @@ families = {
         "header": root / "frontends/include/ecm_front_end_ipv6.h",
         "counter": "ecm_front_end_ipv6_stopped_temp",
         "stop_fn": "ecm_front_end_ipv6_stop_temp(int num)",
+        "lock": "ecm_ipv6_lock",
+        "prototype": "extern void ecm_front_end_ipv6_stop_temp(int num);",
     },
 }
 
@@ -63,34 +67,41 @@ for family, spec in families.items():
     common = spec["common"].read_text()
     header = spec["header"].read_text()
     counter = spec["counter"]
+    lock = spec["lock"]
 
-    declaration = f"atomic_t {counter} = ATOMIC_INIT(0);"
-    if "#include <linux/netdevice.h>" not in (root / "ecm_db/ecm_db.c").read_text():
-        raise SystemExit("FAIL: ECM DB source does not include linux/netdevice.h for synchronize_net()")
-    db_source = (root / "ecm_db/ecm_db.c").read_text()
-    worker_start = db_source.find("static void ecm_db_fib_rule_work_fn")
-    worker_end = db_source.find("static DECLARE_WORK", worker_start)
-    if worker_start < 0 or worker_end < 0:
-        raise SystemExit("FAIL: FIB worker source not found for synchronize_net() check")
-    worker = db_source[worker_start:worker_end]
-    if "synchronize_net();" not in worker:
-        raise SystemExit("FAIL: FIB worker lacks synchronize_net() quiescence barrier")
-    if declaration not in front:
-        raise SystemExit(f"FAIL: {family} temporary-stop counter is not atomic_t/ATOMIC_INIT")
-    if "#include <linux/atomic.h>" not in header:
-        raise SystemExit(f"FAIL: {family} frontend header does not include linux/atomic.h")
-    if f"extern atomic_t {counter};" not in header:
-        raise SystemExit(f"FAIL: {family} frontend header does not export atomic_t")
+    declaration = f"static atomic_t {counter} = ATOMIC_INIT(0);"
+    if declaration not in common:
+        raise SystemExit(f"FAIL: {family} temporary-stop counter is not owned by the common frontend")
+    if "#include <linux/atomic.h>" not in common:
+        raise SystemExit(f"FAIL: {family} common frontend lacks linux/atomic.h")
+    if counter in front:
+        raise SystemExit(f"FAIL: {family} stop state is still defined in the separate frontend file")
+    if f"extern atomic_t {counter};" in header or f"extern int {counter};" in header:
+        raise SystemExit(f"FAIL: {family} temporary-stop counter is unnecessarily exposed in its public header")
+    if spec["prototype"] not in header:
+        raise SystemExit(f"FAIL: {family} stop_temp() API prototype is missing")
 
-    body = function_body(front, spec["stop_fn"])
-    if f"atomic_inc(&{counter});" not in body:
-        raise SystemExit(f"FAIL: {family} stop_temp(1) does not increment its nesting count")
-    if f"atomic_dec_if_positive(&{counter});" not in body:
-        raise SystemExit(f"FAIL: {family} stop_temp(0) is not a guarded atomic decrement")
+    body = function_body(common, spec["stop_fn"])
+    lock_token = f"spin_lock_bh(&{lock});"
+    unlock_token = f"spin_unlock_bh(&{lock});"
+    inc_token = f"atomic_inc(&{counter});"
+    dec_token = f"atomic_dec_if_positive(&{counter});"
+    positions = [body.find(lock_token), body.find(inc_token), body.find(dec_token), body.find(unlock_token)]
+    if any(position < 0 for position in positions):
+        raise SystemExit(f"FAIL: {family} stop_temp() does not take the packet-hook lock around both counter updates")
+    if positions != sorted(positions):
+        raise SystemExit(f"FAIL: {family} stop_temp() updates the counter outside the shared packet-hook lock")
 
-    reads = common.count(f"atomic_read(&{counter})")
-    if reads != 3:
-        raise SystemExit(f"FAIL: {family} packet hooks use {reads} atomic reads; expected 3")
+    reads = list(re.finditer(re.escape(f"atomic_read(&{counter})"), common))
+    if len(reads) != 3:
+        raise SystemExit(f"FAIL: {family} packet hooks use {len(reads)} atomic reads; expected 3")
+    for match in reads:
+        lock_pos = common.rfind(lock_token, 0, match.start())
+        unlock_pos = common.find(unlock_token, match.end())
+        if lock_pos < 0 or unlock_pos < 0:
+            raise SystemExit(f"FAIL: {family} packet-hook stop read is not protected by {lock}")
+        if common.find(unlock_token, lock_pos, match.start()) >= 0:
+            raise SystemExit(f"FAIL: {family} packet-hook stop read occurs after releasing {lock}")
     if f"unlikely({counter})" in common:
         raise SystemExit(f"FAIL: {family} has a non-atomic temporary-stop read")
 
