@@ -206,6 +206,7 @@ jobs:
             openwrt-v2/tmp/.config-package.in
           if-no-files-found: warn
           retention-days: 14
+          include-hidden-files: true
 
   full-build:
     name: Full signed-image build and verify-v2
