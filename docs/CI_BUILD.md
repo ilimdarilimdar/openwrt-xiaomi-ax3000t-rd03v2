@@ -14,6 +14,19 @@ A push to `work/rd03v2-dualwan-mwan3-baseline` and a pull request targeting `mai
 
 These checks do **not** compile OpenWrt, do not validate downloaded feeds, do not build ECM, and do not prove that an image boots.
 
+## Automatic PREPARE_ONLY job
+
+After static checks pass, GitHub Actions runs the normal project `build.sh` with `PREPARE_ONLY=1` on an Ubuntu runner. This stage:
+
+- fetches the exact commits pinned in `upstream.lock` and `feeds.lock`;
+- applies the repository tree patches and overlay;
+- installs the pinned feeds and the feed overlay;
+- runs `make defconfig` and verifies requested symbols;
+- writes `.config` and `diffconfig.txt`;
+- stops before package compilation, image compilation and signing.
+
+The preparation stage does not require the private signing key. The project build script skips signing-key validation and installation only for `PREPARE_ONLY=1`; all full builds still require the matching private key. A green preparation job is **not** a full firmware build.
+
 ## Full build
 
 The full build job runs only on a push whose commit message contains `[full-build]`.
