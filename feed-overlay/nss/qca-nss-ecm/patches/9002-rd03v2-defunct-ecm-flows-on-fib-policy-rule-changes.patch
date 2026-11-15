@@ -23,7 +23,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
-@@ -24,6 +24,10 @@
+@@ -22,5 +22,9 @@
  #include <asm/uaccess.h>	/* for put_user */
  #include <net/ipv6.h>
  #include <net/ip6_route.h>
@@ -33,7 +33,6 @@ index c97f625..0000000 100644
 +#include <linux/rtnetlink.h>
  #include <linux/inet.h>
  #include <linux/in.h>
- 
 @@ -469,9 +473,103 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
