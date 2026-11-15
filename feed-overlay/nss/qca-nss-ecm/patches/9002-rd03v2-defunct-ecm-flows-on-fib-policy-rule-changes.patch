@@ -266,12 +266,18 @@ diff --git a/ecm_init.c b/ecm_init.c
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
-@@ -60,4 +59,0 @@
+@@ -58,8 +58,4 @@
+ extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
+ 
 -/*
 - * Temporary operational control
 - */
 -atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
-@@ -430,13 +425,0 @@
+ 
+ /*
+@@ -428,17 +424,4 @@
+ }
+ 
 -/*
 - * ecm_front_end_ipv4_stop_temp()
 - */
@@ -285,15 +291,25 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 -		}
 -	}
 -}
+ 
+ /*
+  * ecm_front_end_ipv4_init()
+  */
 diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 --- a/frontends/ecm_front_end_ipv6.c
 +++ b/frontends/ecm_front_end_ipv6.c
-@@ -61,4 +60,0 @@
+@@ -59,8 +59,4 @@
+ extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
+ 
 -/*
 - * Temporary operational control
 - */
 -atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
-@@ -505,13 +500,0 @@
+ 
+ /*
+@@ -503,17 +499,4 @@
+ }
+ 
 -/*
 - * ecm_front_end_ipv6_stop_temp()
 - */
@@ -307,6 +323,10 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 -		}
 -	}
 -}
+ 
+ /*
+  * ecm_front_end_ipv6_init()
+  */
 diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
 --- a/frontends/include/ecm_front_end_ipv4.h
 +++ b/frontends/include/ecm_front_end_ipv4.h
@@ -361,7 +381,9 @@ diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/debugfs.h>
-@@ -102,7 +103,20 @@
+@@ -100,9 +101,22 @@
+ /*
+  * Locking of the classifier - concurrency control for file global parameters.
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
   */
  DEFINE_SPINLOCK(ecm_ipv6_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
