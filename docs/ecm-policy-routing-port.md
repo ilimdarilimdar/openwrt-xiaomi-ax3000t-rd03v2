@@ -61,7 +61,7 @@ SHA256=a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886
 curl -fL "$URL" -o "$WORK/reference/$ARCHIVE"
 printf '%s  %s\n' "$SHA256" "$WORK/reference/$ARCHIVE" | sha256sum -c -
 
-PATCH_URL=https://raw.githubusercontent.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/fix/ecm-policy-rule-defunct/nss/feed-patches/qca-nss-ecm/0030-ecm-db-defunct-on-policy-rule-changes.patch
+PATCH_URL=https://raw.githubusercontent.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/d7b85aa5395aeefe29b7d02602c1a7e74e617c0e/nss/feed-patches/qca-nss-ecm/0030-ecm-db-defunct-on-policy-rule-changes.patch
 curl -fL "$PATCH_URL" -o "$WORK/reference/0030-v1-reference.patch"
 
 tar --zstd -xf "$WORK/reference/$ARCHIVE" -C "$WORK/source"
