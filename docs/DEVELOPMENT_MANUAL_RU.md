@@ -48,6 +48,18 @@
 5. Отдельно оценить VPN/AmneziaWG, не приписывая VPN-трафику NSS-ускорение без измерений.
 6. Сделать сборки воспроизводимыми: pinned upstream, pinned feeds, контроль патчей, проверка итогового образа и сохранение отчётов.
 
+### Дополнение по ECM marks (15.11.2026)
+
+Закреплённый NSS feed `qca-nss-ecm/Makefile` включает
+`ECM_CLASSIFIER_MARK_ENABLE=y` для `qualcommax`; PREPARE_ONLY #78
+подтвердил target `ipq50xx` и пакет `kmod-qca-nss-ecm`. Это означает, что
+сборка запрашивает ECM mark classifier, но фактический NSS offload потоков с
+mwan3 fwmark/CONNMARK должен быть измерен на роутере. Пакет
+`iptables-mod-conntrack-extra` не предоставляет CLI `conntrack`;
+`CONFIG_PACKAGE_conntrack` сейчас выключен. Для будущего выборочного
+удаления conntrack entries потребуется отдельный пакет `conntrack` из
+pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
+
 ### 1.1. Неизменяемые ограничения
 
 - Целевая плата — **RD03v2 / Qualcomm IPQ5018**. Не использовать образы или инструкции для MediaTek RD03/RD23.

@@ -219,6 +219,39 @@ The generated kernel config must also retain `CONFIG_FIB_RULES=y`,
 routing-table option when IPv6 is enabled; `verify-v2.sh` checks the final
 kernel config rather than assuming the defconfig request survived.
 
+## ECM mark classifier and conntrack CLI status
+
+The pinned QSDK 14.0 feed Makefile for `qca-nss-ecm` appends
+`ECM_CLASSIFIER_MARK_ENABLE=y` for the `qualcommax` target board. The
+PREPARE_ONLY #78 artifact confirms `CONFIG_TARGET_BOARD="qualcommax"`,
+`CONFIG_TARGET_SUBTARGET="ipq50xx"` and
+`CONFIG_PACKAGE_kmod-qca-nss-ecm=y`. Therefore the build requests the ECM
+mark classifier for RD03v2; this is necessary groundwork for mwan3 mark
+handling, not proof of runtime correctness or that every fwmark/CONNMARK flow
+is NSS-offloaded.
+
+The same prepared `.config` explicitly leaves
+`CONFIG_PACKAGE_conntrack` unset. `iptables-mod-conntrack-extra` is only
+the xtables/kernel extension; it does not ship the userspace `conntrack`
+command. A future selective conntrack-cleanup hook must add the
+`conntrack` package from the pinned `conntrack-tools` 1.4.8 package and
+must fail closed if the command or mark configuration is missing.
+
+Required hardware evidence before accepting mark-aware NSS Dual-WAN:
+
+1. Generate flows with mwan3 marks on WAN1 and WAN2; record packet captures,
+   conntrack marks, `ip rule` selections and ECM/NSS connection counters.
+2. Compare ordinary NAT, policy-routed flows, and flows that do not qualify
+   for offload. Confirm the selected egress is the one whose WAN-mark is stored.
+3. Repeat during tracker `disconnected`, netifd `ifdown`, and rule restore;
+   separate old-flow teardown from new-flow placement.
+4. Do not interpret classifier selection in a Makefile as proof of an offload
+   success. Runtime counters and cable-pull results are mandatory.
+
+Pinned package source:
+[`qca-nss-ecm/Makefile`](https://github.com/kuncy7/nss-packages/blob/57c0fa18f847f6cb23992ff3493c6a9131246f4c/qca-nss-ecm/Makefile).
+PREPARE_ONLY artifact: [CI #78](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665).
+
 ## Required v2 validation
 
 Record image tag, kernel, feed pins, NSS mode, actual WAN logical names,

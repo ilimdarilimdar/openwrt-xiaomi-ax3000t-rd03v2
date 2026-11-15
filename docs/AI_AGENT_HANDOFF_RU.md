@@ -47,6 +47,23 @@
 
 ---
 
+### ECM mark classifier and conntrack CLI audit — 2026-11-15
+
+The pinned `qca-nss-ecm/Makefile` (NSS feed commit
+`57c0fa18f847f6cb23992ff3493c6a9131246f4c`) selects
+`ECM_CLASSIFIER_MARK_ENABLE=y` for `CONFIG_TARGET_BOARD="qualcommax"`.
+PREPARE_ONLY #78 confirms `ipq50xx` and `kmod-qca-nss-ecm=y`; mark
+classifier build option is therefore requested. Runtime handling of mwan3
+fwmark/CONNMARK still needs hardware verification.
+PREPARE_ONLY also confirms `CONFIG_PACKAGE_conntrack` is unset.
+`iptables-mod-conntrack-extra` is not the userspace `conntrack` CLI; future
+selective flow deletion requires package `conntrack` from the pinned
+`conntrack-tools` 1.4.8 and fail-closed mark validation. Details and test
+requirements are in the **ECM mark classifier and conntrack CLI status**
+section of `docs/dualwan.md`.
+
+---
+
 ### ECM worker lock alignment — 2026-11-15
 
 В patch 9002 worker использует `rtnl_net_lock(&init_net)` /
