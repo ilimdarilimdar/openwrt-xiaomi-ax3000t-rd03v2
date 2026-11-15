@@ -243,7 +243,45 @@ SERIES_ROOT="$WORK/series-source"
 cp -a "$ECM_ROOT" "$SERIES_ROOT"
 
 echo "Checking patch against QSDK $QSDK_VERSION source $PKG_SOURCE_VERSION"
-git -C "$ECM_ROOT" apply --whitespace=error-all --check "$PATCH_FILE"
+if ! git -C "$ECM_ROOT" apply --whitespace=error-all --check "$PATCH_FILE"; then
+  echo "DIAGNOSTIC: exact source contexts for failed ECM patch application" >&2
+  python3 - "$ECM_ROOT" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+specs = {
+    "frontends/ecm_front_end_ipv4.c": [
+        "ecm_front_end_ipv4_stopped_temp", "ecm_front_end_ipv4_stop_temp",
+    ],
+    "frontends/ecm_front_end_ipv6.c": [
+        "ecm_front_end_ipv6_stopped_temp", "ecm_front_end_ipv6_stop_temp",
+    ],
+    "frontends/cmn/ecm_ipv4.c": [
+        "ecm_ipv4_lock", "ecm_front_end_ipv4_stopped_temp", "ecm_front_end_ipv4_stop_temp",
+    ],
+    "frontends/cmn/ecm_ipv6.c": [
+        "ecm_ipv6_lock", "ecm_front_end_ipv6_stopped_temp", "ecm_front_end_ipv6_stop_temp",
+    ],
+}
+for rel, terms in specs.items():
+    path = root / rel
+    lines = path.read_text(errors="replace").splitlines()
+    print(f"===== {rel} ({len(lines)} lines) =====")
+    emitted = set()
+    for term in terms:
+        hits = [i for i, line in enumerate(lines) if term in line]
+        print(f"-- {term}: {len(hits)} occurrence(s)")
+        for hit in hits:
+            lo, hi = max(0, hit - 7), min(len(lines), hit + 9)
+            for i in range(lo, hi):
+                if i not in emitted:
+                    print(f"{i + 1:5}: {lines[i]}")
+                    emitted.add(i)
+            print("-----")
+PY
+  die "patch does not apply to the pristine pinned QSDK source; inspect the context dump above"
+fi
 git -C "$ECM_ROOT" apply --whitespace=error-all "$PATCH_FILE"
 
 check_stop_temp_refcount "$ECM_ROOT"
