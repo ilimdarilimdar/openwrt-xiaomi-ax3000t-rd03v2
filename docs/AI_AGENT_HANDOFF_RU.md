@@ -2,11 +2,11 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-15, после проверки GitHub Actions и pinned kernel source.
+**Последняя сверка:** 2026-11-15, после запуска CI #120.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Текущий docs-only HEAD:** `07bd5d0750ee75a2d5d203c2fdcfb7622ee6186d`.
-**Последний code/test HEAD:** `a0e72ce6fa04a243849a96825f4891e0f0608b39` (строгий тест callback; C исходники не меняет).
-**Последняя функциональная ревизия ECM patch 9002:** `006e14a5d0348528a021943b1fd595cc233451db`.
+**Текущий code/test HEAD:** `558d3ca0a740787a43a6e1f33c4ad5fc6180206f`.
+**Текущая ревизия ECM patch 9002:** commit `558d3ca0a740787a43a6e1f33c4ad5fc6180206f`; lifecycle stop в `ecm_exit()` привязан к стабильному teardown-комментарию.
+**Последний подтверждённый результат:** Static checks #120 PASS; PREPARE_ONLY ещё выполняется, verdict ECM preflight пока отсутствует.
 
 ## Текущая контрольная точка
 
@@ -19,12 +19,14 @@
 
 ### GitHub Actions
 
-- [#105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924), commit `d51baa7`: Static, PREPARE_ONLY, raw source apply and pinned feed-series preflight **PASS**.
-- [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036), functional commit `006e14a`: Static and PREPARE_ONLY **PASS**; complete ECM preflight **PASS**.
-- Evidence from #106 preflight log: 9 file sections / 19 hunks validate; raw patch applies to the SHA-verified QSDK archive; patch 9002 applies after **all 31 pinned ECM feed patches**, including 9001; stop-counter/packet-hook lock consistency, RTNL pending-bit snapshot, frontend-gate closure before `synchronize_net()`, notifier registration/unwind/exit order and worker drain checks pass.
-- [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069), test-only commit `eba9d02`: Static **PASS**, PREPARE_ONLY **PASS**, atomic callback regression guard **PASS**. Full signed-image build and `verify-v2` remain **IN PROGRESS** at the latest check. Last reported run update was 15:28:33 UTC; log download was not yet available at 15:51 UTC. Do not interpret this as a build failure or success.
-- [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928), test-only commit `a0e72ce`: **PENDING** behind #107. Its callback guard requires only `set_bit()` and `schedule_work()`; it is not a new firmware-code revision.
-- Full C compilation, notifier marker in built `ecm.ko`, CI image generation and `verify-v2` have **no final result yet**. Runtime module loading and hardware Dual-WAN/NSS testing remain **NOT TESTED**.
+- [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069) и [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928): Static/PREPARE_ONLY проходили, но полный `make` остановился на применении ECM patch 9002 после pinned NSS feed patch queue. До компиляции `qca-nss-ecm` дело не дошло. Это не доказательство ошибки C-компилятора.
+- Ранний PASS workflow [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036) не считать достаточным подтверждением: его preflight использовал проверку через `git apply`, тогда как фактическая сборка использует OpenWrt `scripts/patch-kernel.sh` и GNU `patch -f -p1`. Позднейшие реальные build-запуски выявили расхождение.
+- [#118](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43757950832), HEAD `981a60a`: Static PASS; исправленный raw-source preflight с настоящим `patch -f -p1` дошёл до pinned QSDK source и отверг lifecycle hunk в `ecm_init.c`.
+- [#119](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43758676305), HEAD `e211beb`: Static PASS; raw-source preflight подтвердил, что оставшийся отказ связан с нестабильным контекстом `ecm_exit()`. Другие затронутые файлы применились.
+- [#120](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43759217102), HEAD `558d3ca`: Static PASS. На момент последней проверки job PREPARE_ONLY находился на шаге подготовки pinned sources/feeds/Kconfig; ECM preflight ещё не завершился. Проверка включает новый lifecycle hunk, привязанный к комментарию teardown.
+- Текущий preflight воспроизводит фактический механизм из pinned `scripts/patch-kernel.sh`: последовательное применение через `${PATCH:-patch} -f -p1`, отдельно к чистому QSDK archive и после всей сортированной очереди ECM feed patches. Сначала нужен PASS обеих проверок.
+- Kconfig продолжает выводить три unrelated recursive-dependency diagnostics (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); `defconfig` завершается, эти пакеты не выбраны. Это не причина отказа 9002.
+- Полная C-компиляция ECM, marker в собранном `ecm.ko`, image generation, `verify-v2`, загрузка модуля и Dual-WAN/NSS hardware tests пока **NOT TESTED**. Главный домашний роутер остаётся на штатной MiWiFi.
 
 ### Linux 6.18.55 source/API review
 
@@ -43,12 +45,11 @@
 
 ### Next actions
 
-1. Monitor #107 to completion; inspect full `build.log` and per-package `logs/package/feeds/nss/**` if build fails. Distinguish source/compiler errors from runner resource/time limits.
-2. Confirm successful `kmod-qca-nss-ecm` compilation and the FIB notifier runtime marker inside built `ecm.ko`.
-3. Confirm `verify-v2.sh` passes against the built rootfs/image, then inspect target/profile, package manifest, kernel/module versions, SHA-256 and key/repository stamps.
-4. Review #108's stricter callback guard when it runs. Do not count #107 and #108 as independent firmware architecture validations.
-5. Only after build/verify, prepare a separate second RD03v2 test device and recovery method. Test module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, real `ifdown`/cable-pull; IPv4 and IPv6 separately; conntrack marks, NSS/ECM counters, throughput, CPU, latency and packet loss.
-6. Keep the primary router on stock MiWiFi. Do not flash any CI artifact.
+1. Получить финальный результат [CI #120](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43759217102). Проверить raw QSDK apply и полную feed-series отдельно; при отказе разобрать конкретный `.rej`, а не менять номера строк наугад.
+2. После PASS обеих patch-очередей запустить отдельный full build/verify. Полная компиляция должна подтвердить именно `qca-nss-ecm`, затем проверить notifier marker в собранном `ecm.ko`, образ и `verify-v2.sh`.
+3. Не считать PREPARE_ONLY или Static checks сборкой прошивки. Не выпускать и не прошивать образ до отдельного контроля target/profile, package manifest, kernel/module versions, hashes, signing и recovery.
+4. Только после успешной сборки подготовить отдельное второе RD03v2 и recovery-метод. Проверять module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, conntrack marks, NSS/ECM counters, throughput, CPU, latency и packet loss.
+5. Основной домашний маршрутизатор оставить на stock MiWiFi. Никакие CI артефакты не прошивать.
 
 ### Safety and release limits
 
@@ -78,12 +79,14 @@ section of `docs/dualwan.md`.
 ### ECM worker lock alignment — 2026-11-15
 
 В patch 9002 worker использует `rtnl_net_lock(&init_net)` /
-`rtnl_net_unlock(&init_net)`, совпадая с per-net RTNL primitive в Linux 6.18
-FIB rule operations. Не использовать только общий `rtnl_lock()`: при
-`CONFIG_DEBUG_NET_SMALL_RTNL` он может не сериализовать worker с изменением
-rules в `init_net`. Static preflight теперь должен проверять именно net-scoped
-lock и его release до ECM DB walk. Это source-level guard, не замена compile и
-hardware stress tests.
+`rtnl_net_unlock(&init_net)`, то же API, что и pinned Linux 6.18.55 FIB rule
+operations. При выключенном `CONFIG_DEBUG_NET_SMALL_RTNL` (так настроен
+target generic config) header реализует эти вызовы inline через обычные
+`rtnl_lock()` / `rtnl_unlock()`; при включённом debug option используются
+net-scoped locks. Поэтому для целевой конфигурации это не compile blocker и
+worker сериализуется тем же primitive, что и FIB rule updates. Static preflight
+проверяет lock snapshot и его release до ECM DB walk. Это source-level guard,
+не замена compile и hardware stress tests.
 
 ---
 
