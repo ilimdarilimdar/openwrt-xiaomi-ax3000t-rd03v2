@@ -16,24 +16,25 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 104 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ ecm_db/ecm_db.c | 114 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 100 insertions(+)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
-@@ -24,5 +24,8 @@
+@@ -24,5 +24,9 @@
  #include <asm/uaccess.h>	/* for put_user */
  #include <net/ipv6.h>
  #include <net/ip6_route.h>
 +#include <net/fib_notifier.h>
 +#include <linux/bitops.h>
 +#include <linux/workqueue.h>
++#include <linux/rtnetlink.h>
  #include <linux/inet.h>
  #include <linux/in.h>
 
-@@ -469,8 +472,84 @@
+@@ -469,8 +473,90 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -63,6 +64,13 @@ index c97f625..0000000 100644
 +static void ecm_db_fib_rule_work_fn(struct work_struct *work)
 +{
 +	(void)work;
++
++	/*
++	 * Rule ADD/DEL callbacks run under RTNL before the rule is linked/unlinked.
++	 * Wait for that update to commit, but do not hold RTNL during the DB walk.
++	 */
++	rtnl_lock();
++	rtnl_unlock();
 +
 +	if (test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)) {
 +		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
@@ -119,7 +127,7 @@ index c97f625..0000000 100644
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
 
-@@ -763,3 +842,17 @@
+@@ -763,3 +849,17 @@
  	}
  #endif
 +
@@ -138,7 +146,7 @@ index c97f625..0000000 100644
 +
  	return ret;
 
-@@ -785,9 +878,20 @@
+@@ -785,9 +885,20 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");
