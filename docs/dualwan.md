@@ -42,11 +42,7 @@ The v1.x maintainer and reporter documented the following evidence:
   rather than remaining stalled.
 
 This is evidence for that **v1.x ECM/kernel combination**, not proof for v2.
-The v2 source and Linux 6.18 notifier API differ, so the v1 patch was not copied
-blindly. A separate v2 adaptation is maintained as patch 9002 and is checked
-against the exact pinned QSDK source and the complete pinned ECM feed patch
-series. Applying the patch is only a source-level gate; compilation and
-hardware behavior still have to be established.
+The v2 source and Linux 6.18 notifier API differ. The v1 patch must not be copied into v2 unchanged; patch 9002 is a separate adaptation checked against the exact pinned QSDK source and the complete pinned ECM feed patch series. Applying the patch is only a source-level gate; compilation and hardware behavior still have to be established.
 
 The current v2 pins are materially different:
 

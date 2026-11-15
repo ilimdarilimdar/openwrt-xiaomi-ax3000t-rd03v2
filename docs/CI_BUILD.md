@@ -66,25 +66,41 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
-## Current validation snapshot
+## Current validation snapshot — 2026-11-15
 
-Snapshot refreshed 2026-11-15 around 08:35 UTC; re-check the live workflow before relying on these statuses:
+- Branch: `work/rd03v2-dualwan-mwan3-baseline`.
+- Commit `76ea1dfc2a20ed257fecfd6d083d2b26a21db807` repaired the Git mode of
+  `tools/install-v2-signing-key.sh` to `100755` and added a `test -x` guard.
+  Workflow #74 passed Static and PREPARE_ONLY, including hash-verified QSDK
+  archive and complete ECM feed-series preflight for the previous 9002 revision.
+- Workflow #73, commit `d1bc351ce1d28f608d47ed327ff068519da6f5f0`: Static PASS,
+  PREPARE_ONLY PASS and old-revision ECM preflight PASS. Full-build failed
+  before `make download` because the installer script was not executable.
+- Workflow #74,
+  [run 43707480293](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43707480293):
+  Static PASS and PREPARE_ONLY PASS. Full-build was SKIPPED because the
+  commit did not request `[full-build]`.
+- The PREPARE_ONLY artifact from #73 (ID `14159280711`) has no selected NSS
+  recursive-dependency diagnostic after tree patch 0014. Three remaining
+  diagnostics concern Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom;
+  those package choices are unset in the final `.config`.
+- Exact pinned `ecm_db.c` and `ecm_init.c` review found that the parent module
+  does not call `ecm_db_exit()` when `ecm_db_init()` itself returns an error.
+  Patch 9002 now returns on a non-zero existing route-notifier status before
+  registering the new FIB notifier. Its preflight now asserts the guard against
+  both pristine and fully feed-patched source.
+- Commit `6e5f0e737d447576027005fb17bd044b79e46dda` contains that lifecycle guard,
+  its new preflight assertion, and documentation updates. Workflow #75
+  [run 43708044368](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708044368)
+  stopped at Static validation because the updated `dualwan.md` wording no
+  longer matched the workflow's older literal safety reminder. It did not run
+  PREPARE_ONLY or compile anything. The next commit restores the safety
+  distinction and updates the workflow assertion to the new exact wording.
+- The revised 9002 guard has NOT YET passed CI. Full ECM compilation,
+  `ecm.ko` marker verification, full image verification and hardware tests
+  remain pending.
 
-- Workflow #15 (commit `c5a64af9a23996401eb22c2a275023c419bbe547`): static checks PASS and PREPARE_ONLY PASS. Its artifact `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547` was downloaded and inspected.
-- That #15 `defconfig.log` confirms the earlier NSS recursive dependency cycle: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. The source commit predates patch 0014, so this artifact does not test the fix.
-- Workflow #16 (commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`): static checks PASS; full build remains IN PROGRESS at `Build and run verify-v2`. Logs and artifacts are unavailable while the job is active; timeout is 360 minutes. Do not cancel it merely because it takes time.
-- Runs #43–#46 were superseded/cancelled by newer pushes before yielding a complete current-source PREPARE_ONLY result.
-- Workflow #57 (commit `6878d6d16ab9858a136a6c4d224e0b53d07942cc`) is PENDING; GitHub has not started its jobs yet. It contains the current ECM candidate patch, the RTNL pending-bit snapshot order assertion, pinned-source preflight, and the full-image marker gate. Run #16 remains IN PROGRESS on the earlier commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`, which does not contain patch 9002. Cancelled runs #43–#56 were superseded by newer pushes, not classified as source/build failures. Re-query the newest run before relying on this snapshot.
-- The latest source commit in #57 also corrects C `\n` escaping in the worker's two `DEBUG_TRACE` strings; this does not change pending-bit, RTNL, or defunct behavior. The patch contents were inspected after that commit. The pinned-archive preflight remains NOT RUN until #57 starts.
-- Candidate ECM patch: `feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`. It uses the v2 `*_stop_temp()` helpers, defers the atomic FIB callback to a workqueue, unregisters the notifier and drains work before DB teardown. It is **NOT YET APPLY-VALIDATED, NOT COMPILED, NOT HARDWARE-TESTED**.
-- The candidate worker includes an RTNL publication barrier and snapshots/clears pending AF bits while RTNL is held. It releases RTNL before the ECM database walk. This ordering prevents a new rule event from being swallowed by a prior worker pass. The exact Linux 6.18 event ordering and `rtnl_net_lock()` implementation are linked in `docs/ecm-policy-routing-port.md`; preflight asserts the operation order.
-- PREPARE_ONLY now runs `tools/test-ecm-fib-rule-patch.sh`: read the pinned source fields from the prepared qca-nss-ecm Makefile, download the exact archive, verify its SHA-256, apply-check/apply patch 9002, and check callback/worker/teardown assertions.
-- `verify-v2.sh` checks that the final sysupgrade root filesystem contains `ecm.ko` with the runtime registration message. It also checks each ECM patch fingerprint across the whole ECM source tree when the build directory remains available.
-- Patch 0014's static filename check was corrected, and Markdown/docs-only pushes are filtered out of CI. Mixed source/config/docs changes still run the full validation workflow.
-- CI full-build uses a disposable signing key and `example.invalid`; even a successful run is not a user-installable release. No Dual-WAN/NSS hardware validation has been performed.
-
-Links:
-- [Actions workflow](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/workflows/rd03v2-validation.yml)
-- [Run #15 — PREPARE_ONLY artifact](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686096014)
-- [Run #16 — full build](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656)
-- [Run #57 — current ECM pending-bit snapshot checks](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43693127906)
+A successful CI full-build is still validation-only: it uses an ephemeral
+signing key and `example.invalid` package repository URL, uploads logs/config
+only, and does not publish a user-installable image. Hardware validation is
+NOT TESTED. Keep the primary router on stock firmware.
