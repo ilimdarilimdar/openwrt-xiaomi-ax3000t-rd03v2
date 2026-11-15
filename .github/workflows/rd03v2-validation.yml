@@ -38,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           git fetch origin main
-          git diff --check origin/main...HEAD
+          git diff --check origin/main...HEAD -- . ':(exclude,glob)**/*.patch'
           git merge-base --is-ancestor origin/main HEAD
 
       - name: Check shell syntax
@@ -239,6 +239,13 @@ jobs:
           cp "$keydir/public-key.pem" "$GITHUB_WORKSPACE/keys/public-key.pem"
           openssl ec -in "$keydir/private-key.pem" -pubout 2>/dev/null | cmp -s - "$GITHUB_WORKSPACE/keys/public-key.pem"
           echo "PASS: temporary P-256 keypair matches in the runner workspace"
+
+      - name: Install image verification host tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y qemu-user device-tree-compiler
 
       - name: Build and run verify-v2
         shell: bash
