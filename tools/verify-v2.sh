@@ -282,9 +282,17 @@ done
 # (AUTOREMOVE), the feed check above already proves each one sits in the feed's patches
 # directory, so the package build applied it: a patch that fails stops the build.
 EC=$(ls -d "$TREE"/build_dir/target-*/linux-qualcommax_ipq50xx/qca-nss-ecm-* 2>/dev/null | head -1)
+# With CONFIG_AUTOREMOVE=y, OpenWrt may leave the package build directory name
+# behind while removing its source files. Only inspect the patched source when
+# the actual ECM database source is still present; otherwise verify the exact
+# patch bytes in the feed overlay that PREPARE_ONLY checked before compilation.
+EC_SOURCE_PRESENT=no
+if [ -n "$EC" ] && [ -s "$EC/ecm_db/ecm_db.c" ]; then
+	EC_SOURCE_PRESENT=yes
+fi
 for p in "$V2"/feed-overlay/nss/qca-nss-ecm/patches/*.patch; do
 	[ -e "$p" ] || continue
-	if [ -n "$EC" ] && [ -d "$EC" ]; then
+	if [ "$EC_SOURCE_PRESENT" = yes ]; then
 		chk "ecm $(basename "$p")" "$(fp "$p" "$EC")" yes
 	else
 		chk "ecm $(basename "$p") is in the prepared feed" \
