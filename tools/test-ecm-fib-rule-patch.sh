@@ -357,6 +357,52 @@ grep -qF 'cancel_work_sync(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "notifier workqueue teardown is missing after patch"
 grep -qF 'schedule_work(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "atomic callback does not defer work"
+
+python3 - "$ECM_DB" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text()
+start = source.find("static int ecm_db_fib_rule_event(")
+end = source.find("static struct notifier_block ecm_db_fib_rule_nb", start)
+if start < 0 or end < 0:
+    sys.exit("FAIL: FIB notifier callback body not found")
+callback = source[start:end]
+
+ordered = [
+    "struct fib_notifier_info *info = ptr;",
+    "if (!info ||",
+    "switch (info->family)",
+    "set_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);",
+    "set_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);",
+    "schedule_work(&ecm_db_fib_rule_work);",
+]
+positions = [callback.find(token) for token in ordered]
+if any(position < 0 for position in positions):
+    sys.exit("FAIL: callback lacks a required family-bit / deferred-work operation")
+if positions != sorted(positions):
+    sys.exit("FAIL: callback must classify the event and set its pending bit before queueing work")
+if callback.count("schedule_work(&ecm_db_fib_rule_work);") != 1:
+    sys.exit("FAIL: callback must queue one coalesced worker after family classification")
+
+forbidden = (
+    "ecm_db_connection_defunct_ip_version(",
+    "synchronize_net(",
+    "rtnl_net_lock(",
+    "msleep(",
+    "schedule_timeout(",
+    "cond_resched(",
+)
+for token in forbidden:
+    if token in callback:
+        sys.exit(f"FAIL: atomic FIB callback contains process-context operation: {token}")
+
+if callback.rfind("return NOTIFY_DONE;") < positions[-1]:
+    sys.exit("FAIL: callback must return after scheduling the deferred worker")
+
+print("PASS: FIB notifier callback only records family state and queues deferred work")
+print("PASS: no ECM DB walk, network grace-period wait or sleepable operation runs in callback")
+PY
 grep -qF 'rtnl_net_lock(&init_net);' "$ECM_DB" ||
   die "worker does not wait for the RTNL-protected rule update to finish"
 grep -qF 'rtnl_net_unlock(&init_net);' "$ECM_DB" ||
