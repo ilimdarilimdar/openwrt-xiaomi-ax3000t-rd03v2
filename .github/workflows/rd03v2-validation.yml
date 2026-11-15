@@ -1,0 +1,178 @@
+name: RD03v2 validation
+
+on:
+  push:
+    branches:
+      - work/rd03v2-dualwan-mwan3-baseline
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rd03v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-validation:
+    name: Static checks (no firmware build)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check whitespace and merge-base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git diff --check origin/main...HEAD
+          git merge-base --is-ancestor origin/main HEAD
+
+      - name: Check shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            bash -n "$file"
+            echo "PASS bash -n $file"
+          done < <(find . -type f -name '*.sh' -not -path './openwrt-v2/*' -print0)
+
+      - name: Compile-check Python tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q tools
+          echo "PASS Python syntax: tools/"
+
+      - name: Validate RD03v2 config and package manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          config = Path("config/rd03v2.config").read_text()
+          manifest = [
+              line.strip()
+              for line in Path("config/image-must-have.txt").read_text().splitlines()
+              if line.strip() and not line.lstrip().startswith("#")
+          ]
+
+          devices = re.findall(r"^CONFIG_TARGET_DEVICE_.*=y$", config, re.M)
+          if len(devices) != 1 or "xiaomi_mi-router-ax3000t-v2" not in devices[0]:
+              sys.exit(f"FAIL: expected exactly one RD03v2 target, got {devices}")
+
+          required_config = [
+              "CONFIG_IPV6=y",
+              "CONFIG_PACKAGE_mwan3=y",
+              "CONFIG_PACKAGE_luci-app-mwan3=y",
+              "CONFIG_PACKAGE_iptables-nft=y",
+              "CONFIG_PACKAGE_ip6tables-nft=y",
+              "CONFIG_PACKAGE_xtables-nft=y",
+              "CONFIG_PACKAGE_ipset=y",
+              "CONFIG_ATH11K_MEM_PROFILE_256M=y",
+              "CONFIG_NSS_MEM_PROFILE_LOW=y",
+              "CONFIG_ATH11K_NSS_MEM_PROFILE_256M=y",
+          ]
+          missing = [item for item in required_config if item not in config.splitlines()]
+          if missing:
+              sys.exit(f"FAIL: missing config entries: {missing}")
+
+          duplicates = sorted({item for item in manifest if manifest.count(item) > 1})
+          if duplicates:
+              sys.exit(f"FAIL: duplicate image manifest entries: {duplicates}")
+
+          required_packages = [
+              "mwan3", "luci-app-mwan3", "iptables-nft", "ip6tables-nft",
+              "xtables-nft", "ipset", "iptables-mod-conntrack-extra",
+              "iptables-mod-ipopt"
+          ]
+          missing_packages = [item for item in required_packages if item not in manifest]
+          if missing_packages:
+              sys.exit(f"FAIL: missing image manifest entries: {missing_packages}")
+
+          if "does NOT include the v1.x ECM FIB-rule" not in Path("docs/dualwan.md").read_text():
+              sys.exit("FAIL: Dual-WAN documentation must state that the v1 ECM patch is not in v2")
+
+          print("PASS: one RD03v2 target")
+          print(f"PASS: {len(required_config)} required Kconfig entries")
+          print(f"PASS: {len(required_packages)} required Dual-WAN packages")
+          print("PASS: no duplicate image manifest entries")
+          PY
+
+      - name: Check that no private signing key is tracked
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -E '(^|/)private-key\.pem$'; then
+            echo "::error::A private signing key must never be committed."
+            exit 1
+          fi
+          echo "PASS: no tracked private-key.pem"
+
+  full-build:
+    name: Full signed-image build and verify-v2
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[full-build]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Show runner resources
+        shell: bash
+        run: |
+          free -h
+          df -h "$GITHUB_WORKSPACE"
+          nproc
+
+      - name: Prepare private signing key outside the repository
+        shell: bash
+        env:
+          RD03V2_PRIVATE_KEY_PEM: ${{ secrets.RD03V2_PRIVATE_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RD03V2_PRIVATE_KEY_PEM:-}" ]; then
+            echo "::error::Add repository Actions secret RD03V2_PRIVATE_KEY_PEM before requesting [full-build]."
+            exit 1
+          fi
+          keydir="$(dirname "$GITHUB_WORKSPACE")/keys/v2"
+          mkdir -p "$keydir"
+          umask 077
+          printf '%s\n' "$RD03V2_PRIVATE_KEY_PEM" > "$keydir/private-key.pem"
+          chmod 600 "$keydir/private-key.pem"
+          cp keys/public-key.pem "$keydir/public-key.pem"
+          openssl ec -in "$keydir/private-key.pem" -pubout 2>/dev/null | cmp -s - "$keydir/public-key.pem"
+          echo "PASS: private key matches repository public key"
+          unset RD03V2_PRIVATE_KEY_PEM
+
+      - name: Build and run verify-v2
+        shell: bash
+        env:
+          JOBS: "2"
+          TAG: CI-${{ github.sha }}
+          V2_REPO_URL: https://example.invalid/rd03v2-ci/packages.adb
+        run: |
+          set -euo pipefail
+          ./build.sh
+
+      - name: Upload build logs only (never publish CI images)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rd03v2-build-logs-${{ github.sha }}
+          path: |
+            openwrt-v2/*.log
+            openwrt-v2/diffconfig.txt
+            openwrt-v2/watchdog-*-tests.log
+          if-no-files-found: warn
+          retention-days: 14
