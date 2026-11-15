@@ -10,36 +10,48 @@ firmware. The image has not been built or tested on hardware from this branch.
 
 ## What this change does
 
-- Ships the mwan3 daemon and LuCI application in the root filesystem.
-- Adds a separate RD03v2 ECM patch 9002 for FIB policy-rule ADD/DEL events.
-- The candidate defers rule-change handling from the atomic notifier callback
-  to a work item, then invalidates accelerated connections by address family.
-- Patch 9002 passed the pinned-source preflight in workflow
-  [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036)
-  on functional code commit `006e14a`: the 19 unified-diff hunks validate,
-  raw `git apply --check` succeeds against the hash-verified QSDK 14.0 archive,
-  and the patch applies after all 31 pinned ECM feed patches, including 9001.
-- The same preflight confirms IPv4/IPv6 stop-counter updates and all six packet
-  hook reads use the shared locks; pending-bit snapshots are serialized with
-  RTNL; frontend gates close before `synchronize_net()` and DB invalidation;
-  FIB notifier init/unwind/normal-exit ordering and worker drain are checked.
-- Commit `006e14a` aligned the common frontend include hunks with exact pinned
-  package source locations and adjusted the byte-exact diagnostic ranges.
-  Workflow #106 Static and PREPARE_ONLY/preflight both passed.
-- A regression guard for the atomic callback was added in test-only commits
-  `eba9d02` and `a0e72ce`: the callback may only set family bits and queue
-  deferred work. Workflow [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069)
-  has passed Static and PREPARE_ONLY and is running the full build/verify-v2
-  step. Workflow [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928)
-  is queued behind #107; it tests a stricter version of the same guard, not a
-  different firmware implementation.
-- Full C compilation, image generation, and `verify-v2` have no result yet.
-  Hardware module loading and Dual-WAN/NSS stress tests remain NOT TESTED.
-- Do not install either CI build on the home router: the full-build workflow
-  uses a temporary CI-only signing key and `example.invalid` package-feed URL,
-  and uploads logs only rather than publishing a usable release.
-- Does not preconfigure WANs. First identify the actual netifd logical interface
-  names and DSA port mapping on the target router.
+- Adds upstream `mwan3` and `luci-app-mwan3` to the RD03v2 image using the
+  feed revisions pinned in `feeds.lock`.
+- Adds candidate ECM patch 9002 for FIB policy-rule ADD/DEL events. Its notifier
+  callback queues deferred work; the worker closes frontend gates, waits for
+  network readers and invalidates accelerated connections by IP family.
+- This is still a **source-validation candidate**, not a production-validated
+  Dual-WAN/NSS firmware. The patch has not passed the latest pinned-source
+  preflight, and no image from this branch has completed full build/verify.
+- The earlier [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036)
+  preflight was a false-positive gate for package-build compatibility: it
+  tested application with `git apply`, while OpenWrt actually uses
+  `scripts/patch-kernel.sh` and GNU `patch -f -p1`. The later full build
+  attempts [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069)
+  and [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928)
+  stopped when 9002 failed to apply in the real ECM feed patch queue, before
+  `qca-nss-ecm` compilation. Do not cite #106 as proof that this gate passed.
+- The preflight has since been corrected to use the same
+  `${PATCH:-patch} -f -p1` operation as pinned OpenWrt
+  `scripts/patch-kernel.sh`, both against the pristine QSDK archive and after
+  all sorted ECM feed patches.
+- [#118](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43757950832)
+  and [#119](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43758676305)
+  passed Static checks but exposed a remaining `ecm_exit()` lifecycle hunk
+  mismatch in the raw QSDK source. Other patch files in 9002 applied.
+- [#120](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43759217102)
+  uses a revised hunk anchored to the stable teardown comment. Its Static
+  checks passed; PREPARE_ONLY was still preparing pinned sources/feeds at the
+  last status check. The raw patch and complete feed-series checks have not
+  yet returned a final PASS.
+- Three unrelated Kconfig recursive-dependency diagnostics remain (Qt5 GUI,
+  fwknopd/LuCI fwknopd and squeezelite-custom). They do not prevent
+  `defconfig` completion and are not the cause of the 9002 patch-application
+  failures.
+- Full C compilation, built-module inspection, image generation and
+  `verify-v2` remain **NOT TESTED**. Hardware module loading and Dual-WAN/NSS
+  failover tests remain **NOT TESTED**.
+- Do not install a CI artifact on either router. The full-build workflow uses
+  a temporary CI-only signing key and the placeholder package URL
+  `example.invalid`; the workflow uploads logs/configuration rather than a
+  usable release image.
+- Does not preconfigure WANs. First identify the actual netifd logical
+  interface names and DSA port mapping on the target router.
 
 ## v1.x reference and the separate v2 port
 
