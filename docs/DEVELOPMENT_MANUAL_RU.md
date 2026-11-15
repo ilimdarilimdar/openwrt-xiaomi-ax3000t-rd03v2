@@ -37,7 +37,7 @@
 The full-build CI job uses a disposable signing key and an `example.invalid` package repository URL. It uploads logs, not a usable release image. Do not flash a CI artifact; keep the primary router on stock MiWiFi.
 
 ---
- 
+
 ## 1. Цель проекта
 
 Развивать отдельную сборку OpenWrt для **Xiaomi Mi Router AX3000T аппаратной ревизии RD03v2** с приоритетами:
