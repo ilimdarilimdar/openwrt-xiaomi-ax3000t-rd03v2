@@ -50,6 +50,38 @@
 
 ---
 
+### Дополнительная контрольная точка — mwan3 conntrack/failover audit (2026-11-15)
+
+Проверен точный pinned source mwan3 2.12.5 из packages commit
+`3a4f118a016af8a250fc77bb51b92aa2daf91f0a`:
+
+- `disconnected` (mwan3 health tracker) обновляет policy mangle chains, но не
+  удаляет per-WAN `ip rule` и таблицу маршрутов; сам по себе этот event не
+  гарантирует FIB notification для ECM patch 9002.
+- `ifdown` удаляет WAN rules/routes и может вызвать FIB notifier.
+- mwan3 восстанавливает conntrack mark до policy evaluation и сохраняет новый
+  mark в conntrack. Существующее соединение может сохранить старый WAN mark.
+- ECM FIB worker инвалидирует NSS/ECM acceleration state, но не переписывает
+  conntrack mark.
+- `flush_conntrack` в этой версии выполняет глобальный flush через
+  `/proc/net/nf_conntrack` и запускается только если действие явно перечислено
+  в `list flush_conntrack`; sample config не задаёт его по умолчанию.
+
+Следовательно, patch 9002 нельзя считать полным failover-переключателем для
+health-check `disconnected`, а прозрачное сохранение уже существующей TCP/UDP
+сессии между публичными WAN не обещается. Базовый критерий — новые соединения
+выходят через оставшийся WAN; судьбу существующих conntrack flows нужно
+измерять отдельно. Не включать глобальный conntrack flush без стендовой оценки.
+См. новый раздел **Failover events, conntrack marks and the ECM notifier** в
+`docs/dualwan.md`.
+
+Обязательные отдельные испытания: tracker `disconnected` при интерфейсе netifd
+UP; реальный `ifdown`/cable pull; conntrack mark до/после; FIB rule events;
+NSS counters; packet captures обоих WAN. Selective conntrack cleanup по
+mwan3 mark — отдельная будущая функция, пока не реализована.
+
+---
+
 ## 1. Сначала понять цель проекта
 
 Цель владельца — отдельная прошивка OpenWrt для **Xiaomi Mi Router AX3000T именно аппаратной ревизии RD03v2**, с сохранением Qualcomm NSS/ECM и последующей работой двух независимых WAN.

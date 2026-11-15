@@ -67,6 +67,63 @@ and [the v1.14 release](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/r
 - mwan3 performs per-connection policy distribution/failover. It does not
   bond two WANs into one faster TCP stream.
 
+## Failover events, conntrack marks and the ECM notifier
+
+The exact pinned mwan3 2.12.5 scripts distinguish a health-check **`disconnected`**
+event from a netifd **`ifdown`** event. This distinction is essential for the
+RD03v2 ECM/FIB work:
+
+- On `disconnected`, the hotplug script marks the interface offline and rebuilds
+  the policy mangle chains. It does not delete that interface's `ip rule` entries
+  or routing table. Therefore this event alone does not necessarily emit a FIB
+  rule ADD/DEL notification for patch 9002 to observe.
+- On `ifdown`, the script deletes the interface's policy rules, routes and
+  per-interface mangle chain, then rebuilds the policies. Those rule deletions
+  are the events that can reach the new ECM FIB notifier.
+- The general mwan3 hook restores the saved connection mark with
+  `CONNMARK --restore-mark` before policy evaluation, and saves a newly selected
+  mark with `CONNMARK --save-mark`. Existing conntrack entries can therefore
+  retain the old WAN mark instead of being re-evaluated against the updated
+  policy. Defuncting an ECM/NSS accelerated connection does **not** erase or
+  rewrite that conntrack mark.
+- `mwan3_flush_conntrack()` performs a global conntrack-table flush by writing
+  to `/proc/net/nf_conntrack`. It runs only when the interface's
+  `list flush_conntrack` contains the current event. The pinned sample config
+  does not enable this option by default. Do not enable global flushing blindly:
+  it can interrupt unrelated flows, including traffic using the surviving WAN.
+
+Primary source for these statements is the project's exact pinned
+[`mwan3.sh`](https://github.com/openwrt/packages/blob/3a4f118a016af8a250fc77bb51b92aa2daf91f0a/net/mwan3/files/lib/mwan3/mwan3.sh),
+[`15-mwan3` hotplug script](https://github.com/openwrt/packages/blob/3a4f118a016af8a250fc77bb51b92aa2daf91f0a/net/mwan3/files/etc/hotplug.d/iface/15-mwan3)
+and [sample config](https://github.com/openwrt/packages/blob/3a4f118a016af8a250fc77bb51b92aa2daf91f0a/net/mwan3/files/etc/config/mwan3).
+
+**Engineering consequence:** patch 9002 is an ECM acceleration invalidation
+mechanism for FIB policy-rule changes. It is not a conntrack mark migration
+mechanism and not, by itself, a complete response to every mwan3 tracker
+`disconnected` event. The expected baseline is that *new* connections use the
+surviving WAN. Existing sessions may stall or terminate and must not be described
+as transparently migrated to another public source address.
+
+Required bench cases, kept separate:
+
+1. Force a mwan3 tracker `disconnected` state while the netifd interface remains
+   up. Record `ip rule`, all route tables, the old connection's conntrack mark,
+   per-WAN packet captures and ECM/NSS counters. Confirm whether any FIB event
+   occurs; do not assume it does.
+2. Cause a real netifd `ifdown`/cable pull. Confirm the WAN rules/routes are
+   removed, patch 9002 receives the rule event, and the old conntrack mark is
+   still inspected independently of ECM acceleration state.
+3. On the isolated bench only, compare the effect of
+   `list flush_conntrack 'ifdown'`. Measure collateral loss of unrelated
+   connections; this option is global, not per-WAN selective cleanup.
+4. Only after these observations, evaluate a selective conntrack cleanup keyed
+   to mwan3's mark and mask. Treat it as a separate feature requiring its own
+   tests; do not silently add it to the base firmware.
+
+Useful evidence includes `ip -4 rule show`, `ip -4 route show table all`,
+`conntrack -L -o extended`, `mwan3 status`, `logread`, packet captures on
+both WAN devices, and ECM/NSS counters before and after each event.
+
 ## WAN and VPN configuration sequence
 
 1. Bring up each WAN independently in `/etc/config/network`. Verify address,
