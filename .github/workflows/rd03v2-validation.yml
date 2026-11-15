@@ -158,7 +158,7 @@ jobs:
   prepare-only:
     name: Prepare pinned sources, feeds and defconfig (no signing key)
     needs: static-validation
-    if: needs.static-validation.result == 'success' && !(github.event_name == 'push' && contains(github.event.head_commit.message, '[full-build]'))
+    if: needs.static-validation.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -210,7 +210,10 @@ jobs:
 
   full-build:
     name: Full signed-image build and verify-v2
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[full-build]')
+    needs:
+      - static-validation
+      - prepare-only
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[full-build]') && needs.prepare-only.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
