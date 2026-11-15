@@ -70,7 +70,8 @@ The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recurs
 _Last live GitHub Actions check: 2026-11-15._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Branch HEAD: `a0e72ce6fa04a243849a96825f4891e0f0608b39` (test-only callback guard).
+- Latest code/test HEAD before the documentation-only refresh: `a0e72ce6fa04a243849a96825f4891e0f0608b39` (test-only callback guard).
+- Documentation-only updates after that checkpoint: `a8d15e9` and `0b5bf9f`; firmware source unchanged.
 - Functional firmware-source revision: `006e14a5d0348528a021943b1fd595cc233451db`; later commits `eba9d02` and `a0e72ce` modify regression tests only.
 - Pinned target tree: `c36db6321c11595dc45a160cdab36b5c2d787744`; the kernel version file pins Linux **6.18.55**.
 - Pinned QSDK ECM: `7894b769eeb64f1c44fde547a107a8b866997590`; QSDK archive SHA-256 is checked by the preflight script.
