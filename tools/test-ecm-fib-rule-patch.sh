@@ -172,4 +172,48 @@ grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SE
   die "runtime registration diagnostic is missing after applying the complete feed series"
 echo "PASS: patch 9002 applies after $series_count pinned ECM feed patches, including 9001"
 
+# ecm_db_init() must not register the new FIB notifier if its existing
+# IPv4/IPv6 route-notifier registration failed. ecm_init() does not call
+# ecm_db_exit() from its err_db label when ecm_db_init() returns an error.
+python3 - "$ECM_DB" "$SERIES_ECM_DB" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+registration = "register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)"
+guard_pattern = re.compile(r"if\s*\(ret\)\s*\{\s*return\s+ret;\s*\}", re.S)
+
+for filename in sys.argv[1:]:
+    source = Path(filename).read_text()
+    start = source.find("int ecm_db_init(")
+    end = source.find("EXPORT_SYMBOL(ecm_db_init);", start)
+    if start < 0 or end < 0:
+        sys.exit(f"FAIL: ecm_db_init() not found in {filename}")
+    init = source[start:end]
+    reg_pos = init.find(registration)
+    if reg_pos < 0:
+        sys.exit(f"FAIL: FIB notifier registration missing in {filename}")
+
+    route_positions = [
+        init.find("ip_rt_register_notifier("),
+        init.find("rt6_register_notifier("),
+    ]
+    route_positions = [pos for pos in route_positions if pos >= 0]
+    if not route_positions:
+        sys.exit(f"FAIL: existing route notifier registration missing in {filename}")
+
+    guards = [
+        match for match in guard_pattern.finditer(init, 0, reg_pos)
+        if match.start() > max(route_positions)
+    ]
+    if not guards:
+        sys.exit(
+            f"FAIL: FIB notifier is not guarded by the ecm_db_init() route-notifier error "
+            f"return in {filename}"
+        )
+    print(f"PASS: FIB notifier registration is guarded against partial init failure ({filename})")
+
+print("PASS: no new FIB notifier is left registered on ecm_db_init() error path")
+PY
+
 echo "PASS: patch applies cleanly to the hash-verified pinned ECM source"

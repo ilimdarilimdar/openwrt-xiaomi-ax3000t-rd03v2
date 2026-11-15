@@ -250,12 +250,14 @@ Primary Linux 6.18 source references:
 - [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
 - [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
 
-## Current preflight limitation
+## Current preflight boundary
 
-`tools/test-ecm-fib-rule-patch.sh` currently verifies the hash-pinned raw QSDK
-archive and applies patch 9002 to that pristine source snapshot. This is useful
-for checking the patch's base context, but it does **not** prove that patch 9002
-applies after the NSS feed's existing package patch series (0000–0059), nor
-that `ecm.ko` compiles. The actual package preparation/compile and the final
-`verify-v2.sh` marker check remain mandatory gates. A green raw-archive
-preflight must not be reported as an ECM build PASS.
+`tools/test-ecm-fib-rule-patch.sh` verifies the hash-pinned raw QSDK archive,
+applies every preceding ECM feed patch in lexical/quilt order (including 9001),
+then applies 9002 to the resulting tree. CI #72 and #74 passed that full-series
+preflight for the previous revision of 9002. The current revision adds a guard
+for the `ecm_db_init()` error path and extends the script to assert the guard
+against both pristine and fully patched source. That revised guard has not yet
+passed CI. Even a green full-series apply test does not prove that `ecm.ko`
+compiles or runs: package compilation, the final `verify-v2.sh` marker check
+and controlled hardware tests remain mandatory.

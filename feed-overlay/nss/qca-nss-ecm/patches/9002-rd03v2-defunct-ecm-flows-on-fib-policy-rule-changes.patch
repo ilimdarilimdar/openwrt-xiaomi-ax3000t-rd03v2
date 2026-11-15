@@ -16,8 +16,8 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 123 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 123 insertions(+)
+ ecm_db/ecm_db.c | 130 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 130 insertions(+)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
@@ -137,9 +137,15 @@ index c97f625..0000000 100644
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +861,18 @@
+@@ -763,4 +861,25 @@
  	}
  #endif
++
++	/* ecm_init() skips ecm_db_exit() when this init returns an error. */
++	/* Do not register a notifier on that partial-initialization path. */
++	if (ret) {
++		return ret;
++	}
 +
 +	/*
 +	 * Register for policy-rule modifications (used by mwan3 and other
@@ -156,7 +162,7 @@ index c97f625..0000000 100644
 +
  	return ret;
  
-@@ -785,9 +897,20 @@
+@@ -785,9 +904,20 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");

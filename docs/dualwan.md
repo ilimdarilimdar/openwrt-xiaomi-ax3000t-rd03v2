@@ -11,13 +11,15 @@ firmware. The image has not been built or tested on hardware from this branch.
 ## What this change does
 
 - Ships the mwan3 daemon and LuCI application in the root filesystem.
-- Leaves Qualcomm NSS/ECM source and patch queues unchanged.
-- Does not add an experimental FIB notifier or claim that accelerated flows
-  always recover correctly after a mwan3 policy-rule change.
+- Adds a separate RD03v2 ECM patch 9002 for FIB policy-rule ADD/DEL events.
+- The candidate defers rule-change handling from the atomic notifier callback
+  to a work item, then invalidates accelerated connections by address family.
+- Patch application has passed the pinned-source and feed-series preflight;
+  compilation and hardware behavior remain unverified.
 - Does not preconfigure WANs. First identify the actual netifd logical interface
   names and DSA port mapping on the target router.
 
-## Important: a known v1.x fix exists, but it is not in v2
+## v1.x reference and the separate v2 port
 
 The ADCDS v1.x line already addressed the ECM/mwan3 policy-routing problem in
 [PR #40](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/pull/40).
@@ -39,11 +41,12 @@ The v1.x maintainer and reporter documented the following evidence:
   triggered three `mwan3 restart` operations; routed IPv6 flows recovered
   rather than remaining stalled.
 
-This is meaningful evidence for that **v1.x ECM/kernel combination**. It is
-not proof for v2. The v2.1.3 validation notes explicitly say that v2 ECM has
-no FIB-rule notifier and that a full mwan3 + PPPoE rig is needed to settle the
-interaction. The v1 patch must not be copied into v2 without adapting it to
-the exact pinned source and compiling it.
+This is evidence for that **v1.x ECM/kernel combination**, not proof for v2.
+The v2 source and Linux 6.18 notifier API differ, so the v1 patch was not copied
+blindly. A separate v2 adaptation is maintained as patch 9002 and is checked
+against the exact pinned QSDK source and the complete pinned ECM feed patch
+series. Applying the patch is only a source-level gate; compilation and
+hardware behavior still have to be established.
 
 The current v2 pins are materially different:
 
@@ -166,26 +169,44 @@ connections across each transition. Save `ip rule`, `ip route show table all`,
 `conntrack -L`, `mwan3 status`, `logread`, ECM/NSS counters and packet
 captures where possible.
 
-## ECM v2 porting gate
+## ECM v2 candidate validation status
 
-Before adding a v2 patch:
+The candidate lives at
+`feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`.
+It is separate from the upstream feed patches and is applied after the existing
+queue, including RD03v2 patch 9001.
 
-1. Extract the exact source archive pinned by the v2 NSS package Makefile and
-   verify its SHA-256 against the package hash.
-2. Compare the v1 patch's touched functions with v2's `ecm_db/ecm_db.c`.
-   Confirm that `ecm_db_connection_defunct_ip_version()`, the front-end stop
-   helpers, notifier registration API and cleanup labels have the expected
-   signatures and locking semantics.
-3. Add the v2 patch as a new final patch (currently after 0059) in
-   `feed-overlay/nss/qca-nss-ecm/patches/`. Do not replace or renumber an
-   upstream patch.
-4. Compile `kmod-qca-nss-ecm` against the pinned Linux 6.18 tree. Add a
-   verifier check for the registration log string and a runtime check that the
-   notifier registers successfully.
-5. Re-run the stock-vs-patched reproduction, rule-order tests, repeated
-   `mwan3 restart`, actual cable-pull failover and IPv4/IPv6 test matrix.
-   Only then call the v2 ECM change validated.
+**Source-level evidence already obtained:**
 
-Do not work around this by permanently disabling IPv6 acceleration or by
-writing to `front_end_ipv6_stop`: the v1 maintainer established that this is
-an internal pause flag, not a persistent configuration setting.
+- The exact QSDK 14.0 source archive is pinned by the NSS feed Makefile and
+  checked by SHA-256 before preflight.
+- CI #72 and #74 passed the then-current candidate's apply checks against the
+  raw archive and after all 31 preceding feed patches, including patch 9001.
+- The worker uses the Linux 6.18 FIB rule ADD/DEL notifier, per-family pending
+  bits, an RTNL publication barrier, and v2 `*_stop_temp()` helpers.
+- A source review found that `ecm_init()` does not call `ecm_db_exit()` when
+  `ecm_db_init()` itself returns an error. The candidate has now been tightened
+  to return before registering its new FIB notifier whenever the existing
+  IPv4/IPv6 route-notifier initialization leaves `ret != 0`. The new preflight
+  assertion for this guard has not yet run in CI.
+
+**Still NOT VERIFIED:**
+
+- The revised patch 9002 has not yet passed its updated preflight.
+- `kmod-qca-nss-ecm` has not yet been compiled with the complete patch queue.
+- The notifier registration marker has not yet been checked inside a freshly
+  built `ecm.ko`.
+- No second-router boot, Dual-WAN failover, throughput, NSS counter or latency
+  test has been performed.
+
+The full build in CI #73 did not reach `make download` or package compilation:
+it stopped because `install-v2-signing-key.sh` lacked the executable bit in
+Git. Commit `76ea1dfc2a20ed257fecfd6d083d2b26a21db807` fixed the tracked mode
+and added a static guard. CI #74 then passed Static and PREPARE_ONLY; its full
+build was skipped because the commit did not request `[full-build]`.
+
+Do not call this candidate a production Dual-WAN/NSS fix until the revised
+preflight, module compilation, final image verification and controlled
+hardware tests pass. Do not work around this by permanently disabling IPv6
+acceleration or by writing to `front_end_ipv6_stop`: the v1 maintainer
+established that this is an internal pause flag, not a persistent setting.
