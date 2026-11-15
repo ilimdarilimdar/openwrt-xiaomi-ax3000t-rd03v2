@@ -569,6 +569,22 @@ def check_source(db_path, init_path, header_path):
     if stop_call > min(conntrack, fe_stop, fe_exit):
         sys.exit(f"FAIL: FIB worker is not drained before normal frontend shutdown in {init_path}")
 
+    # Keep GNU patch fuzz from silently moving the worker drain elsewhere.
+    exit_lines = exit_fn.splitlines()
+    stop_lines = [
+        index for index, line in enumerate(exit_lines)
+        if line.strip() == "ecm_db_fib_rule_notifier_stop();"
+    ]
+    if len(stop_lines) != 1:
+        sys.exit(f"FAIL: expected exactly one FIB worker drain call in {init_path}, found {len(stop_lines)}")
+    stop_line = stop_lines[0]
+    expected_next = r'DEBUG_INFO("stop conntrack notifier\n");'
+    if stop_line + 1 >= len(exit_lines) or exit_lines[stop_line + 1].strip() != expected_next:
+        context = "\n".join(exit_lines[max(0, stop_line - 2):min(len(exit_lines), stop_line + 4)])
+        sys.exit(
+            f"FAIL: FIB worker drain must immediately precede conntrack notifier shutdown in {init_path}:\n{context}"
+        )
+
     err_ct = init.find("\nerr_ct:")
     err_v6 = init.find("\nerr_fe_ipv6:", err_ct)
     err_v4 = init.find("\nerr_fe_ipv4:", err_ct)
