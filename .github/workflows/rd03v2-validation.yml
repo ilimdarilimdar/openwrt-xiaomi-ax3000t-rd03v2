@@ -77,13 +77,23 @@ jobs:
               "CONFIG_PACKAGE_ip6tables-nft=y",
               "CONFIG_PACKAGE_xtables-nft=y",
               "CONFIG_PACKAGE_ipset=y",
-              "CONFIG_ATH11K_MEM_PROFILE_256M=y",
-              "CONFIG_NSS_MEM_PROFILE_LOW=y",
               "CONFIG_ATH11K_NSS_MEM_PROFILE_256M=y",
           ]
-          missing = [item for item in required_config if item not in config.splitlines()]
+          config_lines = config.splitlines()
+          missing = [item for item in required_config if item not in config_lines]
           if missing:
               sys.exit(f"FAIL: missing config entries: {missing}")
+
+          upstream_profile_choices = [
+              "CONFIG_ATH11K_MEM_PROFILE_256M=y",
+              "CONFIG_NSS_MEM_PROFILE_LOW=y",
+          ]
+          duplicated_profiles = [item for item in upstream_profile_choices if item in config_lines]
+          if duplicated_profiles:
+              sys.exit(
+                  "FAIL: 256 MiB choice symbols must come only from upstream "
+                  f".github/ci/ipq50xx/256m.config, not config/rd03v2.config: {duplicated_profiles}"
+              )
 
           duplicates = sorted({item for item in manifest if manifest.count(item) > 1})
           if duplicates:
@@ -102,7 +112,8 @@ jobs:
               sys.exit("FAIL: Dual-WAN documentation must state that the v1 ECM patch is not in v2")
 
           print("PASS: one RD03v2 target")
-          print(f"PASS: {len(required_config)} required Kconfig entries")
+          print(f"PASS: {len(required_config)} local Kconfig requirements")
+          print("PASS: upstream 256 MiB host/NSS profile choices are not duplicated locally")
           print(f"PASS: {len(required_packages)} required Dual-WAN packages")
           print("PASS: no duplicate image manifest entries")
           PY
