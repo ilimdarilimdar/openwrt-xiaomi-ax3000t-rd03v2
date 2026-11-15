@@ -84,14 +84,14 @@ index c97f625..0000000 100644
 +	rtnl_unlock();
 +
 +	if (ipv4_pending) {
-+		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\\n");
++		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
 +		ecm_front_end_ipv4_stop_temp(1);
 +		ecm_db_connection_defunct_ip_version(4);
 +		ecm_front_end_ipv4_stop_temp(0);
 +	}
 +#ifdef ECM_IPV6_ENABLE
 +	if (ipv6_pending) {
-+		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\\n");
++		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\n");
 +		ecm_front_end_ipv6_stop_temp(1);
 +		ecm_db_connection_defunct_ip_version(6);
 +		ecm_front_end_ipv6_stop_temp(0);
