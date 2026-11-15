@@ -226,7 +226,6 @@ index c97f625..0000000 100644
  {
 +	ecm_db_fib_rule_notifier_stop();
 +
-
 diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
 --- a/ecm_db/ecm_db.h
 +++ b/ecm_db/ecm_db.h
@@ -255,7 +254,6 @@ diff --git a/ecm_init.c b/ecm_init.c
  {
 +	ecm_db_fib_rule_notifier_stop();
 +
-
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
