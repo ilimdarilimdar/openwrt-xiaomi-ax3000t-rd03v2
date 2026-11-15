@@ -31,17 +31,9 @@ The preparation stage does not require the private signing key. The project buil
 
 The full build job runs only on a push whose commit message contains `[full-build]`.
 
-Before requesting such a run:
+A full-build run does not use the owner's release key. It generates a disposable P-256 EC keypair on the ephemeral GitHub runner, substitutes the public key only in that runner's checkout, and uses it to sign the temporary package index. The private key is not committed, printed, or uploaded. It disappears when the runner is destroyed.
 
-1. Open repository Settings → Secrets and variables → Actions.
-2. Add a repository secret named `RD03V2_PRIVATE_KEY_PEM`.
-3. Its value must be the PEM contents of the private EC signing key corresponding exactly to the committed `keys/public-key.pem`.
-4. Never put the private key in the repository, issue, chat, workflow file or build artifact.
-5. Make a deliberate commit with `[full-build]` in its message.
-
-The workflow creates the key only in the runner's temporary workspace, validates it against the public key and uses the project's normal `build.sh` and `verify-v2.sh` path. It uploads logs only and does not publish firmware binaries or a package repository.
-
-The build is stamped with an `example.invalid` package-repository URL. This deliberately makes the CI image unsuitable for installation as a user-facing release until a real package repository URL and release process are configured.
+The build is stamped with an `example.invalid` package-repository URL. This deliberately makes the CI image unsuitable for installation as a user-facing release. The workflow uploads logs and configuration only; it never publishes sysupgrade images or package repositories. A real release still requires the owner's long-term signing key, a real package repository URL, release artifacts, and separate review.
 
 ## Resource caveat
 
