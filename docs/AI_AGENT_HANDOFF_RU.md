@@ -3,33 +3,49 @@
 > **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
 
 **Последняя сверка исходного состояния:** 2026-11-15, текущая сессия
-**Последний source-code commit:** `e80f964efb78331be0c5c8c26c29a724f0c668cb` (переведён FIB worker на per-net RTNL lock)
-**Текущий branch HEAD на момент записи:** `70f92cc24098933a252c803403368534e97ec587` (исправлена кавычка Bash в preflight test); перед изменениями всегда получать актуальный HEAD из GitHub.
+**Последний code/patch commit:** `bd9867c8bdb4042280f571e57b0c75071ffc582e` (patch 9002: atomic refcount для общего ECM temporary-stop API и исправленные hunk counts).
+**Текущий branch HEAD на момент записи:** `5255da82c7a856dbc42f797419f8c4da636da398` (после документационных исправлений); перед изменениями всегда получать актуальный HEAD из GitHub.
 ## Актуальная контрольная точка — 2026-11-15
 
+Последняя live-сверка GitHub Actions: 2026-11-15 13:45 UTC.
+
+- Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
+- Последний code/patch commit: `bd9867c8bdb4042280f571e57b0c75071ffc582e`.
+  Он исправляет hunk counts в patch 9002 после добавления atomic temporary-stop accounting.
+- Branch HEAD на момент этой записи: `5255da82c7a856dbc42f797419f8c4da636da398`.
+  Более поздний HEAD включает только документационные уточнения.
 - CI #77, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS; pinned QSDK archive hash
-  и применение 9002 после 31 feed-патча подтверждены. Full build завершился
-  **FAIL** в `package/feeds/nss/qca-nss-ecm`; package compiler log не попал в
-  старый artifact, поэтому точная причина пока не установлена.
-- CI #78, source `3614994`: Static PASS, PREPARE_ONLY PASS и обновлённый ECM
-  preflight PASS. Preflight подтвердил применение 9002 после всех 31 feed-патча
-  и все проверки init/unwind/normal-exit. Full build job ещё выполняется на
-  последней live-проверке; результат компиляции и `verify-v2` не подтверждён.
-- Source commit `e80f964` меняет worker lock с общего `rtnl_lock()` на
-  `rtnl_net_lock(&init_net)` / `rtnl_net_unlock(&init_net)`, соответствуя
-  per-net RTNL primitive Linux 6.18 FIB rule update. Это устраняет условную
-  рассинхронизацию при `CONFIG_DEBUG_NET_SMALL_RTNL`.
-- В `tools/test-ecm-fib-rule-patch.sh` обновлены assertions на per-net lock.
-  Дополнительный commit `70f92cc` исправляет кавычки Bash в grep assertion.
-  Проверка этих последних изменений ожидает CI #82.
-- CI #82, run `43715272931`, commit `70f92cc`: PENDING на последнем
-  live-check. Он содержит обновлённый worker, test script и исправленный
-  artifact glob. CI #79–#81 были отменены более новыми push.
+  и применение старой 9002 revision после 31 feed-патча подтверждены. Full build
+  завершился **FAIL** в `package/feeds/nss/qca-nss-ecm`; старый artifact не содержит
+  per-package compiler log, поэтому первопричина остаётся **UNKNOWN**.
+- CI #78, source `3614994`: Static PASS, PREPARE_ONLY PASS и lifecycle preflight PASS.
+  На последней live-проверке Full build ещё **IN_PROGRESS**. Этот run не содержит
+  per-net RTNL update `e80f964` и не содержит atomic temporary-stop refcount update.
+- CI #82, run `43715272931`, commit `70f92cc`: **CANCELLED** последующими push
+  до выполнения актуального полного preflight. Не использовать как evidence для
+  per-net RTNL или последующих изменений.
+- CI #83, run `43720520592`, commit `8ce56c7`: **CANCELLED**.
+- CI #84, run `43720561061`, commit `2fba10a`: **CANCELLED**.
+- CI #85, run `43720607768`, commit `bd9867c`: **PENDING** на последней live-проверке,
+  ожидает сериализованный слот за #78. Именно он должен проверить обновлённый
+  patch 9002 и preflight assertions. Commit message не содержит `[full-build]`,
+  поэтому этот запуск рассчитан на Static + PREPARE_ONLY/preflight, а не на полную компиляцию.
+- Patch 9002 теперь преобразует исходные QSDK plain 0/1 temporary-stop flags в
+  `atomic_t` nesting counters: `atomic_inc()`, `atomic_dec_if_positive()`; все
+  шесть IPv4/IPv6 packet hook reads используют `atomic_read()`. Причина:
+  route notifier, interface notifier и новый FIB worker используют один и тот же
+  helper, поэтому plain assignment допускал premature re-enable при overlap.
+- `tools/test-ecm-fib-rule-patch.sh` теперь проверяет counter type, обе helper
+  операции, оба заголовка, все шесть atomic reads и выполняет assertions как на
+  clean pinned source, так и после полного feed patch series.
+- Важно: atomic nesting gate **не является quiescence barrier**. Он не ждёт
+  packet hooks, уже прошедшие stop check. Это отдельно требует lockdep/stress
+  и аппаратного тестирования.
 - Workflow artifact glob исправлен на `openwrt-v2/logs/package/feeds/nss/**`,
-  чтобы следующая полная сборка сохраняла реальные per-package компиляторные логи.
-- Не считать прошивку готовой. Требуются: успешная компиляция ECM, marker в
-  `ecm.ko`, `verify-v2.sh`, затем контролируемые испытания на втором RD03v2.
-  Основной роутер остаётся на штатной прошивке.
+  чтобы следующая полная сборка могла сохранить реальные per-package компиляторные логи.
+- Полная компиляция обновлённой atomic revision, marker в `ecm.ko`,
+  `verify-v2.sh` и аппаратная проверка остаются **NOT TESTED**.
+  Основной роутер остаётся на штатной MiWiFi.
 
 Исторические записи ниже сохранены как журнал; при расхождении использовать
 эту контрольную точку и актуальное состояние GitHub.
