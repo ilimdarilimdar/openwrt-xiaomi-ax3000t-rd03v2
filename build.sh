@@ -40,12 +40,17 @@ anchor() {
 }
 
 # 0. preflight
+case "$PREPARE_ONLY" in 0|1) ;; *) die "PREPARE_ONLY must be 0 or 1" ;; esac
 [ -e "$TREE" ] && die "$TREE exists; remove it first"
-[ "$(stat -c %a "$KEYDIR/private-key.pem")" = 600 ] || die "$KEYDIR/private-key.pem must be mode 600"
-openssl ec -in "$KEYDIR/private-key.pem" -pubout 2>/dev/null | cmp -s - "$KEYDIR/public-key.pem" ||
-	die "public-key.pem does not match private-key.pem"
-cmp -s "$KEYDIR/public-key.pem" "$V2/keys/public-key.pem" ||
-	die "the signing key is not the one committed in keys/public-key.pem"
+if [ "$PREPARE_ONLY" = 1 ]; then
+	echo "PREPARE_ONLY: signing key validation is skipped; no package/image signing or compilation will run"
+else
+	[ "$(stat -c %a "$KEYDIR/private-key.pem")" = 600 ] || die "$KEYDIR/private-key.pem must be mode 600"
+	openssl ec -in "$KEYDIR/private-key.pem" -pubout 2>/dev/null | cmp -s - "$KEYDIR/public-key.pem" ||
+		die "public-key.pem does not match private-key.pem"
+	cmp -s "$KEYDIR/public-key.pem" "$V2/keys/public-key.pem" ||
+		die "the signing key is not the one committed in keys/public-key.pem"
+fi
 
 # 1. his tree at the locked commit (full history: getver.sh derives the revision from it).
 # The pinned commits come from our forks (upstream.lock) when a local mirror lacks them, so a
@@ -131,8 +136,13 @@ awg_pin amneziawg-tools 3.1.20260812 ee0f0a9aa34ff0a0da4b3433b9512781cfe02843 \
 "$V2/tools/stamp-release-v2.sh" "$TREE" "$TAG" "$REPO_URL"
 
 # 6. our signing key (package/Makefile only generates one when the file is missing)
-install -m 600 "$KEYDIR/private-key.pem" "$TREE/private-key.pem"
-install -m 644 "$KEYDIR/public-key.pem" "$TREE/public-key.pem"
+# A PREPARE_ONLY tree stops before package indexing/signing and deliberately carries no private key.
+if [ "$PREPARE_ONLY" = 1 ]; then
+	echo "PREPARE_ONLY: signing key installation skipped"
+else
+	install -m 600 "$KEYDIR/private-key.pem" "$TREE/private-key.pem"
+	install -m 644 "$KEYDIR/public-key.pem" "$TREE/public-key.pem"
+fi
 
 # 7. .config: his CI fragments (without his 256m device list) + ours
 CI=$TREE/.github/ci/ipq50xx
