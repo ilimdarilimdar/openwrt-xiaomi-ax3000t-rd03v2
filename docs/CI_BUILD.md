@@ -62,6 +62,8 @@ The pinned upstream base already contains OpenWrt's `package-metadata.pl` correc
 
 The NSS cycle in the generated Kconfig is a separate dependency path: `luci-app-nss` selects the IPQ50xx `nss-tools-dwmac` package but also contains a conditional legacy `nss-tools` fallback. The DWMAC package conflicts with the legacy package and pulls in the NSS kernel stack. The RD03v2 fork now carries `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`, which removes the unused fallback for this IPQ50xx-only fork while leaving NSS kernel modules and runtime code unchanged.
 
+Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Makefile` was fetched from the pinned upstream tree commit `c36db6321c11595dc45a160cdab36b5c2d787744`. `git apply --check` passed, and applying patch 0014 left only `+luci-base +nss-tools-dwmac` in `LUCI_DEPENDS`. This proves the patch context applies cleanly to the pinned file; it does **not** prove Kconfig generation is cycle-free.
+
 This is a targeted hypothesis, not yet a proven fix. The next PREPARE_ONLY artifact must be inspected to verify that the NSS recursive dependency disappears. The other optional-package diagnostics should also be rechecked, but those packages were absent from the prior final `.config`.
 
 ## Current validation snapshot
