@@ -127,7 +127,7 @@ index c97f625..0000000 100644
 +	 * policy-routing managers). Failure is non-fatal, but without this
 +	 * notifier ECM cannot invalidate accelerated flows on rule-only changes.
 +	 */
-+	ret = register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL);
++ 	if (register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)) {
 +	if (ret) {
 +		cancel_work_sync(&ecm_db_fib_rule_work);
 +		printk(KERN_WARNING "ECM: failed to register FIB rule notifier (%d); policy-rule changes will not defunct accelerated connections\n", ret);
@@ -138,21 +138,24 @@ index c97f625..0000000 100644
 +
  	return ret;
 
-@@ -791,6 +884,17 @@
- 	spin_lock_bh(&ecm_db_lock);
- 	ecm_db_terminate_pending = true;
- 	spin_unlock_bh(&ecm_db_lock);
+@@ -785,9 +878,20 @@
+ void ecm_db_exit(void)
+ {
+ 	DEBUG_INFO("ECM DB Module exit\\n");
+ 
+ 	int ret;
  
 +	/* Stop new FIB callbacks and drain any queued defunct worker before the
-+	 * connection database is torn down. */
++	 * database enters its termination path. */
 +	if (ecm_db_fib_rule_registered) {
 +		ret = unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb);
 +		if (ret) {
-+			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\n", ret);
++			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\\n", ret);
 +		}
 +		ecm_db_fib_rule_registered = false;
 +	}
 +	cancel_work_sync(&ecm_db_fib_rule_work);
 +
- 	/*
- 	 * unregister for route table update events only if registered.
+ 	spin_lock_bh(&ecm_db_lock);
+ 	ecm_db_terminate_pending = true;
+ 	spin_unlock_bh(&ecm_db_lock);
