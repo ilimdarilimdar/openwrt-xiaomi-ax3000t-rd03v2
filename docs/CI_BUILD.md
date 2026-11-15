@@ -67,33 +67,38 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
 ## Current validation snapshot — 2026-11-15
-_Last live GitHub Actions check: 2026-11-15 13:26 UTC._
+_Last live GitHub Actions check: 2026-11-15 13:47 UTC._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Latest ECM patch/source revision: `e80f964efb78331be0c5c8c26c29a724f0c668cb`. It changes the worker's RTNL barrier to Linux 6.18's `rtnl_net_lock(&init_net)` / `rtnl_net_unlock(&init_net)` API.
-- The branch's later HEAD at this check is `70f92cc24098933a252c803403368534e97ec587`. Changes after `e80f964` are documentation and the static-test quoting correction; they do not alter patch 9002 itself.
+- Latest functional ECM patch revision: `bd9867c8bdb4042280f571e57b0c75071ffc582e`; later commit `6f54049` corrects only its displayed diffstat. The current branch HEAD at this check is `6f54049aea05f93ef06adab74662f502943c89eb`.
+- Patch 9002 now adds an atomic nesting count to the pinned QSDK `stop_temp()` API. The pinned baseline had plain `int` assignment, so concurrent route notifier, interface notifier and FIB worker operations could clear one another's stop state. The candidate uses `atomic_inc()`, `atomic_dec_if_positive()` and `atomic_read()` at all six IPv4/IPv6 packet-hook checks. This corrects the earlier incorrect description that the original v2 helpers already used atomic nesting counters.
+- The stop counter is a nesting gate, **not** a quiescence barrier. It does not wait for packet hooks that already passed the stop check.
 
 ### Workflow results
 
-- Workflow #77, [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463), used source revision `ac4ee43c79879c8bb557a26c252eb442aa5a3654`. Static checks and PREPARE_ONLY passed. The full build failed at `package/feeds/nss/qca-nss-ecm`. Its uploaded artifact contained only top-level logs, so the actual compiler diagnostic was not captured. The precise cause remains **UNKNOWN**; do not classify it as a source-code defect or a runner resource failure without the package log.
-- Workflow #78, [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665), uses lifecycle revision `36149940c8eb00df46d14b7bb10e747ec9666f3b`. Static checks and PREPARE_ONLY completed successfully, including the pinned-source and complete ECM feed-series preflight. At the last live check, its full-build job was still running at `Build and run verify-v2`. This run does **not** include the later `e80f964` per-net RTNL change.
-- Workflow #82, [run 43715272931](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43715272931), was triggered for HEAD `70f92cc`. At the last live check it was **Waiting** for #78 to complete because the workflow serializes runs on this branch. It will exercise the `e80f964` per-net RTNL revision and the corrected static assertion.
+- Workflow #77, [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463), tested source revision `ac4ee43c79879c8bb557a26c252eb442aa5a3654`. Static checks and PREPARE_ONLY passed; the full build failed at `package/feeds/nss/qca-nss-ecm`. The old artifact omitted package-specific logs, so the actual compiler diagnostic was not captured. The precise cause remains **UNKNOWN**.
+- Workflow #78, [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665), tests lifecycle revision `36149940c8eb00df46d14b7bb10e747ec9666f3b`. Static checks and PREPARE_ONLY/lifecycle preflight passed. Its full-build job was **IN_PROGRESS** at the last live check. It does not include later per-net RTNL or atomic stop-counter changes.
+- Workflow #82, run `43715272931`, commit `70f92cc`, was **CANCELLED** before the updated worker was validated.
+- Workflows #83 (`8ce56c7`), #84 (`2fba10a`) and #85 (`bd9867c`) were each **CANCELLED** by newer pushes before providing validation results.
+- Workflow #86, [run 43720816145](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43720816145), targets HEAD `6f54049`, which contains the atomic temporary-stop patch and its preflight checks. At the last live check it was **PENDING** behind #78 because runs are serialized on the branch. Its commit message does not include `[full-build]`, so it is expected to run Static + PREPARE_ONLY/preflight only, not a full image build.
 
-The current workflow now uploads the package-specific NSS logs under `openwrt-v2/logs/package/feeds/nss/**` in addition to top-level build logs. This path was verified against the pinned OpenWrt `include/subdir.mk` logging layout: `BUILD_LOG=1` stores a package's compile output beneath `logs/package/<feed>/<package>/`. Therefore a later full build should expose the actual ECM compiler output if that package fails again.
+The workflow now uploads package-specific NSS logs under `openwrt-v2/logs/package/feeds/nss/**`. This path matches the pinned OpenWrt `include/subdir.mk` logging layout: with `BUILD_LOG=1`, compile output is stored under `logs/package/<feed>/<package>/`. A subsequent full build should therefore expose the actual ECM compiler diagnostic if that package fails again.
 
 ### Source-level findings
 
 - Linux v6.18 defines `rtnl_net_lock()` and `rtnl_net_unlock()`; FIB rule changes assert the matching per-net RTNL lock before notifier dispatch. The worker snapshots/clears pending family bits under `init_net`'s lock, then releases it before walking the ECM database.
-- Linux v6.18 workqueue code clears the work item's pending bit before invoking its function and handles a requeued work item without running it concurrently with itself. This supports the patch's design in which a new rule event during the database walk schedules another worker pass.
-- These are source/API checks only. They do not prove successful ECM compilation, module load safety, NSS offload behavior or Dual-WAN correctness.
-- FIB notifier registration replays existing rules as ADD events. As documented in `ecm-policy-routing-port.md`, loading/reloading ECM can therefore cause a broad per-family defunct/re-acceleration pass. It is not session preservation across WAN address changes.
+- Linux v6.18 workqueue code clears the work item's pending bit before invoking its function and handles a requeued work item without running it concurrently with itself. This supports the worker's ability to schedule another pass when a rule change arrives during a DB walk.
+- The exact pinned QSDK 14.0 baseline implements frontend `stop_temp()` as plain flag assignment. Patch 9002 changes this shared API to guarded atomic nesting semantics to prevent overlapping notifier/worker operations from re-enabling a frontend early. The preflight checks the type, acquire/release operations, headers and all six packet-hook reads on raw source and after the complete feed patch series.
+- These are source/API and preflight assertions only. They do not prove successful ECM compilation, module load safety, NSS offload behavior or Dual-WAN correctness.
+- FIB notifier registration replays existing rules as ADD events. Loading/reloading ECM can therefore cause a broad per-family defunct/re-acceleration pass. It is not session preservation across WAN address changes.
 
 ### Required gates still open
 
-1. A successful full build of the latest `e80f964` revision.
-2. Confirmation that the built `ecm.ko` contains the expected notifier marker.
-3. Successful final `verify-v2.sh` checks against the generated image/root filesystem.
-4. Controlled second-router tests: ECM load/unload, FIB rule churn, mwan3 restart and cable-pull failover, IPv4/IPv6 separately, NSS/ECM counters, throughput, CPU, latency and packet loss.
-5. No primary-router flashing until all source, build/image and second-router hardware gates pass.
+1. Successful preflight of the latest atomic patch revision in CI #86.
+2. A separate successful full build of that exact patch revision, including compilation of `qca-nss-ecm`.
+3. Confirmation that the built `ecm.ko` contains the expected notifier marker.
+4. Successful final `verify-v2.sh` checks against the generated image/root filesystem.
+5. Controlled second-router tests: overlapping route/interface/FIB stop events, module load/unload, FIB rule churn, mwan3 restart and cable-pull failover; IPv4/IPv6 separately; NSS/ECM counters, throughput, CPU, latency and packet loss.
+6. No primary-router flashing until all source, build/image and second-router hardware gates pass.
 
-The CI full-build job uses a disposable signing key and an `example.invalid` repository URL. It uploads logs only and does not publish a usable release image. Hardware validation remains **NOT TESTED**; keep the primary router on stock firmware.
+CI full-build jobs use a disposable signing key and an `example.invalid` repository URL. They upload logs only and do not publish a usable release image. Hardware validation remains **NOT TESTED**; keep the primary router on stock firmware.
