@@ -51,7 +51,7 @@
 - `main`: `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`
 - Последний подтверждённый firmware source/config HEAD на момент аудита: `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`; документационные и CI-коммиты могут сдвигать HEAD без изменения firmware config.
-- GitHub compare на 15.11.2026: рабочая ветка `ahead_by=52`, `behind_by=0` относительно `main`, общая точка `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`. Ветка содержит актуальный на момент проверки `main`; merge/rebase из `main` не требуется.
+- GitHub compare на 15.11.2026: общая точка с `main` — `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`, рабочая ветка `behind_by=0` (она содержит `main`). В ранней проверке было `ahead_by=52`, в более поздней — `ahead_by=54`; счётчик включает документационные commits и не означает столько же изменений прошивки. Перед PR/merge проверять live refs, не полагаться на сохранённое число. Merge/rebase из `main` на этой контрольной точке не требуется.
 
 Сверять refs/SHA заново перед каждой работой: ветки и upstream со временем меняются. Не выполнять merge или rebase автоматически.
 
