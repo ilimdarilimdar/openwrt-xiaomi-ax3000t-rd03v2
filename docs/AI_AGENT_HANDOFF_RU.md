@@ -39,10 +39,10 @@
 
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
-**Последний baseline source/config commit до экспериментального ECM notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`
-**Текущий экспериментальный source delta:** feed overlay patch `9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`; статус NOT TESTED до pinned archive preflight и компиляции.
-**Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`
-**Последующие commits:** `4a0a9146086cebd4b8c8471870187c6986ae1de3` и `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7` меняют только CI workflow; `50b15707fedc0354a6ac175352ba21a3f1985f9a`, `0a5ea92c8f80dd2e045954b2e225ea1d7c6b5501`, `16b01367564d62091a3e966b56c8629fd3ff94f0` и `bcfad8813a164a38f59444534cd7f4983d9d345` обновляют CI-документацию; `8039a4795cc66434e17deca5f76d0e9e8a1d4fc8`, `331ce2f8328c900bd777b426e098c2450e2f0c06` и `7b55792f980412afd6678e2539cd78496dbc0940` создали/уточнили handoff и ссылку README. Ни один из этих commits не меняет firmware source, kernel, NSS code patches или WAN config.
+**Baseline source/config до эксперимента ECM FIB notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`.
+**Текущий source state:** firmware source HEAD `36149940c8eb00df46d14b7bb10e747ec9666f3b` включает candidate patch 9002 и lifecycle shutdown hook. CI #77 подтвердил применение предыдущей ревизии patch 9002 к точному pinned QSDK archive и полной feed-series; это PASS для preflight, но не для компиляции. Изменения shutdown hook из `3614994` ждут своего CI #78. Полная компиляция ECM и hardware tests остаются NOT TESTED.
+**Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`.
+**История изменений:** после baseline добавлены source patch 9002 и lifecycle изменения в commit `3614994`; отдельные commits изменяли CI workflow и документацию. Не считать старую формулировку ниже, что после baseline были только docs/CI, актуальной.
 
 **Последний статус на момент аудита:** активная разработка; базовая конфигурация и автоматические проверки есть, полная сборка Dual-WAN-ветки и её аппаратная пригодность не подтверждены.
 
@@ -97,7 +97,7 @@ RD03v2 — не MediaTek RD03/RD23. Образы, device tree, инструкц�
 
 Контрольная точка предыдущего инженерного аудита — `88ca871cb02074ede9138563e1f007d53d2fb440`. По GitHub compare рабочая ветка на момент последней сверки содержала 32 коммита после этой контрольной точки. Не ориентироваться на старый SHA из предыдущего мануала: получать HEAD заново.
 
-GitHub compare от 2026-11-15 подтверждает: `main` находится на общей точке `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`; рабочая ветка уже содержит `main` (`behind_by=0`). В раннем запросе было `ahead_by=52`, в более позднем — `ahead_by=54`; разница объясняется новыми documentation-only commits, а не изменением firmware. Считать важным условием `behind_by=0`, а точное число ahead перепроверять перед PR/merge. Дополнительный merge/rebase из `main` сейчас не требуется. **Не сливать main автоматически** и не обновлять upstream pins попутно с текущей задачей.
+Последний live GitHub compare (HEAD `d8fdd9a364f2fb3b8205f12504988db8fa95af63`, перед этим docs-only обновлением) показал: `main` на общей точке `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`; рабочая ветка `ahead_by=121`, `behind_by=0`. Это число включает весь commit history ветки, а не только исходные изменения прошивки. Текущая запись сама является docs-only commit, поэтому число ahead увеличится ещё на один; перед PR/merge сравнение обязательно повторить. `behind_by=0`, дополнительный merge/rebase из `main` сейчас не требуется. **Не сливать main автоматически** и не обновлять upstream pins попутно с текущей задачей.
 
 Главные документы проекта:
 
