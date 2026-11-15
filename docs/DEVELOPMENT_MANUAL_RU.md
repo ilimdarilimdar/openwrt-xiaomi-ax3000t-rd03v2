@@ -7,7 +7,7 @@
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
-**Базовый HEAD на момент подготовки:** `88ca871cb02074ede9138563e1f007d53d2fb440`
+**HEAD рабочей ветки на момент этой редакции:** `5bcad81cfe911b91f4ac928e53f424e1580ddfd7` (15.11.2026). Перед любой работой обязательно сверять актуальный SHA.
 
 ## Происхождение материалов и использование ИИ
 
@@ -17,7 +17,7 @@
 
 Результат, созданный ИИ, не считается автоматически корректным. Если изменение явно не отмечено как скомпилированное и проверенное на аппаратуре, оно считается непроверенным. Статусы проверки: PASS, FAIL, NOT TESTED и INCONCLUSIVE.
 
-> Это инженерный план и руководство, а не сертификат готовности прошивки. Текущая ветка является packaging baseline для mwan3. Её сборка и аппаратное тестирование не подтверждены. Не устанавливать её на основной роутер до прохождения ворот проверки из этого документа.
+> Это инженерный план, а не сертификат готовности прошивки. На 15.11.2026 статические проверки GitHub Actions и этап PREPARE_ONLY завершились успешно. Полная CI-сборка запущена, её итог ещё не подтверждён. На устройстве наша ветка не испытывалась. CI-сборка использует временный ключ и `example.invalid`, поэтому её результат не является пользовательским релизом и не предназначен для установки. Основной роутер не прошивать.
 
 ---
 
@@ -50,7 +50,7 @@
 - Родительский проект: `ADCDS/openwrt-xiaomi-ax3000t-rd03v2`
 - `main`: `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`
-- HEAD рабочей ветки: `88ca871cb02074ede9138563e1f007d53d2fb440`
+- HEAD рабочей ветки на момент этой редакции: `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`
 
 Сверять SHA заново перед каждой работой: ветки и upstream со временем меняются.
 
@@ -61,12 +61,25 @@
 - `config/rd03v2.config`
 - `config/image-must-have.txt`
 - `tools/verify-v2.sh`
+- `.github/workflows/rd03v2-validation.yml`
+- `docs/CI_BUILD.md`
+- `docs/TEST_PLAN_RU.md`
 - `docs/dualwan.md`
 - `docs/ecm-policy-routing-port.md`
 
 Точное состояние сверять по Git diff. Ветка **не** содержит готовую аппаратно проверенную конфигурацию второго WAN и не содержит портированный v2 ECM FIB notifier.
 
-### 2.3. Текущие pinned source revisions
+### 2.3. Подтверждённые результаты CI на 15.11.2026
+
+- Workflow #15, commit `c5a64af9a23996401eb22c2a275023c419bbe547`: статические проверки — PASS; `PREPARE_ONLY` — PASS; артефакт подготовки создан. Полная сборка в этом запуске была пропущена по условию workflow.
+- По выгруженному `config.final.txt` сохранены целевая плата RD03v2, NSS-профиль 256 MiB/LOW, `mwan3`, `luci-app-mwan3`, nft-backed iptables, ipset и предусмотренные пакеты WireGuard/AmneziaWG.
+- В `defconfig.log` присутствуют сообщения Kconfig `recursive dependency detected` для нескольких пакетов, включая цепочку `luci-app-nss`. `make defconfig` завершился и записал `.config`, но предупреждения остаются предметом аудита и не должны замалчиваться.
+- Workflow #16, commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`: статические проверки — PASS; полная сборка запущена и на момент последней проверки ещё выполнялась. Итог `make` и `verify-v2.sh` пока не подтверждён.
+- CI full-build создаёт временный P-256 ключ, встраивает URL репозитория `example.invalid` и загружает только логи. Даже успешный результат этого задания не является устанавливаемым релизом и не должен прошиваться.
+
+Подробный порядок приёмки: [docs/TEST_PLAN_RU.md](TEST_PLAN_RU.md). Общая схема CI: [docs/CI_BUILD.md](CI_BUILD.md).
+
+### 2.4. Текущие pinned source revisions
 
 Из документации рабочей ветки:
 
@@ -559,6 +572,8 @@ validation/
 - [Upstream ADCDS](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2)
 - [Upstream releases](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/releases)
 - [v2 validation](../VALIDATION.md)
+- [План испытаний и приёмки](TEST_PLAN_RU.md)
+- [Состояние и устройство CI-сборки](CI_BUILD.md)
 - [Dual-WAN baseline](dualwan.md)
 - [ECM policy-routing port plan](ecm-policy-routing-port.md)
 - [OpenWrt mwan3 documentation](https://openwrt.org/docs/guide-user/network/wan/multiwan/mwan3)

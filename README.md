@@ -131,6 +131,8 @@ Details are in [VALIDATION.md](VALIDATION.md).
   (from v2.1.2)
 - [Upgrading from v1.x](docs/upgrading-from-v1.md)
 - [Building](docs/building.md)
+- [План испытаний и приёмки RD03v2](docs/TEST_PLAN_RU.md)
+- [CI build and signing model](docs/CI_BUILD.md)
 - [VALIDATION.md](VALIDATION.md): what was tested on hardware, and what was not
 - [NFC tag](docs/nfc.md)
 - [In-place updates, and the RAM installer without UART](docs/no-uart-reflash.md)
