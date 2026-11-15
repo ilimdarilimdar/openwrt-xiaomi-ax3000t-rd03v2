@@ -284,8 +284,8 @@ done
 EC=$(ls -d "$TREE"/build_dir/target-*/linux-qualcommax_ipq50xx/qca-nss-ecm-* 2>/dev/null | head -1)
 for p in "$V2"/feed-overlay/nss/qca-nss-ecm/patches/*.patch; do
 	[ -e "$p" ] || continue
-	if [ -n "$EC" ] && [ -d "$EC/frontends" ]; then
-		chk "ecm $(basename "$p")" "$(fp "$p" "$EC/frontends")" yes
+	if [ -n "$EC" ] && [ -d "$EC" ]; then
+		chk "ecm $(basename "$p")" "$(fp "$p" "$EC")" yes
 	else
 		chk "ecm $(basename "$p") is in the prepared feed" \
 			"$(yes_ cmp -s "$p" "$TREE/feeds/nss/qca-nss-ecm/patches/$(basename "$p")")" yes
