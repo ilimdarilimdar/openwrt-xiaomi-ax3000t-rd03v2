@@ -88,4 +88,3 @@ Links:
 - [Run #15 — PREPARE_ONLY artifact](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686096014)
 - [Run #16 — full build](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656)
 - [Run #57 — current ECM pending-bit snapshot checks](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43693127906)
-
