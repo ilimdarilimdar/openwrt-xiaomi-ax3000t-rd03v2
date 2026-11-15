@@ -66,6 +66,10 @@ grep -qF 'cancel_work_sync(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "notifier workqueue teardown is missing after patch"
 grep -qF 'schedule_work(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "atomic callback does not defer work"
+grep -qF 'rtnl_lock();' "$ECM_DB" ||
+  die "worker does not wait for the RTNL-protected rule update to finish"
+grep -qF 'rtnl_unlock();' "$ECM_DB" ||
+  die "worker does not release RTNL before walking the ECM database"
 grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
 grep -qF 'ecm_db_connection_defunct_ip_version(4)' "$ECM_DB" ||
