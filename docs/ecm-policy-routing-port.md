@@ -100,6 +100,21 @@ building a sysupgrade image.
 
 ## v2 source review and candidate patch status (2026-11-15)
 
+The Linux 6.18 event path was also checked in the exact tagged kernel sources:
+
+- `net/core/fib_rules.c` builds `fib_rule_notifier_info` with
+  `info.family = ops->family` and calls `call_fib_notifiers()`
+  ([notifier wrapper](https://github.com/torvalds/linux/blob/v6.18/net/core/fib_rules.c#L368-L399)).
+- The rule-add path calls `call_fib_rule_notifiers(..., FIB_EVENT_RULE_ADD, ...)`
+  after the rule is configured
+  ([add path](https://github.com/torvalds/linux/blob/v6.18/net/core/fib_rules.c#L920-L927)).
+- The delete path calls `FIB_EVENT_RULE_DEL`
+  ([delete path](https://github.com/torvalds/linux/blob/v6.18/net/core/fib_rules.c#L1091-L1099)).
+- `net/core/fib_notifier.c` dispatches the chain with
+  `atomic_notifier_call_chain()`
+  ([dispatch](https://github.com/torvalds/linux/blob/v6.18/net/core/fib_notifier.c#L29-L39)).
+  This confirms that the callback must remain short and defer database traversal to workqueue context.
+
 The exact pinned QSDK 14.0 source was inspected at
 `7894b769eeb64f1c44fde547a107a8b866997590`. The v2 code differs from the
 v1 reference in a critical API detail:
