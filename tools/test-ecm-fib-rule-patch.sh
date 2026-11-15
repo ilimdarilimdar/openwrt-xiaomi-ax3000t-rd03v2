@@ -626,4 +626,53 @@ check_source(*sys.argv[4:7])
 print("PASS: FIB worker is drained before front-end teardown")
 PY
 
+# The FIB notifier callback runs in atomic context. It must only record the
+# affected family and queue process-context work; all sleeping and DB work
+# belongs in the worker.
+python3 - "$ECM_DB" "$SERIES_ECM_DB" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+def check_atomic_callback(path):
+    source = Path(path).read_text()
+    start = source.find("static int ecm_db_fib_rule_event(")
+    brace = source.find("{", start)
+    end = source.find("\nstatic struct notifier_block ecm_db_fib_rule_nb", brace)
+    if start < 0 or brace < 0 or end < 0:
+        sys.exit(f"FAIL: FIB notifier callback is missing in {path}")
+    body = source[brace + 1:end]
+
+    required = [
+        "event != FIB_EVENT_RULE_ADD",
+        "event != FIB_EVENT_RULE_DEL",
+        "switch (info->family)",
+        "set_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)",
+        "set_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending)",
+        "schedule_work(&ecm_db_fib_rule_work)",
+        "return NOTIFY_DONE;",
+    ]
+    missing = [token for token in required if token not in body]
+    if missing:
+        sys.exit(f"FAIL: atomic FIB callback is missing required behavior in {path}: {missing}")
+
+    calls = re.findall(r"\b([A-Za-z_]\w*)\s*\(", body)
+    actual = [name for name in calls if name not in {"if", "switch"}]
+    if actual != ["set_bit", "set_bit", "schedule_work"]:
+        sys.exit(
+            f"FAIL: atomic FIB callback contains unexpected calls in {path}: {actual}; "
+            "only set_bit() and schedule_work() are allowed"
+        )
+
+    if body.find("set_bit(ECM_DB_FIB_RULE_PENDING_IPV4") > body.find("schedule_work("):
+        sys.exit(f"FAIL: IPv4 pending bit is set after queuing work in {path}")
+    if body.find("set_bit(ECM_DB_FIB_RULE_PENDING_IPV6") > body.find("schedule_work("):
+        sys.exit(f"FAIL: IPv6 pending bit is set after queuing work in {path}")
+
+for source_path in sys.argv[1:]:
+    check_atomic_callback(source_path)
+
+print("PASS: FIB notifier callback only sets atomic pending bits and queues work")
+PY
+
 echo "PASS: patch applies cleanly to the hash-verified pinned ECM source"
