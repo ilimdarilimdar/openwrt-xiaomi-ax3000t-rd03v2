@@ -262,74 +262,43 @@ Primary Linux 6.18 source references:
 - [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
 - [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
 
-## Current preflight and lifecycle status
+## Current preflight and lifecycle status — 2026-11-15
 
-`tools/test-ecm-fib-rule-patch.sh` verifies the hash-pinned raw QSDK archive,
-applies every preceding ECM feed patch in lexical/quilt order (including 9001),
-then applies 9002 to the resulting tree. CI #77 passed the current
-pre-shutdown revision against both clean source and the complete feed series.
-Its separate full-build job later failed at `package/feeds/nss/qca-nss-ecm`.
+The exact pinned QSDK 14.0 archive is:
+- source commit: `7894b769eeb64f1c44fde547a107a8b866997590`;
+- archive: `qca-nss-ecm-14.0.2026.09.06.7894b769eeb64f1c44fde547a107a8b866997590.tar.zst`;
+- CI #93 successfully downloaded the archive and verified its configured SHA-256. The failure was not a network or archive-integrity problem.
 
-The source revision `36149940c8eb00df46d14b7bb10e747ec9666f3b` extended patch 9002 with
-`ecm_db_fib_rule_notifier_stop()` and adds explicit shutdown-order checks:
+The lifecycle changes in patch 9002 remain:
+- FIB notifier callbacks only set per-family pending bits and schedule work;
+- the worker snapshots/clears pending bits while holding `rtnl_net_lock(&init_net)`, then releases RTNL before stop gates, `synchronize_net()` and the ECM DB walk;
+- notifier shutdown unregisters the callback and drains work before database/front-end teardown;
+- module init unwind paths stop the worker before tearing down initialized front ends.
 
-- Normal `ecm_exit()` unregisters the FIB notifier and drains the worker before
-  stopping conntrack notifications or either ECM front end.
-- The `err_ct`, `err_fe_ipv6` and `err_fe_ipv4` init-unwind paths stop the
-  worker before tearing down any already-initialized front end.
-- `ecm_db_exit()` retains the same idempotent helper before DB termination.
-- The stop helper clears the registered flag only after successful notifier
-  unregistration, then waits for `cancel_work_sync()`.
-- The preflight script asserts these ordering constraints on both pristine
-  pinned source and the fully feed-patched source.
+A green source-apply preflight does not prove that `ecm.ko` compiles or runs. Required gates remain: complete feed-series preflight, full `kmod-qca-nss-ecm` compilation, notifier marker in the built module, `verify-v2.sh`, and controlled second-router hardware tests.
 
-CI #78 has now confirmed the lifecycle preflight for `3614994` (including raw
-and fully feed-patched source), but its full build is still in progress at the
-last live check. Source commit `e80f964` additionally aligns the worker with
-Linux 6.18's per-net RTNL lock API. The updated lock assertions and Bash fix
-are queued for CI #82. CI #77's full build failed in `qca-nss-ecm`; the old
-artifact omitted the per-package compiler log. The workflow now uploads
-`openwrt-v2/logs/package/feeds/nss/**` so the next full build exposes detailed
-NSS/ECM diagnostics.
+## Concurrent temporary-stop accounting — corrected source audit, 2026-11-15
 
-Even a green source-apply test does not prove that `ecm.ko` compiles or runs.
-Required gates remain: revised preflight, complete `kmod-qca-nss-ecm`
-compilation, notifier marker in the built module, `verify-v2.sh`, and
-controlled second-router hardware tests.
+An earlier draft incorrectly described the pinned QSDK `stop_temp()` helpers as plain integer assignments. The exact pinned source already declares IPv4 and IPv6 temporary-stop state as `atomic_t`, increments it with `atomic_inc()`, and performs a read-then-`atomic_dec()` release. The common packet hooks already use `atomic_read()` while holding the corresponding `ecm_ipv4_lock` or `ecm_ipv6_lock`.
 
-## Concurrent temporary-stop accounting — 2026-11-15
+The actual race is narrower:
+- stop-counter updates in the original helper do not take the family lock used by packet hooks;
+- the original `atomic_read() > 0` followed by `atomic_dec()` is a check-then-update sequence and is not one indivisible decrement;
+- therefore the packet-hook check and the stop-state update are not serialized by a common lock.
 
-A source-level review of the exact QSDK 14.0 base found that the original
-v2 `stop_temp()` helpers are plain integer assignments, not the nested
-atomic counters described in an earlier draft of this document. The helpers
-are shared by the existing IPv4/IPv6 route-table notifiers and interface
-notifier as well as patch 9002's new FIB-rule worker. An overlapping caller
-could therefore write zero while another caller still requires the front end
-to remain stopped.
+The corrected patch 9002 moves each existing atomic counter and its public helper implementation from the separate IPv4/IPv6 front-end source into the corresponding common front-end source, beside the family spinlock. The helper now takes that lock, uses `atomic_inc()` for stop and `atomic_dec_if_positive()` for release, then unlocks. The six existing packet-hook `atomic_read()` checks are already protected by the same locks, so the corrected patch deliberately does not rewrite those expressions.
 
-Patch 9002 now changes those shared flags to `atomic_t`, uses
-`atomic_inc()` for a stop and `atomic_dec_if_positive()` for a matching
-release, and converts all six relevant packet-hook checks to `atomic_read()`.
-The guarded decrement is intentionally stronger than the read-then-decrement
-backport pattern: a competing release cannot decrement below zero. The new
-preflight checks the counter type, helper body, all six reads and header API
-against both the clean pinned source and the complete pinned feed-patch order.
+The direct helper callsites found in the pinned source are in `ecm_db.c` route-notifier/proc-control paths and `ecm_interface.c` node-connection defunct handling. The inspected caller bodies do not already hold the same family lock, so the added helper lock does not show an obvious recursive acquisition in those call paths. This is a targeted caller review, not a substitute for lockdep and concurrency stress testing.
 
-The atomic counter alone is not a grace-period barrier. The FIB worker now
-raises each affected frontend stop gate, then calls `synchronize_net()` once,
-after releasing `init_net`'s per-net RTNL lock and before the database walk.
-Linux v6.18's `nf_hook()` holds `rcu_read_lock()` across the complete hook
-chain, while `synchronize_net()` waits for pre-existing network RCU readers.
-Thus hooks that already passed the stop check finish before the FIB worker
-starts defuncting connections; later hooks see the raised atomic gate and
-return without ECM processing. The wait runs in workqueue context with RTNL
-released.
+### CI finding and correction
 
-This barrier is specific to the FIB worker. Existing route/interface notifier
-walks still rely on the shared atomic nesting gate and ECM DB locking; this
-change does not add a global mutex around every notifier walk. It also does
-not preserve conntrack/NAT sessions across WAN address changes. Compile,
-lockdep/stress, module lifecycle and hardware validation remain required.
+Run [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43723568587), source `f9b71d7`, passed static checks and OpenWrt PREPARE_ONLY source/config preparation, and verified the pinned archive checksum. Its ECM preflight then failed because patch hunks expected the wrong original declarations/reads; the full build was skipped. The error identified the six IPv4/IPv6 frontend/header/common-source hunks, not an ECM compiler failure.
+
+Corrected patch/preflight commit: `d08e5d8b44276f306244b02b56ed9f090809e5e1`. It now targets the actual atomic QSDK baseline described above.
+
+Run [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`, had passed Static checks; PREPARE_ONLY source/config preparation was still running and the ECM preflight step was pending at the last check (2026-11-15 14:45 UTC). Do not mark the corrected patch as apply-validated until that step completes.
+
+The FIB worker's `synchronize_net()` barrier remains separate from the temporary-stop counter fix. It closes the affected frontend gates, waits for already-running Netfilter hook readers after RTNL is released, and only then walks the ECM database. This barrier does not preserve conntrack/NAT sessions across WAN address changes, and it does not serialize unrelated route/interface notifier DB walks.
 
 Kernel source references for the exact 6.18 API:
 - `nf_hook()` RCU critical section:
