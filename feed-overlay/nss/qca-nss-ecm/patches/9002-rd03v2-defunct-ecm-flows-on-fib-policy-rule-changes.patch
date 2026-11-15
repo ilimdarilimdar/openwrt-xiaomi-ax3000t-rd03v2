@@ -16,8 +16,10 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 129 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 129 insertions(+)
+ ecm_db/ecm_db.c | 140 ++++++++++++++++++++++++++++++
+ecm_db/ecm_db.h | 1 +
+ecm_init.c | 4 ++++
+ 3 files changed, 145 insertions(+), 0 deletions(-)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
@@ -33,7 +35,7 @@ index c97f625..0000000 100644
 +#include <linux/rtnetlink.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-@@ -469,9 +473,103 @@
+@@ -469,9 +473,123 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -133,11 +135,31 @@ index c97f625..0000000 100644
 +	.notifier_call = ecm_db_fib_rule_event,
 +};
 +
++/*
++ * ecm_db_fib_rule_notifier_stop()
++ * Stop FIB callbacks and drain pending work before front-end teardown.
++ */
++void ecm_db_fib_rule_notifier_stop(void)
++{
++	int ret;
++
++	if (ecm_db_fib_rule_registered) {
++		ret = unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb);
++		if (ret) {
++			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\n", ret);
++		} else {
++			ecm_db_fib_rule_registered = false;
++		}
++	}
++	cancel_work_sync(&ecm_db_fib_rule_work);
++}
++EXPORT_SYMBOL(ecm_db_fib_rule_notifier_stop);
++
  /*
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +861,24 @@
+@@ -763,4 +881,24 @@
  	}
  #endif
 +
@@ -162,24 +184,46 @@ index c97f625..0000000 100644
 +
  	return ret;
  
-@@ -785,9 +903,20 @@
+@@ -785,9 +923,11 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");
  
  	int ret;
  
-+	/* Stop new FIB callbacks and drain any queued defunct worker before the
-+	 * database enters its termination path. */
-+	if (ecm_db_fib_rule_registered) {
-+		ret = unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb);
-+		if (ret) {
-+			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\n", ret);
-+		}
-+		ecm_db_fib_rule_registered = false;
-+	}
-+	cancel_work_sync(&ecm_db_fib_rule_work);
++	ecm_db_fib_rule_notifier_stop();
 +
  	spin_lock_bh(&ecm_db_lock);
  	ecm_db_terminate_pending = true;
  	spin_unlock_bh(&ecm_db_lock);
+
+diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
+--- a/ecm_db/ecm_db.h
++++ b/ecm_db/ecm_db.h
+@@ -45,2 +45,3 @@
+ int ecm_db_init(struct dentry *dentry);
++void ecm_db_fib_rule_notifier_stop(void);
+ void ecm_db_exit(void);
+diff --git a/ecm_init.c b/ecm_init.c
+--- a/ecm_init.c
++++ b/ecm_init.c
+@@ -307,2 +307,3 @@
+ err_ct:
++	ecm_db_fib_rule_notifier_stop();
+ #ifdef ECM_IPV6_ENABLE
+@@ -310,3 +311,4 @@
+ err_fe_ipv6:
+ #endif
++	ecm_db_fib_rule_notifier_stop();
+ 	ecm_front_end_ipv4_exit();
+@@ -313,2 +315,3 @@
+ err_fe_ipv4:
++	ecm_db_fib_rule_notifier_stop();
+ #ifdef ECM_INTERFACE_BOND_ENABLE
+@@ -378,5 +381,6 @@
+ static void __exit ecm_exit(void)
+ {
+ 	printk(KERN_INFO "ECM exit\n");
+ 
++	ecm_db_fib_rule_notifier_stop();
+ 	/* call stop on anything that requires a prepare-to-exit signal */

@@ -53,6 +53,10 @@ tar --zstd -xf "$ARCHIVE_PATH" -C "$SOURCE_DIR"
 ECM_DB=$(find "$SOURCE_DIR" -type f -path '*/ecm_db/ecm_db.c' -print -quit)
 [[ -n "$ECM_DB" ]] || die "ecm_db/ecm_db.c not found in source archive"
 ECM_ROOT=${ECM_DB%/ecm_db/ecm_db.c}
+ECM_INIT="$ECM_ROOT/ecm_init.c"
+ECM_DB_HEADER="$ECM_ROOT/ecm_db/ecm_db.h"
+[[ -s "$ECM_INIT" ]] || die "ecm_init.c missing from pinned ECM source"
+[[ -s "$ECM_DB_HEADER" ]] || die "ecm_db/ecm_db.h missing from pinned ECM source"
 
 # Preserve a pristine copy for the full feed-series test before raw 9002 is applied.
 SERIES_ROOT="$WORK/series-source"
@@ -162,7 +166,10 @@ done
 [[ "$series_count" -gt 0 ]] || die "prepared ECM feed patch series is empty"
 
 SERIES_ECM_DB="$SERIES_ROOT/ecm_db/ecm_db.c"
+SERIES_ECM_INIT="$SERIES_ROOT/ecm_init.c"
+SERIES_ECM_DB_HEADER="$SERIES_ROOT/ecm_db/ecm_db.h"
 [[ -s "$SERIES_ECM_DB" ]] || die "ecm_db/ecm_db.c missing after pinned feed patches"
+[[ -s "$SERIES_ECM_INIT" && -s "$SERIES_ECM_DB_HEADER" ]] || die "ecm_init.c or ecm_db/ecm_db.h missing after pinned feed patches"
 git -C "$SERIES_ROOT" apply --whitespace=error-all --check "$PATCH_FILE" ||
   die "RD03v2 patch 9002 does not apply after the pinned NSS feed patch series"
 git -C "$SERIES_ROOT" apply --whitespace=error-all "$PATCH_FILE"
@@ -175,7 +182,7 @@ echo "PASS: patch 9002 applies after $series_count pinned ECM feed patches, incl
 # ecm_db_init() must not register the new FIB notifier if its existing
 # IPv4/IPv6 route-notifier registration failed. ecm_init() does not call
 # ecm_db_exit() from its err_db label when ecm_db_init() returns an error.
-python3 - "$ECM_DB" "$SERIES_ECM_DB" <<'PY'
+python3 - "$ECM_DB" "$ECM_INIT" "$ECM_DB_HEADER" "$SERIES_ECM_DB" "$SERIES_ECM_INIT" "$SERIES_ECM_DB_HEADER" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -183,37 +190,92 @@ import sys
 registration = "register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)"
 guard_pattern = re.compile(r"if\s*\(ret\)\s*\{\s*return\s+ret;\s*\}", re.S)
 
-for filename in sys.argv[1:]:
-    source = Path(filename).read_text()
-    start = source.find("int ecm_db_init(")
-    end = source.find("EXPORT_SYMBOL(ecm_db_init);", start)
-    if start < 0 or end < 0:
-        sys.exit(f"FAIL: ecm_db_init() not found in {filename}")
-    init = source[start:end]
-    reg_pos = init.find(registration)
+def check_source(db_path, init_path, header_path):
+    db = Path(db_path).read_text()
+    init = Path(init_path).read_text()
+    header = Path(header_path).read_text()
+
+    db_start = db.find("int ecm_db_init(")
+    db_end = db.find("EXPORT_SYMBOL(ecm_db_init);", db_start)
+    if db_start < 0 or db_end < 0:
+        sys.exit(f"FAIL: ecm_db_init() missing in {db_path}")
+    db_init = db[db_start:db_end]
+    reg_pos = db_init.find(registration)
     if reg_pos < 0:
-        sys.exit(f"FAIL: FIB notifier registration missing in {filename}")
+        sys.exit(f"FAIL: FIB notifier registration missing in {db_path}")
 
     route_positions = [
-        init.find("ip_rt_register_notifier("),
-        init.find("rt6_register_notifier("),
+        db_init.find("ip_rt_register_notifier("),
+        db_init.find("rt6_register_notifier("),
     ]
-    route_positions = [pos for pos in route_positions if pos >= 0]
+    route_positions = [p for p in route_positions if p >= 0]
     if not route_positions:
-        sys.exit(f"FAIL: existing route notifier registration missing in {filename}")
-
+        sys.exit(f"FAIL: route notifier registration missing in {db_path}")
     guards = [
-        match for match in guard_pattern.finditer(init, 0, reg_pos)
-        if match.start() > max(route_positions)
+        m for m in guard_pattern.finditer(db_init, 0, reg_pos)
+        if m.start() > max(route_positions)
     ]
     if not guards:
-        sys.exit(
-            f"FAIL: FIB notifier is not guarded by the ecm_db_init() route-notifier error "
-            f"return in {filename}"
-        )
-    print(f"PASS: FIB notifier registration is guarded against partial init failure ({filename})")
+        sys.exit(f"FAIL: FIB registration lacks route-notifier init guard in {db_path}")
 
-print("PASS: no new FIB notifier is left registered on ecm_db_init() error path")
+    stop_start = db.find("void ecm_db_fib_rule_notifier_stop(void)")
+    stop_end = db.find("EXPORT_SYMBOL(ecm_db_fib_rule_notifier_stop);", stop_start)
+    if stop_start < 0 or stop_end < 0:
+        sys.exit(f"FAIL: FIB notifier stop hook missing in {db_path}")
+    stop_fn = db[stop_start:stop_end]
+    unregister = stop_fn.find("unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb)")
+    cancel = stop_fn.find("cancel_work_sync(&ecm_db_fib_rule_work)")
+    if unregister < 0 or cancel < 0 or unregister > cancel:
+        sys.exit(f"FAIL: stop hook must unregister before cancel_work_sync in {db_path}")
+    if "void ecm_db_fib_rule_notifier_stop(void);" not in header:
+        sys.exit(f"FAIL: stop-hook prototype missing in {header_path}")
+
+    db_exit_start = db.find("void ecm_db_exit(void)")
+    db_exit_end = db.find("EXPORT_SYMBOL(ecm_db_exit);", db_exit_start)
+    if db_exit_start < 0 or db_exit_end < 0:
+        sys.exit(f"FAIL: ecm_db_exit() missing in {db_path}")
+    db_exit = db[db_exit_start:db_exit_end]
+    stop_call = db_exit.find("ecm_db_fib_rule_notifier_stop();")
+    terminate = db_exit.find("ecm_db_terminate_pending = true;")
+    if stop_call < 0 or terminate < 0 or stop_call > terminate:
+        sys.exit(f"FAIL: DB exit must stop FIB worker before DB termination in {db_path}")
+
+    exit_start = init.find("static void __exit ecm_exit(void)")
+    exit_end = init.find("module_init(ecm_init)", exit_start)
+    if exit_start < 0 or exit_end < 0:
+        sys.exit(f"FAIL: ecm_exit() missing in {init_path}")
+    exit_fn = init[exit_start:exit_end]
+    stop_call = exit_fn.find("ecm_db_fib_rule_notifier_stop();")
+    conntrack = exit_fn.find("ecm_conntrack_notifier_stop(1);")
+    fe_stop = exit_fn.find("ecm_front_end_ipv4_stop_temp(1);")
+    fe_exit = exit_fn.find("ecm_front_end_ipv4_exit();")
+    if min(stop_call, conntrack, fe_stop, fe_exit) < 0:
+        sys.exit(f"FAIL: normal exit lacks lifecycle stop calls in {init_path}")
+    if stop_call > min(conntrack, fe_stop, fe_exit):
+        sys.exit(f"FAIL: FIB worker is not drained before normal frontend shutdown in {init_path}")
+
+    err_ct = init.find("\nerr_ct:")
+    err_v6 = init.find("\nerr_fe_ipv6:", err_ct)
+    err_v4 = init.find("\nerr_fe_ipv4:", err_ct)
+    err_bond = init.find("\nerr_bond:", err_v4)
+    if min(err_ct, err_v6, err_v4, err_bond) < 0:
+        sys.exit(f"FAIL: init unwind labels missing in {init_path}")
+    checks = [
+        (init[err_ct:err_v6], "ecm_front_end_ipv6_exit();", "IPv6 frontend"),
+        (init[err_v6:err_v4], "ecm_front_end_ipv4_exit();", "IPv4 frontend"),
+        (init[err_v4:err_bond], "ecm_front_end_bond_notifier_exit();", "bond frontend"),
+    ]
+    for block, target, name in checks:
+        stop = block.find("ecm_db_fib_rule_notifier_stop();")
+        teardown = block.find(target)
+        if stop < 0 or teardown < 0 or stop > teardown:
+            sys.exit(f"FAIL: FIB work is not drained before {name} teardown in {init_path}")
+
+    print(f"PASS: FIB notifier init/unwind/normal-exit ordering ({db_path})")
+
+check_source(*sys.argv[1:4])
+check_source(*sys.argv[4:7])
+print("PASS: FIB worker is drained before front-end teardown")
 PY
 
 echo "PASS: patch applies cleanly to the hash-verified pinned ECM source"
