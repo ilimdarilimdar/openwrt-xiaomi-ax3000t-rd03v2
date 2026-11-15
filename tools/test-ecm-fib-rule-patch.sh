@@ -136,4 +136,38 @@ if grep -qF 'ecm_front_end_ipv4_stop(' "$ECM_DB" || grep -qF 'ecm_front_end_ipv6
   die "legacy v1 frontend stop helper was introduced"
 fi
 
+# Also reproduce OpenWrt's real quilt patch order. The NSS feed package uses
+# include/quilt.mk: without a patches/series file, files are copied in lexical
+# order (ls | sort). Verify that 9002 applies after every pinned feed patch
+# and our earlier 9001 patch, not only against the pristine source archive.
+PATCH_DIR=$(dirname "$PATCH_FILE")
+SERIES_ROOT="$WORK/series-source"
+cp -a "$ECM_ROOT" "$SERIES_ROOT"
+mapfile -t FEED_PATCHES < <(cd "$PATCH_DIR" && LC_ALL=C ls | LC_ALL=C sort)
+series_count=0
+found_9001=0
+for patch_name in "${FEED_PATCHES[@]}"; do
+  [[ -f "$PATCH_DIR/$patch_name" ]] || die "non-file entry in ECM patch directory: $patch_name"
+  [[ "$patch_name" == "$(basename "$PATCH_FILE")" ]] && continue
+  [[ "$patch_name" == 9001-rd03v2-frontends-give-both-qos-tags-a-value.patch ]] && found_9001=1
+  series_count=$((series_count + 1))
+  if ! patch --batch --fuzz=0 -p1 -d "$SERIES_ROOT" < "$PATCH_DIR/$patch_name" >>"$WORK/feed-series-apply.log" 2>&1; then
+    cat "$WORK/feed-series-apply.log" >&2
+    die "pinned ECM feed patch failed in quilt order: $patch_name"
+  fi
+done
+[[ "$found_9001" -eq 1 ]] || die "RD03v2 ECM patch 9001 is missing from the prepared feed series"
+[[ "$series_count" -gt 0 ]] || die "prepared ECM feed patch series is empty"
+
+SERIES_ECM_DB="$SERIES_ROOT/ecm_db/ecm_db.c"
+[[ -s "$SERIES_ECM_DB" ]] || die "ecm_db/ecm_db.c missing after pinned feed patches"
+git -C "$SERIES_ROOT" apply --whitespace=error-all --check "$PATCH_FILE" ||
+  die "RD03v2 patch 9002 does not apply after the pinned NSS feed patch series"
+git -C "$SERIES_ROOT" apply --whitespace=error-all "$PATCH_FILE"
+grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$SERIES_ECM_DB" ||
+  die "FIB notifier registration is missing after applying the complete feed series"
+grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SERIES_ECM_DB" ||
+  die "runtime registration diagnostic is missing after applying the complete feed series"
+echo "PASS: patch 9002 applies after $series_count pinned ECM feed patches, including 9001"
+
 echo "PASS: patch applies cleanly to the hash-verified pinned ECM source"
