@@ -127,9 +127,9 @@ index c97f625..0000000 100644
 +	 * policy-routing managers). Failure is non-fatal, but without this
 +	 * notifier ECM cannot invalidate accelerated flows on rule-only changes.
 +	 */
-+\tif (register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)) {
++	if (register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)) {
 +		cancel_work_sync(&ecm_db_fib_rule_work);
-+		printk(KERN_WARNING "ECM: failed to register FIB rule notifier (%d); policy-rule changes will not defunct accelerated connections\n", ret);
++		printk(KERN_WARNING "ECM: failed to register FIB rule notifier; policy-rule changes will not defunct accelerated connections\n");
 +	} else {
 +		ecm_db_fib_rule_registered = true;
 +		printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\n");
