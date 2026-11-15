@@ -6,6 +6,13 @@ cd openwrt-xiaomi-ax3000t-rd03v2
 TAG=DEV-<name> ./build.sh            # or a release tag; PREPARE_ONLY=1 stops before make
 ```
 
+`PREPARE_ONLY=1` fetches the pinned source mirrors and feeds, applies the
+overlay, and runs `make defconfig`, then exits before package/image compilation
+and signing. This preparation mode does not require the private signing key.
+A full build still requires the private EC key in `keys/v2/private-key.pem`
+(mode 0600), matching `keys/public-key.pem` and the repository's committed
+`keys/public-key.pem`.
+
 - The workspace is this repository plus, next to it: `mirrors/` (kuncy7's tree and his nss feed,
   never pruned, with reflogs), `keys/v2/` (the signing key), `dl-v2/` (the download cache),
   `ccache-v2/`, `v2-tmp/` (scratch space), `v2-validation/` (the lock that keeps builds and
