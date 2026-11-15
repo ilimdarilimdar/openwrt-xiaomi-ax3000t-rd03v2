@@ -20,7 +20,7 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 154 +++++++++++++++++++++++++++++++++++
+ ecm_db/ecm_db.c | 167 +++++++++++++++++++++++++++++++++++++++++++++++++++
  ecm_db/ecm_db.h | 1 +
  ecm_init.c | 4 ++++
  frontends/cmn/ecm_ipv4.c | 6 +++---
@@ -29,13 +29,12 @@ conntrack/NAT sessions across a public-WAN change.
  frontends/ecm_front_end_ipv6.c | 8 ++++++--
  frontends/include/ecm_front_end_ipv4.h | 4 +++-
  frontends/include/ecm_front_end_ipv6.h | 4 +++-
- 9 files changed, 183 insertions(+), 12 deletions(-)
-
+ 9 files changed, 196 insertions(+), 12 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
-@@ -22,5 +22,9 @@
+@@ -22,5 +22,10 @@
  #include <asm/uaccess.h>	/* for put_user */
  #include <net/ipv6.h>
  #include <net/ip6_route.h>
@@ -46,7 +45,7 @@ index c97f625..0000000 100644
 +#include <linux/netdevice.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-@@ -469,9 +473,123 @@
+@@ -469,9 +474,149 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -196,7 +195,7 @@ index c97f625..0000000 100644
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +881,24 @@
+@@ -763,4 +908,24 @@
  	}
  #endif
 +
@@ -221,7 +220,7 @@ index c97f625..0000000 100644
 +
  	return ret;
  
-@@ -785,9 +923,11 @@
+@@ -785,9 +950,11 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");
