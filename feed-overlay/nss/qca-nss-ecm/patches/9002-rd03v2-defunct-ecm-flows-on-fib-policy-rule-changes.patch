@@ -32,7 +32,6 @@ frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
  9 files changed, 200 insertions(+), 36 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
-index c97f625..0000000 100644
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
 @@ -22,5 +22,10 @@
