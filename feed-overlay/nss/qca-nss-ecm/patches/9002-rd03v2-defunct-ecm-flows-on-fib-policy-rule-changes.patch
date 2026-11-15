@@ -267,82 +267,88 @@ diff --git a/ecm_init.c b/ecm_init.c
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
-@@ -61,6 +61,6 @@
-  * Temporary operational control
-  */
+@@ -61,4 +61,1 @@
+-/*
+- * Temporary operational control
+- */
 -int ecm_front_end_ipv4_stopped_temp = 0;	/* When non-zero further traffic/process will not be processed where it is checked */
-+atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);	/* Nested temporary stops; non-zero blocks processing where checked */
- 
- /*
-  * ecm_front_end_ipv4_interface_construct_ip_addr_set()
-@@ -379,6 +379,10 @@
++/* Temporary stop state is owned by the common frontend lock. */
+@@ -379,10 +376,4 @@
   * ecm_front_end_ipv4_stop_temp()
   */
- void ecm_front_end_ipv4_stop_temp(int num)
- {
+-void ecm_front_end_ipv4_stop_temp(int num)
+-{
 -	ecm_front_end_ipv4_stopped_temp = num;
+-}
+ 
+ /*
+  * ecm_front_end_ipv4_init()
+  */
+diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
+--- a/frontends/ecm_front_end_ipv6.c
++++ b/frontends/ecm_front_end_ipv6.c
+@@ -62,4 +62,1 @@
+-/*
+- * Temporary operational control
+- */
+-int ecm_front_end_ipv6_stopped_temp = 0;	/* When non-zero further traffic/process will not be processed where it is checked */
++/* Temporary stop state is owned by the common frontend lock. */
+@@ -414,10 +411,4 @@
+  * ecm_front_end_ipv6_stop_temp()
+  */
+-void ecm_front_end_ipv6_stop_temp(int num)
+-{
+-	ecm_front_end_ipv6_stopped_temp = num;
+-}
+ 
+ /*
+  * ecm_front_end_ipv6_init()
+ */
+diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
+--- a/frontends/include/ecm_front_end_ipv4.h
++++ b/frontends/include/ecm_front_end_ipv4.h
+@@ -19,2 +19,1 @@
+ extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
+-extern atomic_t ecm_front_end_ipv4_stopped_temp;	/* Reference-counted temporary stop gate */
+ 
+diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_front_end_ipv6.h
+--- a/frontends/include/ecm_front_end_ipv6.h
++++ b/frontends/include/ecm_front_end_ipv6.h
+@@ -19,2 +19,1 @@
+ extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
+-extern atomic_t ecm_front_end_ipv6_stopped_temp;	/* Reference-counted temporary stop gate */
+
+diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
+--- a/frontends/cmn/ecm_ipv4.c
++++ b/frontends/cmn/ecm_ipv4.c
+@@ -24,6 +24,7 @@
+ #include <linux/tcp.h>
+ #include <linux/module.h>
++#include <linux/atomic.h>
+ #include <linux/skbuff.h>
+ #include <linux/icmp.h>
+ #include <linux/kthread.h>
+@@ -107,6 +108,20 @@
+  * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
+  */
+ DEFINE_SPINLOCK(ecm_ipv4_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
++
++static atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);
++
++void ecm_front_end_ipv4_stop_temp(int num)
++{
++	spin_lock_bh(&ecm_ipv4_lock);
 +	if (num) {
 +		atomic_inc(&ecm_front_end_ipv4_stopped_temp);
 +	} else {
 +		atomic_dec_if_positive(&ecm_front_end_ipv4_stopped_temp);
 +	}
- }
-diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
---- a/frontends/ecm_front_end_ipv6.c
-+++ b/frontends/ecm_front_end_ipv6.c
-@@ -62,6 +62,6 @@
-  * Temporary operational control
-  */
--int ecm_front_end_ipv6_stopped_temp = 0;	/* When non-zero further traffic/process will not be processed where it is checked */
-+atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);	/* Nested temporary stops; non-zero blocks processing where checked */
++	spin_unlock_bh(&ecm_ipv4_lock);
++}
  
  /*
-  * ecm_front_end_ipv6_interface_construct_ip_addr_set()
-@@ -414,6 +414,10 @@
-  * ecm_front_end_ipv6_stop_temp()
+  * Management thread control
   */
- void ecm_front_end_ipv6_stop_temp(int num)
- {
--	ecm_front_end_ipv6_stopped_temp = num;
-+	if (num) {
-+		atomic_inc(&ecm_front_end_ipv6_stopped_temp);
-+	} else {
-+		atomic_dec_if_positive(&ecm_front_end_ipv6_stopped_temp);
-+	}
- }
-diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
---- a/frontends/include/ecm_front_end_ipv4.h
-+++ b/frontends/include/ecm_front_end_ipv4.h
-@@ -14,8 +14,10 @@
-  * OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-  **************************************************************************/
- 
-+#include <linux/atomic.h>
-+
- extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
--extern int ecm_front_end_ipv4_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
-+extern atomic_t ecm_front_end_ipv4_stopped_temp;	/* Reference-counted temporary stop gate */
- 
- #ifdef ECM_MULTICAST_ENABLE
- extern int ecm_front_end_ipv4_mc_stopped;	/* When non-zero further traffic will not be processed */
-diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_front_end_ipv6.h
---- a/frontends/include/ecm_front_end_ipv6.h
-+++ b/frontends/include/ecm_front_end_ipv6.h
-@@ -14,8 +14,10 @@
-  * OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-  **************************************************************************/
- 
-+#include <linux/atomic.h>
-+
- extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
--extern int ecm_front_end_ipv6_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
-+extern atomic_t ecm_front_end_ipv6_stopped_temp;	/* Reference-counted temporary stop gate */
- 
- #ifdef ECM_MULTICAST_ENABLE
- extern int ecm_front_end_ipv6_mc_stopped;	/* When non-zero further traffic will not be processed */
-diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
---- a/frontends/cmn/ecm_ipv4.c
-+++ b/frontends/cmn/ecm_ipv4.c
 @@ -1702,5 +1702,5 @@
  	spin_lock_bh(&ecm_ipv4_lock);
 -	if (unlikely(ecm_front_end_ipv4_stopped) || unlikely(ecm_front_end_ipv4_stopped_temp)) {
@@ -367,6 +373,33 @@ diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
 --- a/frontends/cmn/ecm_ipv6.c
 +++ b/frontends/cmn/ecm_ipv6.c
+@@ -30,6 +30,7 @@
+ #include <linux/module.h>
++#include <linux/atomic.h>
+ #include <linux/skbuff.h>
+ #include <linux/icmp.h>
+ #include <linux/debugfs.h>
+@@ -113,6 +114,20 @@
+  * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
+  */
+ DEFINE_SPINLOCK(ecm_ipv6_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
++
++static atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);
++
++void ecm_front_end_ipv6_stop_temp(int num)
++{
++	spin_lock_bh(&ecm_ipv6_lock);
++	if (num) {
++		atomic_inc(&ecm_front_end_ipv6_stopped_temp);
++	} else {
++		atomic_dec_if_positive(&ecm_front_end_ipv6_stopped_temp);
++	}
++	spin_unlock_bh(&ecm_ipv6_lock);
++}
+ 
+ /*
+  * Management thread control
+  */
 @@ -1681,5 +1681,5 @@
  	spin_lock_bh(&ecm_ipv6_lock);
 -	if (unlikely(ecm_front_end_ipv6_stopped) || unlikely(ecm_front_end_ipv6_stopped_temp)) {
