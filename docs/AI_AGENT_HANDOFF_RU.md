@@ -22,9 +22,9 @@
 - В `tools/test-ecm-fib-rule-patch.sh` обновлены assertions на per-net lock.
   Дополнительный commit `70f92cc` исправляет кавычки Bash в grep assertion.
   Проверка этих последних изменений ожидает CI #82.
-- CI #82, run `437...` (получить точный run ID живым запросом), queued на
-  последнем live-check. Он содержит обновлённый worker, test script и
-  исправленный artifact glob. CI #79–#81 были отменены более новыми push.
+- CI #82, run `43715272931`, commit `70f92cc`: PENDING на последнем
+  live-check. Он содержит обновлённый worker, test script и исправленный
+  artifact glob. CI #79–#81 были отменены более новыми push.
 - Workflow artifact glob исправлен на `openwrt-v2/logs/package/feeds/nss/**`,
   чтобы следующая полная сборка сохраняла реальные per-package компиляторные логи.
 - Не считать прошивку готовой. Требуются: успешная компиляция ECM, marker в
