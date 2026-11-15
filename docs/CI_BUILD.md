@@ -66,8 +66,15 @@ This is a targeted hypothesis, not yet a proven fix. The next PREPARE_ONLY artif
 
 ## Current validation snapshot
 
-- Workflow #15: static checks PASS and PREPARE_ONLY PASS.
-- Workflow #16: full build was still IN PROGRESS at the last confirmed check; it uses an earlier commit than the latest source changes.
-- The current branch adds the signing-key helper test and the NSS dependency guard. The helper test has passed locally against the retrieved repository scripts; its CI result is still pending.
-- The current full-build CI job uses a disposable key and `example.invalid`; it is not a user-installable release.
+Snapshot checked 2026-11-15 around 07:40 UTC; refresh GitHub before relying on it:
+
+- Workflow #15 (commit `c5a64af9a23996401eb22c2a275023c419bbe547`): static checks PASS and PREPARE_ONLY PASS. Its artifact `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547` was downloaded and inspected.
+- That #15 `defconfig.log` confirms the NSS recursive dependency cycle: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. It also reports optional Qt5, fwknopd and squeezelite diagnostics. The NSS loop is the one relevant to selected RD03v2 packages.
+- The #15 source commit predates `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`; therefore #15 does **not** validate that patch. It also predates the cleanup that removed duplicate local 256 MiB choice symbols. Its warnings must not be reported as the current branch's final state.
+- Workflow #16 (commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`): Static PASS; full build job remained IN PROGRESS at the last API check. The active step is `Build and run verify-v2`; logs/artifacts are not available until the job finishes. Do not cancel this job just because it is long: the configured timeout is 360 minutes.
+- Workflow #29 (source commit `f5e828f`) and later queued documentation runs were cancelled by newer pushes before a confirmed result for the current PREPARE_ONLY was obtained.
+- Workflow #35 (commit `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`) is queued behind #16. It should exercise the corrected static check and run PREPARE_ONLY for the current source tree once the serialized slot is free.
+- A static-check path typo was found and fixed: the workflow now references the exact patch filename `0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`. Before the fix it referenced a nonexistent shorter filename.
+- Documentation-only changes are now excluded with `paths-ignore`; mixed code/config/docs changes still trigger validation. This avoids burning the serialized build slot on README/manual edits.
+- The full-build CI job uses a disposable key and `example.invalid`; it is not a user-installable release. No result in this snapshot establishes hardware validation of Dual-WAN/NSS.
 
