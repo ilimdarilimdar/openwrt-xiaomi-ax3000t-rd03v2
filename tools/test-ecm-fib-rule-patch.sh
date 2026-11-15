@@ -491,22 +491,27 @@ if grep -qF 'ecm_front_end_ipv4_stop(' "$ECM_DB" || grep -qF 'ecm_front_end_ipv6
   die "legacy v1 frontend stop helper was introduced"
 fi
 
-# Also reproduce OpenWrt's real quilt patch order. The NSS feed package uses
-# include/quilt.mk: without a patches/series file, files are copied in lexical
-# order (ls | sort). Verify that 9002 applies after every pinned feed patch
-# and our earlier 9001 patch, not only against the pristine source archive.
+# Reproduce OpenWrt's actual package patch path (scripts/patch-kernel.sh):
+# sorted filename order, then "patch -f -p1" for every patch, including 9002.
+# The raw-source git-apply check above is useful, but it is not a substitute for
+# the exact patch(1) operation used by the real package build.
 PATCH_DIR=$(dirname "$PATCH_FILE")
 mapfile -t FEED_PATCHES < <(cd "$PATCH_DIR" && LC_ALL=C ls | LC_ALL=C sort)
 series_count=0
 found_9001=0
+: > "$WORK/feed-series-apply.log"
 for patch_name in "${FEED_PATCHES[@]}"; do
   [[ -f "$PATCH_DIR/$patch_name" ]] || die "non-file entry in ECM patch directory: $patch_name"
-  [[ "$patch_name" == "$(basename "$PATCH_FILE")" ]] && continue
   [[ "$patch_name" == 9001-rd03v2-frontends-give-both-qos-tags-a-value.patch ]] && found_9001=1
   series_count=$((series_count + 1))
-  if ! patch --batch --fuzz=0 -p1 -d "$SERIES_ROOT" < "$PATCH_DIR/$patch_name" >>"$WORK/feed-series-apply.log" 2>&1; then
+  if ! patch -f -p1 -d "$SERIES_ROOT" < "$PATCH_DIR/$patch_name" >>"$WORK/feed-series-apply.log" 2>&1; then
+    echo "DIAGNOSTIC: OpenWrt patch-kernel.sh-equivalent queue failed at $patch_name" >&2
     cat "$WORK/feed-series-apply.log" >&2
-    die "pinned ECM feed patch failed in quilt order: $patch_name"
+    while IFS= read -r reject; do
+      echo "===== REJECT: $reject =====" >&2
+      cat "$reject" >&2
+    done < <(find "$SERIES_ROOT" -type f -name '*.rej' -print)
+    die "pinned ECM patch queue failed with OpenWrt patch-kernel.sh semantics: $patch_name"
   fi
 done
 [[ "$found_9001" -eq 1 ]] || die "RD03v2 ECM patch 9001 is missing from the prepared feed series"
@@ -517,15 +522,12 @@ SERIES_ECM_INIT="$SERIES_ROOT/ecm_init.c"
 SERIES_ECM_DB_HEADER="$SERIES_ROOT/ecm_db/ecm_db.h"
 [[ -s "$SERIES_ECM_DB" ]] || die "ecm_db/ecm_db.c missing after pinned feed patches"
 [[ -s "$SERIES_ECM_INIT" && -s "$SERIES_ECM_DB_HEADER" ]] || die "ecm_init.c or ecm_db/ecm_db.h missing after pinned feed patches"
-git -C "$SERIES_ROOT" apply --whitespace=error-all --check "$PATCH_FILE" ||
-  die "RD03v2 patch 9002 does not apply after the pinned NSS feed patch series"
-git -C "$SERIES_ROOT" apply --whitespace=error-all "$PATCH_FILE"
 grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$SERIES_ECM_DB" ||
   die "FIB notifier registration is missing after applying the complete feed series"
 grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SERIES_ECM_DB" ||
   die "runtime registration diagnostic is missing after applying the complete feed series"
 check_stop_temp_refcount "$SERIES_ROOT"
-echo "PASS: patch 9002 applies after $series_count pinned ECM feed patches, including 9001"
+echo "PASS: complete patch queue ($series_count patches, including 9001 and 9002) applies with OpenWrt patch-kernel.sh semantics"
 
 # ecm_db_init() must not register the new FIB notifier if its existing
 # IPv4/IPv6 route-notifier registration failed. ecm_init() does not call
