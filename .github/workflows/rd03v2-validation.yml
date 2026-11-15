@@ -62,6 +62,8 @@ jobs:
         run: |
           set -euo pipefail
           bash tools/test-install-v2-signing-key.sh
+          test -x tools/install-v2-signing-key.sh
+          echo "PASS: signing-key installer is tracked as executable"
 
       - name: Check RD03v2 NSS Kconfig cycle guard
         shell: bash
