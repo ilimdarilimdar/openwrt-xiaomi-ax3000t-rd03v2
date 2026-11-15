@@ -49,6 +49,12 @@ jobs:
           python3 -m compileall -q tools
           echo "PASS Python syntax: tools/"
 
+      - name: Test PREPARE_ONLY signing-key resume safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash tools/test-install-v2-signing-key.sh
+
       - name: Validate RD03v2 config and package manifest
         shell: bash
         run: |
@@ -170,6 +176,7 @@ jobs:
             openwrt-v2/defconfig.log
             openwrt-v2/config.final.txt
             openwrt-v2/diffconfig.txt
+            openwrt-v2/tmp/.config-package.in
           if-no-files-found: warn
           retention-days: 14
 
