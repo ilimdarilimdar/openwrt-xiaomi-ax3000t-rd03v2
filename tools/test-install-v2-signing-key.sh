@@ -20,14 +20,14 @@ openssl ec -in "$KEYDIR/private-key.pem" -pubout -out "$KEYDIR/public-key.pem" 2
 cp "$KEYDIR/public-key.pem" "$FAKE_REPO/keys/public-key.pem"
 
 # First call must install the validated pair with restrictive private-key permissions.
-RD03V2_WS="$WORKSPACE" "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE"
+RD03V2_WS="$WORKSPACE" bash "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE"
 [ "$(stat -c %a "$TREE/private-key.pem")" = 600 ]
 cmp -s "$TREE/public-key.pem" "$FAKE_REPO/keys/public-key.pem"
 openssl ec -in "$TREE/private-key.pem" -pubout 2>/dev/null | cmp -s - "$FAKE_REPO/keys/public-key.pem"
 first_hash=$(sha256sum "$TREE/private-key.pem" | awk '{print $1}')
 
 # A second call must be idempotent and must not replace the existing key.
-RD03V2_WS="$WORKSPACE" "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE"
+RD03V2_WS="$WORKSPACE" bash "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE"
 second_hash=$(sha256sum "$TREE/private-key.pem" | awk '{print $1}')
 [ "$first_hash" = "$second_hash" ]
 
@@ -37,7 +37,7 @@ mkdir -p "$BAD_KEYDIR"
 openssl ecparam -name prime256v1 -genkey -noout -out "$BAD_KEYDIR/private-key.pem"
 chmod 600 "$BAD_KEYDIR/private-key.pem"
 openssl ec -in "$BAD_KEYDIR/private-key.pem" -pubout -out "$BAD_KEYDIR/public-key.pem" 2>/dev/null
-if V2_KEY_DIR="$BAD_KEYDIR" RD03V2_WS="$WORKSPACE" "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE" >"$TMP/mismatch.log" 2>&1; then
+if V2_KEY_DIR="$BAD_KEYDIR" RD03V2_WS="$WORKSPACE" bash "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE" >"$TMP/mismatch.log" 2>&1; then
   echo "FAIL: mismatched workspace key was accepted" >&2
   exit 1
 fi
@@ -45,7 +45,7 @@ fi
 
 # A partial keypair in the build tree must fail closed instead of being overwritten.
 rm "$TREE/public-key.pem"
-if RD03V2_WS="$WORKSPACE" "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE" >"$TMP/incomplete.log" 2>&1; then
+if RD03V2_WS="$WORKSPACE" bash "$FAKE_REPO/tools/install-v2-signing-key.sh" "$TREE" >"$TMP/incomplete.log" 2>&1; then
   echo "FAIL: incomplete build-tree keypair was accepted" >&2
   exit 1
 fi
