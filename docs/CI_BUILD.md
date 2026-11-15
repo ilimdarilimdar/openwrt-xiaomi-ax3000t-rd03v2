@@ -68,15 +68,22 @@ This is a targeted hypothesis, not yet a proven fix. The next PREPARE_ONLY artif
 
 ## Current validation snapshot
 
-Snapshot checked 2026-11-15 around 07:40 UTC; refresh GitHub before relying on it:
+Snapshot refreshed 2026-11-15 around 08:10 UTC; re-check the live workflow before relying on these statuses:
 
 - Workflow #15 (commit `c5a64af9a23996401eb22c2a275023c419bbe547`): static checks PASS and PREPARE_ONLY PASS. Its artifact `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547` was downloaded and inspected.
-- That #15 `defconfig.log` confirms the NSS recursive dependency cycle: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. It also reports optional Qt5, fwknopd and squeezelite diagnostics. The NSS loop is the one relevant to selected RD03v2 packages.
-- The #15 source commit predates `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`; therefore #15 does **not** validate that patch. It also predates the cleanup that removed duplicate local 256 MiB choice symbols. Its warnings must not be reported as the current branch's final state.
-- Workflow #16 (commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`): Static PASS; full build job remained IN PROGRESS at the last API check. The active step is `Build and run verify-v2`; logs/artifacts are not available until the job finishes. Do not cancel this job just because it is long: the configured timeout is 360 minutes.
-- Workflow #29 (source commit `f5e828f`) and later queued documentation runs were cancelled by newer pushes before a confirmed result for the current PREPARE_ONLY was obtained.
-- Workflow #35 (commit `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`) is queued behind #16. It should exercise the corrected static check and run PREPARE_ONLY for the current source tree once the serialized slot is free.
-- A static-check path typo was found and fixed: the workflow now references the exact patch filename `0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`. Before the fix it referenced a nonexistent shorter filename.
-- Documentation-only changes are now excluded with `paths-ignore`; mixed code/config/docs changes still trigger validation. This avoids burning the serialized build slot on README/manual edits.
-- The full-build CI job uses a disposable key and `example.invalid`; it is not a user-installable release. No result in this snapshot establishes hardware validation of Dual-WAN/NSS.
+- That #15 `defconfig.log` confirms the earlier NSS recursive dependency cycle: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. The source commit predates patch 0014, so this artifact does not test the fix.
+- Workflow #16 (commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`): static checks PASS; full build remains IN PROGRESS at `Build and run verify-v2`. Logs and artifacts are unavailable while the job is active; timeout is 360 minutes. Do not cancel it merely because it takes time.
+- Runs #43–#46 were superseded/cancelled by newer pushes before yielding a complete current-source PREPARE_ONLY result.
+- Workflow #47 (commit `004279dcd96056d203045c3dc870548840041ea7`) is WAITING behind #16. It includes the current ECM candidate patch, source preflight, and updated full-image verification gates. If more source or workflow commits are made, the run number changes; query the newest run rather than assuming #47 remains current.
+- Candidate ECM patch: `feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`. It uses the v2 `*_stop_temp()` helpers, defers the atomic FIB callback to a workqueue, unregisters the notifier and drains work before DB teardown. It is **NOT YET APPLY-VALIDATED, NOT COMPILED, NOT HARDWARE-TESTED**.
+- PREPARE_ONLY now runs `tools/test-ecm-fib-rule-patch.sh`: read the pinned source fields from the prepared qca-nss-ecm Makefile, download the exact archive, verify its SHA-256, apply-check/apply patch 9002, and check callback/worker/teardown assertions.
+- `verify-v2.sh` checks that the final sysupgrade root filesystem contains `ecm.ko` with the runtime registration message. It also checks each ECM patch fingerprint across the whole ECM source tree when the build directory remains available.
+- Patch 0014's static filename check was corrected, and Markdown/docs-only pushes are filtered out of CI. Mixed source/config/docs changes still run the full validation workflow.
+- CI full-build uses a disposable signing key and `example.invalid`; even a successful run is not a user-installable release. No Dual-WAN/NSS hardware validation has been performed.
+
+Links:
+- [Actions workflow](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/workflows/rd03v2-validation.yml)
+- [Run #15 — PREPARE_ONLY artifact](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686096014)
+- [Run #16 — full build](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656)
+- [Run #47 — current-source checks at this snapshot](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43692560000)
 
