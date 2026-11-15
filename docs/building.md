@@ -9,9 +9,12 @@ TAG=DEV-<name> ./build.sh            # or a release tag; PREPARE_ONLY=1 stops be
 `PREPARE_ONLY=1` fetches the pinned source mirrors and feeds, applies the
 overlay, and runs `make defconfig`, then exits before package/image compilation
 and signing. This preparation mode does not require the private signing key.
-A full build still requires the private EC key in `keys/v2/private-key.pem`
-(mode 0600), matching `keys/public-key.pem` and the repository's committed
-`keys/public-key.pem`.
+A local full/release build still requires the private EC key in
+`keys/v2/private-key.pem` (mode 0600), matching `keys/v2/public-key.pem`
+and the repository's committed `keys/public-key.pem`. The GitHub Actions
+CI-only full build instead generates a temporary keypair on its ephemeral runner;
+it does not publish installable images or packages and does not replace the
+owner's release key.
 
 - The workspace is this repository plus, next to it: `mirrors/` (kuncy7's tree and his nss feed,
   never pruned, with reflogs), `keys/v2/` (the signing key), `dl-v2/` (the download cache),
