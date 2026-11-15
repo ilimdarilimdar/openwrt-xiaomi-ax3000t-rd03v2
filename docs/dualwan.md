@@ -14,24 +14,30 @@ firmware. The image has not been built or tested on hardware from this branch.
 - Adds a separate RD03v2 ECM patch 9002 for FIB policy-rule ADD/DEL events.
 - The candidate defers rule-change handling from the atomic notifier callback
   to a work item, then invalidates accelerated connections by address family.
-- Patch 9002 is still a candidate implementation; it has **not** passed
-  the pinned-source preflight. No full ECM build has run.
-- Workflows #100 and #101 passed Static and PREPARE_ONLY source/config
-  preparation but failed the local structural validator on IPv4 deletion-hunk
-  counts. Workflow #103 failed the same validator on a truncated IPv6
-  common-lock hunk.
-- Workflow [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
-  passed the structural validator (all 19 hunks, exact counts), and every
-  other hunk applied. Raw `git apply --check` then failed only at
-  `frontends/cmn/ecm_ipv6.c:100`: the final `*/` context line in the
-  management-thread comment was missing the source's leading space.
-- Commit `d51baa7` corrects that exact whitespace. Workflow
-  [#105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924)
-  is testing the corrected patch (Static **PASS**; PREPARE_ONLY source/config
-  preparation **IN PROGRESS** at last check).
-- Do not treat structural diff validation as proof of source compatibility.
-  The gate is raw apply to the pinned archive **and** the full pinned ECM feed
-  patch series, followed by compilation and hardware validation.
+- Patch 9002 passed the pinned-source preflight in workflow
+  [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036)
+  on functional code commit `006e14a`: the 19 unified-diff hunks validate,
+  raw `git apply --check` succeeds against the hash-verified QSDK 14.0 archive,
+  and the patch applies after all 31 pinned ECM feed patches, including 9001.
+- The same preflight confirms IPv4/IPv6 stop-counter updates and all six packet
+  hook reads use the shared locks; pending-bit snapshots are serialized with
+  RTNL; frontend gates close before `synchronize_net()` and DB invalidation;
+  FIB notifier init/unwind/normal-exit ordering and worker drain are checked.
+- Commit `006e14a` aligned the common frontend include hunks with exact pinned
+  package source locations and adjusted the byte-exact diagnostic ranges.
+  Workflow #106 Static and PREPARE_ONLY/preflight both passed.
+- A regression guard for the atomic callback was added in test-only commits
+  `eba9d02` and `a0e72ce`: the callback may only set family bits and queue
+  deferred work. Workflow [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069)
+  has passed Static and PREPARE_ONLY and is running the full build/verify-v2
+  step. Workflow [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928)
+  is queued behind #107; it tests a stricter version of the same guard, not a
+  different firmware implementation.
+- Full C compilation, image generation, and `verify-v2` have no result yet.
+  Hardware module loading and Dual-WAN/NSS stress tests remain NOT TESTED.
+- Do not install either CI build on the home router: the full-build workflow
+  uses a temporary CI-only signing key and `example.invalid` package-feed URL,
+  and uploads logs only rather than publishing a usable release.
 - Does not preconfigure WANs. First identify the actual netifd logical interface
   names and DSA port mapping on the target router.
 
