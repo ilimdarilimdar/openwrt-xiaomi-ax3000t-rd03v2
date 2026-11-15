@@ -77,8 +77,15 @@ health-check `disconnected`, а прозрачное сохранение уже
 
 Обязательные отдельные испытания: tracker `disconnected` при интерфейсе netifd
 UP; реальный `ifdown`/cable pull; conntrack mark до/после; FIB rule events;
-NSS counters; packet captures обоих WAN. Selective conntrack cleanup по
-mwan3 mark — отдельная будущая функция, пока не реализована.
+NSS counters; packet captures обоих WAN. Selective conntrack cleanup по mwan3 mark — отдельная будущая функция, пока не реализована.
+Для неё требуется добавить userspace package `conntrack` из pinned
+`conntrack-tools` 1.4.8: текущий `config/image-must-have.txt` включает
+`iptables-mod-conntrack-extra`, но не CLI `conntrack`. Скрипт
+`/etc/mwan3.user` запускается через `env -i`, поэтому обязан сам загрузить
+UCI (`config_load mwan3`), получить ID интерфейса через mwan3 helper и
+вычислить mark через `mwan3_id2mask` с фактическим `mmx_mask`. Пустой/нулевой
+ID, недоступную конфигурацию или отсутствующий CLI трактовать как отказ без
+очистки; никогда не использовать global flush как fallback.
 
 ---
 

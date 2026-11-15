@@ -119,6 +119,26 @@ Required bench cases, kept separate:
 4. Only after these observations, evaluate a selective conntrack cleanup keyed
    to mwan3's mark and mask. Treat it as a separate feature requiring its own
    tests; do not silently add it to the base firmware.
+   Implementation guardrails for that future feature:
+
+   - The image currently does not select the userspace `conntrack` command.
+     `iptables-mod-conntrack-extra` is a separate xtables/kernel extension,
+     not the CLI. The pinned packages feed provides `conntrack` through
+     `conntrack-tools` 1.4.8; add that package explicitly before using
+     `conntrack -D`.
+   - The pinned `16-mwan3-user` hotplug script runs `/etc/mwan3.user` with
+     `env -i`. The custom script must source its own OpenWrt helper libraries
+     and call `config_load mwan3` itself; parent-shell UCI state is not passed
+     into it.
+   - Resolve the interface ID with mwan3's own helper and compute the mark
+     through `mwan3_id2mask` using the configured `mmx_mask`. Validate that
+     the ID is numeric and non-zero, and fail closed if configuration, mask,
+     or `conntrack` is unavailable. Never fall back to a zero mark or a global
+     flush.
+   - Test IPv4 and IPv6 deletion separately on the secondary router, then
+     confirm that unrelated WAN/LAN and router-originated conntrack entries
+     remain untouched.
+
 
 Useful evidence includes `ip -4 rule show`, `ip -4 route show table all`,
 `conntrack -L -o extended`, `mwan3 status`, `logread`, packet captures on
