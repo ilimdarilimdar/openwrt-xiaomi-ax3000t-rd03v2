@@ -70,6 +70,10 @@ grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
 grep -qF 'ecm_db_connection_defunct_ip_version(4)' "$ECM_DB" ||
   die "IPv4 connection defunct pass is missing"
+grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6' "$ECM_DB" ||
+  die "IPv6 pending-bit worker is missing"
+grep -qF 'ecm_db_connection_defunct_ip_version(6)' "$ECM_DB" ||
+  die "IPv6 connection defunct pass is missing"
 grep -qF 'FIB_EVENT_RULE_ADD' "$ECM_DB" ||
   die "FIB_EVENT_RULE_ADD handling is missing after patch"
 grep -qF 'FIB_EVENT_RULE_DEL' "$ECM_DB" ||
@@ -78,6 +82,8 @@ grep -qF 'ecm_front_end_ipv4_stop_temp(1)' "$ECM_DB" ||
   die "v2 IPv4 temporary stop helper is not used"
 grep -qF 'ecm_front_end_ipv4_stop_temp(0)' "$ECM_DB" ||
   die "v2 IPv4 temporary start helper is not used"
+grep -qF 'ecm_front_end_ipv6_stop_temp(0)' "$ECM_DB" ||
+  die "v2 IPv6 temporary start helper is not used"
 grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$ECM_DB" ||
   die "runtime registration diagnostic is missing"
 if grep -qF 'ret = register_fib_notifier(' "$ECM_DB"; then
