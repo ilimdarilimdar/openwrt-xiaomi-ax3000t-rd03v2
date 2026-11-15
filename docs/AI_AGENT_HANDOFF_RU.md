@@ -2,28 +2,30 @@
 
 > **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
 
-**Последняя сверка исходного состояния:** 2026-11-15, 14:45 UTC
-**Последняя функциональная ревизия patch 9002:** `d08e5d8b44276f306244b02b56ed9f090809e5e1`.
-**Последний проверенный branch HEAD на момент записи:** `d08e5d8b44276f306244b02b56ed9f090809e5e1`.
+**Последняя сверка исходного состояния:** 2026-11-15, 14:48 UTC
+**Последняя функциональная ревизия patch 9002:** `1121ec832d1903ee530fd824681a32f3b7b39a6e`.
+**Последний проверенный branch HEAD до этого docs refresh:** `1121ec832d1903ee530fd824681a32f3b7b39a6e`.
 
 ## Актуальная контрольная точка — 2026-11-15
 
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
-- Run [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43723568587), source `f9b71d7`: Static **PASS**; PREPARE_ONLY source/config preparation **PASS**; pinned QSDK archive SHA-256 **PASS**; ECM preflight **FAIL**; full build **SKIPPED**. Причина: hunks patch 9002 ожидали plain `int`, но точный QSDK 14.0 уже содержит `atomic_t` и `atomic_read()`. Это несовпадение patch context, а не compiler error.
-- Исправленная functional revision и preflight script объединены в commit `d08e5d8b44276f306244b02b56ed9f090809e5e1`. Патч сохраняет исходные atomic counters, переносит их рядом с `ecm_ipv4_lock`/`ecm_ipv6_lock`, сериализует helper updates с packet-hook checks и использует `atomic_dec_if_positive()`. Шесть существующих packet-hook `atomic_read()` уже защищены соответствующими lock и больше не переписываются.
-- Точный pinned source: QSDK 14.0 commit `7894b769eeb64f1c44fde547a107a8b866997590`. Архив успешно загружается и проходит SHA-256 check в CI #93.
-- Run [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`: Static **PASS**; PREPARE_ONLY preparation **IN_PROGRESS**, ECM preflight **PENDING** на момент последней сверки 14:45 UTC. Полной сборки ещё не было.
-- Ранее обнаруженные прямые вызовы `stop_temp()` находятся в route-notifier/proc-control участках `ecm_db.c` и defunct path в `ecm_interface.c`. В изученных caller bodies повторного захвата соответствующего family lock не найдено. Это targeted source review, не замена lockdep/concurrency stress.
-- FIB worker сохраняет порядок: per-net RTNL snapshot → release RTNL → affected stop gates → `synchronize_net()` → ECM DB defunct → release gates. Notifier shutdown/drain остаётся до DB/front-end teardown.
-- Kconfig preparation содержит три невыбранных рекурсивных предупреждения (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); они не остановили PREPARE_ONLY #93. NSS-specific cycle после patch 0014 отсутствовал в просмотренном последнем артефакте.
-- Полная компиляция ECM, notifier marker в `ecm.ko`, `verify-v2.sh`, загрузка модуля и hardware/Dual-WAN/NSS tests остаются **NOT TESTED**. Основной роутер должен оставаться на штатной MiWiFi.
+- Run [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43723568587), source `f9b71d7`: Static **PASS**; PREPARE_ONLY preparation **PASS**; pinned QSDK archive SHA-256 **PASS**; ECM preflight **FAIL** because the earlier patch expected plain `int`, while the exact QSDK 14.0 baseline already had `atomic_t` and `atomic_read()`. Full build **SKIPPED**.
+- Functional patch correction commit `d08e5d8b44276f306244b02b56ed9f090809e5e1` adapted the changes to the actual `atomic_t` source, moving counters beside `ecm_ipv4_lock`/`ecm_ipv6_lock`, serializing helper updates with packet-hook checks and using `atomic_dec_if_positive()`.
+- Run [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`: Static **PASS**; PREPARE_ONLY preparation **PASS**; ECM preflight **FAIL** with `corrupt patch` at line 369. The archive hash was valid; two hunk counts and the IPv6 include hunk count were malformed. Full build **SKIPPED**.
+- Commit `1121ec832d1903ee530fd824681a32f3b7b39a6e` repairs the unified-diff metadata and diffstat. A structural check parsed 19 patch hunks and confirmed every declared old/new line count matches its body. This is a formatting check only, not proof that the patch applies.
+- Run [#95](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43726388183), source `1121ec8`, was **QUEUED** at 14:48 UTC. Its Static/PREPARE_ONLY/ECM preflight result was not yet available.
+- Exact pinned source: QSDK 14.0 commit `7894b769eeb64f1c44fde547a107a8b866997590`. CI #93 and #94 both downloaded the archive and verified SHA-256.
+- Direct `stop_temp()` callers were found in route-notifier/proc-control paths in `ecm_db.c` and connection-defunct handling in `ecm_interface.c`. The inspected caller bodies did not already hold the same family lock; this targeted review is not a replacement for lockdep/concurrency stress.
+- FIB worker order remains per-net RTNL snapshot → RTNL release → affected stop gates → `synchronize_net()` → ECM DB defunct → release gates. Notifier shutdown/drain remains ahead of DB/front-end teardown.
+- Kconfig preparation has three unrelated recursive warnings (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); they did not stop PREPARE_ONLY #93/#94. NSS-specific cycle after patch 0014 was absent in the inspected artifacts.
+- Full ECM compilation, notifier marker in `ecm.ko`, `verify-v2.sh`, module load, and hardware Dual-WAN/NSS tests remain **NOT TESTED**. Keep the primary router on stock MiWiFi.
 
 Исторические записи ниже сохранены как журнал. При расхождении использовать эту контрольную точку и актуальный GitHub state.
 
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
 **Baseline source/config до эксперимента ECM FIB notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`.
-**Текущий source state:** patch 9002 содержит lifecycle shutdown hook, per-net RTNL snapshot barrier, исправленную синхронизацию atomic temporary-stop counters и `synchronize_net()` grace period. Исправленный commit `d08e5d8` проходит Static; его PREPARE_ONLY/ECM preflight ещё ожидает завершения CI #94. Полная компиляция и hardware tests не подтверждены.
+**Текущий source state:** patch 9002 содержит lifecycle shutdown hook, per-net RTNL snapshot barrier, исправленную синхронизацию atomic temporary-stop counters и `synchronize_net()` grace period. Последний functional commit `1121ec8` исправляет unified-diff hunk counts; CI #95 ожидает проверки применимости. Полная компиляция и hardware tests не подтверждены.
 **Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`.
 **История изменений:** после baseline добавлены source patch 9002 и lifecycle изменения в commit `3614994`; отдельные commits изменяли CI workflow и документацию. Не считать старую формулировку ниже, что после baseline были только docs/CI, актуальной.
 

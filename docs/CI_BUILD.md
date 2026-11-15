@@ -67,18 +67,19 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
 ## Current validation snapshot — 2026-11-15
-_Last live GitHub Actions check: 2026-11-15 14:45 UTC._
+_Last live GitHub Actions check: 2026-11-15 14:48 UTC._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Corrected functional patch/preflight commit: `d08e5d8b44276f306244b02b56ed9f090809e5e1`.
-- The pinned QSDK 14.0 source already has `atomic_t` temporary-stop counters and `atomic_read()` packet-hook checks. The corrected patch moves the counters and helper implementations beside the common frontend locks, serializing stop updates with the checks. It does not need to rewrite the six existing packet-hook expressions.
+- Current firmware/source patch commit: `1121ec832d1903ee530fd824681a32f3b7b39a6e`. Documentation-only handoff refreshes may move branch HEAD without changing this source revision.
+- The pinned QSDK 14.0 source already has `atomic_t` temporary-stop counters and `atomic_read()` packet-hook checks. The corrected functional patch moves the counters and helper implementations beside the common frontend locks, serializing stop updates with the checks. It does not rewrite the six existing packet-hook expressions.
 - The FIB worker keeps the per-net RTNL snapshot, stop-gate, `synchronize_net()`, DB-defunct and teardown ordering described above.
 
 ### Latest workflow results
 
 - Workflow [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43723568587), source `f9b71d764caa9061d544a0a52b4f944b9dfa6fa3`: Static checks **PASS**. PREPARE_ONLY source/config preparation **PASS**. ECM preflight **FAIL** because the patch expected a plain-integer QSDK baseline while the pinned source actually used `atomic_t` plus atomic reads. The archive checksum was verified; this was a patch-context mismatch. Full build **SKIPPED**.
-- Workflow [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`: Static checks **PASS**. PREPARE_ONLY source/config preparation was **IN_PROGRESS**; the ECM preflight step was **PENDING** at the timestamp above. No full build had started.
-- Earlier runs #82–#93 were cancelled or failed while correcting this patch series; do not treat their cancelled status as code validation. Run #93 is the specific failed preflight described above.
+- Workflow [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`: Static checks **PASS**; PREPARE_ONLY source/config preparation **PASS**; ECM preflight **FAIL** with `corrupt patch` at patch line 369. The two common-lock hunk counts and the IPv6 include hunk count were wrong. The archive hash was verified; full build **SKIPPED**.
+- Source patch commit `1121ec8` corrects those hunk counts. A structural parser found 19 hunks and verified all declared old/new line counts against the patch bodies. Workflow [#95](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43726388183), source `1121ec8`, was **QUEUED** at 14:48 UTC. This is not yet a `git apply` PASS.
+- Earlier runs #82–#92 were cancelled or failed while correcting the patch series; do not treat their cancelled status as code validation.
 
 ### Source-level findings
 

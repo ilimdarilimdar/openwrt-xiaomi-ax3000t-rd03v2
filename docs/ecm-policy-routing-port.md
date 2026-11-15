@@ -296,7 +296,9 @@ Run [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/action
 
 Corrected patch/preflight commit: `d08e5d8b44276f306244b02b56ed9f090809e5e1`. It now targets the actual atomic QSDK baseline described above.
 
-Run [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`, had passed Static checks; PREPARE_ONLY source/config preparation was still running and the ECM preflight step was pending at the last check (2026-11-15 14:45 UTC). Do not mark the corrected patch as apply-validated until that step completes.
+Run [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`, passed Static and PREPARE_ONLY source/config preparation, but ECM preflight failed with `corrupt patch` at line 369. The archive checksum was valid; the failure was unified-diff metadata (two lock hunks and the IPv6 include hunk had incorrect line counts), not a source/compiler failure. Full build was skipped.
+
+Commit `1121ec832d1903ee530fd824681a32f3b7b39a6e` fixes the patch headers and diffstat. A structural check parsed all 19 hunks and confirmed that each declared old/new line count matches its actual body. Run [#95](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43726388183), source `1121ec8`, was queued at the last live check (2026-11-15 14:48 UTC). This parser check does not replace the CI apply check; wait for #95's ECM preflight result before calling the patch apply-validated.
 
 The FIB worker's `synchronize_net()` barrier remains separate from the temporary-stop counter fix. It closes the affected frontend gates, waits for already-running Netfilter hook readers after RTNL is released, and only then walks the ECM database. This barrier does not preserve conntrack/NAT sessions across WAN address changes, and it does not serialize unrelated route/interface notifier DB walks.
 
