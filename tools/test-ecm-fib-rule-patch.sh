@@ -55,8 +55,8 @@ ECM_DB=$(find "$SOURCE_DIR" -type f -path '*/ecm_db/ecm_db.c' -print -quit)
 ECM_ROOT=${ECM_DB%/ecm_db/ecm_db.c}
 
 echo "Checking patch against QSDK $QSDK_VERSION source $PKG_SOURCE_VERSION"
-git -C "$ECM_ROOT" apply --check "$PATCH_FILE"
-git -C "$ECM_ROOT" apply "$PATCH_FILE"
+git -C "$ECM_ROOT" apply --whitespace=error-all --check "$PATCH_FILE"
+git -C "$ECM_ROOT" apply --whitespace=error-all "$PATCH_FILE"
 
 grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$ECM_DB" ||
   die "FIB notifier registration is missing after patch"
