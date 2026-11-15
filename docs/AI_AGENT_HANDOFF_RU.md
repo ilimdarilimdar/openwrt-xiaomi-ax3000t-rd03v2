@@ -1,37 +1,58 @@
 # Передача проекта следующему ИИ-агенту: Xiaomi AX3000T RD03v2
 
-> **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
+> **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и состояние сборки нужно обновлять перед каждым действием.
 
-**Последняя сверка исходного состояния:** 2026-11-15, 14:48 UTC
-**Последняя функциональная ревизия patch 9002:** `1121ec832d1903ee530fd824681a32f3b7b39a6e`.
-**Последний проверенный branch HEAD до этого docs refresh:** `1121ec832d1903ee530fd824681a32f3b7b39a6e`.
+**Последняя сверка:** 2026-11-15, около 15:12 UTC.
+**Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
+**Последняя функциональная ревизия ECM patch 9002:** `552f134b8f4fbab3a0a31f08411f76f2a5d9a689`.
+Документационные обновления после неё не меняют firmware source.
 
 ## Актуальная контрольная точка — 2026-11-15
 
-- Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
-- Run [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43723568587), source `f9b71d7`: Static **PASS**; PREPARE_ONLY preparation **PASS**; pinned QSDK archive SHA-256 **PASS**; ECM preflight **FAIL** because the earlier patch expected plain `int`, while the exact QSDK 14.0 baseline already had `atomic_t` and `atomic_read()`. Full build **SKIPPED**.
-- Functional patch correction commit `d08e5d8b44276f306244b02b56ed9f090809e5e1` adapted the changes to the actual `atomic_t` source, moving counters beside `ecm_ipv4_lock`/`ecm_ipv6_lock`, serializing helper updates with packet-hook checks and using `atomic_dec_if_positive()`.
-- Run [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`: Static **PASS**; PREPARE_ONLY preparation **PASS**; ECM preflight **FAIL** with `corrupt patch` at line 369. The archive hash was valid; two hunk counts and the IPv6 include hunk count were malformed. Full build **SKIPPED**.
-- Commit `1121ec832d1903ee530fd824681a32f3b7b39a6e` repairs the unified-diff metadata and diffstat. A structural check parsed 19 patch hunks and confirmed every declared old/new line count matches its body. This is a formatting check only, not proof that the patch applies.
-- Run [#95](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43726388183), source `1121ec8`, was **QUEUED** at 14:48 UTC. Its Static/PREPARE_ONLY/ECM preflight result was not yet available.
-- Exact pinned source: QSDK 14.0 commit `7894b769eeb64f1c44fde547a107a8b866997590`. CI #93 and #94 both downloaded the archive and verified SHA-256.
-- Direct `stop_temp()` callers were found in route-notifier/proc-control paths in `ecm_db.c` and connection-defunct handling in `ecm_interface.c`. The inspected caller bodies did not already hold the same family lock; this targeted review is not a replacement for lockdep/concurrency stress.
-- FIB worker order remains per-net RTNL snapshot → RTNL release → affected stop gates → `synchronize_net()` → ECM DB defunct → release gates. Notifier shutdown/drain remains ahead of DB/front-end teardown.
-- Kconfig preparation has three unrelated recursive warnings (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); they did not stop PREPARE_ONLY #93/#94. NSS-specific cycle after patch 0014 was absent in the inspected artifacts.
-- Full ECM compilation, notifier marker in `ecm.ko`, `verify-v2.sh`, module load, and hardware Dual-WAN/NSS tests remain **NOT TESTED**. Keep the primary router on stock MiWiFi.
+- Репозиторий: `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`.
+- Точная цель: Xiaomi Mi Router AX3000T **RD03v2**, Qualcomm IPQ5018, 256 MiB RAM, NAND. Не переносить образ на другие аппаратные ревизии AX3000T.
+- OpenWrt/NSS base: `c36db6321c11595dc45a160cdab36b5c2d787744`, Linux 6.18.
+- QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`; NSS feed: `57c0fa18f847f6cb23992ff3493c6a9131246f4c`; packages feed: `3a4f118a016af8a250fc77bb51b92aa2daf91f0a`.
+- QSDK source archive SHA-256: `a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`. В CI #100/#101 загрузка источников и SHA verification прошли.
+- Workflow [#100](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43727888918), commit `5b709d0`: Static **PASS**, PREPARE_ONLY sources/feeds/defconfig **PASS**, ECM preflight **FAIL** на структурном валидаторе — IPv4 deletion hunk содержал строки контекста сверх объявленного количества.
+- Workflow [#101](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728125583), commit `55171b1`: Static **PASS**, PREPARE_ONLY **PASS**, ECM preflight **FAIL** по той же структурной причине. Byte-exact диагностика и verbose `git apply` были добавлены в тестовый скрипт, но этот ранний structural failure не дошёл до блока raw-apply diagnostics.
+- Workflow #102, commit `e1a6818`, **CANCELLED**. В этом коммите поправлены размеры IPv4/IPv6 deletion hunks и добавлена проверка единственного владельца временного stop-counter в исходниках.
+- Workflow [#103](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728459690), commit `3637215`: Static **PASS**; PREPARE_ONLY source/config preparation **IN PROGRESS** на момент сверки. Этот коммит добавил последний контекст IPv6 common-lock hunk.
+- Workflow [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752), commit `552f134`, **PENDING** на момент сверки. Он исправляет размер последнего IPv6 common-lock hunk с учётом фактического тела.
+- **Ни один из запусков #96–#103 ещё не подтвердил** успешные raw `git apply --check` и полный pinned ECM feed patch series на чистом QSDK. Структурный валидатор не эквивалентен source apply.
+- Полная компиляция `kmod-qca-nss-ecm`, проверка marker в `ecm.ko`, `verify-v2.sh`, загрузка модуля и hardware Dual-WAN/NSS tests — **NOT TESTED**. Полный image build для этой функциональной ревизии ещё не запускался.
+- Не прошивать основной домашний маршрутизатор. Оставить его на stock MiWiFi; аппаратные испытания начинать только на втором RD03v2 после source apply, feed-series, полной сборки и проверки recovery procedure.
+
+## Что делать следующим
+
+1. Дождаться завершения #103 и #104, затем проверить не только job conclusion, но и PREPARE_ONLY/ECM preflight logs.
+2. Если #104 проходит структурный валидатор, убедиться, что тот же job прошёл `git apply --check` на чистом QSDK и тест полного pinned ECM patch series. Если нет — использовать byte-exact diagnostics из #101 и исправлять конкретный hunk; не применять `--unidiff-zero` как обход.
+3. Только после чистого source/feed-series PASS запускать отдельную полную сборку и проверять `kmod-qca-nss-ecm`, notifier marker и `verify-v2.sh`.
+4. После полной сборки проводить стендовые испытания на втором роутере: загрузка/перезагрузка, module lifecycle, FIB rule churn, overlapping route/interface events, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, packet captures, conntrack marks, NSS/ECM counters, throughput, CPU, RTT/loss.
+5. Не считать ECM notifier механизмом bonding. mwan3 распределяет/failover-ит отдельные соединения; он не ускоряет один TCP flow объединением пропускной способности WAN.
+
+## Ограничения Dual-WAN, важные для принятия решений
+
+- В pinned mwan3 2.12.5 событие health tracker `disconnected` обновляет policy mangle chains, но само по себе не обязано удалять per-WAN `ip rule`/routes и вызывать FIB notifier.
+- `ifdown` удаляет policy rules/routes и может вызвать FIB notifier.
+- Conntrack mark может остаться привязанным к предыдущему WAN. ECM notifier удаляет accelerated state, но не переписывает conntrack mark.
+- Существующие NAT TCP/UDP сессии через разные публичные WAN не обещаются к сохранению. Базовый критерий — новые соединения идут через оставшийся WAN; существующие проверяются отдельно.
+- Глобальный mwan3 `flush_conntrack` опасен для всех текущих сессий и в sample config не включён. Не включать без отдельной оценки.
+- `iptables-mod-conntrack-extra` не является userspace CLI `conntrack`; CLI package не выбран в текущем manifest. Селективная чистка по mark — отдельная будущая задача.
+
+## Ограничения CI
+
+Full-build workflow использует одноразовый P-256 signing key и URL пакетов `example.invalid`; он не публикует пользовательский релизный репозиторий. Даже успешный CI image не должен считаться пригодным для установки. До реального релиза требуются постоянная контролируемая схема подписи, доступный package repository, проверка образов/SHA и release validation.
+
+PREPARE_ONLY предыдущих запусков генерировал конфигурацию, но в Kconfig logs присутствовали рекурсивные зависимости Qt5 GUI, fwknopd и squeezelite-custom. NSS-specific dependency guard patch 0014 оставляет для целевого IPQ50xx runtime `nss-tools-dwmac`; его статическая проверка проходит. Предупреждения Kconfig нельзя удалять или объявлять безвредными без анализа итогового .config и log.
 
 Исторические записи ниже сохранены как журнал. При расхождении использовать эту контрольную точку и актуальный GitHub state.
 
-**Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
-**Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
 **Baseline source/config до эксперимента ECM FIB notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`.
-**Текущий source state:** patch 9002 содержит lifecycle shutdown hook, per-net RTNL snapshot barrier, исправленную синхронизацию atomic temporary-stop counters и `synchronize_net()` grace period. Последний functional commit `1121ec8` исправляет unified-diff hunk counts; CI #95 ожидает проверки применимости. Полная компиляция и hardware tests не подтверждены.
-**Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`.
-**История изменений:** после baseline добавлены source patch 9002 и lifecycle изменения в commit `3614994`; отдельные commits изменяли CI workflow и документацию. Не считать старую формулировку ниже, что после baseline были только docs/CI, актуальной.
+**Ранний functional/lifecycle patch history:** commit `3614994`; актуальную ревизию брать из живого HEAD, не из исторических записей.
+**CI workflow:** `.github/workflows/rd03v2-validation.yml`; prepare-only timeout 90 min, full-build timeout 360 min; full-build запускается только отдельным push с `[full-build]` после успешного prepare-only.
 
-**Последний статус на момент аудита:** активная разработка; базовая конфигурация и автоматические проверки есть, полная сборка Dual-WAN-ветки и её аппаратная пригодность не подтверждены.
-
-> Перед любым действием получить живой HEAD. Последующие обновления этого handoff тоже создают documentation-only commit и двигают branch HEAD; не считать такой сдвиг изменением firmware code.
+> Перед любым действием получить живой HEAD. Последующие обновления этого handoff создают documentation-only commit и двигают branch HEAD; не считать такой сдвиг изменением firmware code.
 
 ---
 
