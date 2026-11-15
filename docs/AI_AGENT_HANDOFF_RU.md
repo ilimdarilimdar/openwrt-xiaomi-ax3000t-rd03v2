@@ -110,6 +110,7 @@ GitHub compare от 2026-11-15 подтверждает: `main` находитс
 - В #16 checkout, runner resource check и временная CI-подпись прошли. `Build and run verify-v2` продолжает выполняться; лог/артефакты не доступны до завершения. Тайм-аут — 360 минут. Не отменять этот запуск лишь из-за длительности.
 - #43–#56 были отменены последующими push до завершения соответствующих проверок. `cancelled` здесь означает superseded/отменённый queued run, а не доказанную ошибку исходников или сборки.
 - #57 на commit `6878d6d` находится в `pending`; GitHub ещё не вернул jobs. Run включает candidate patch 9002, pinned-source preflight, проверку порядка pending-bit snapshot под RTNL и marker check в `verify-v2`.
+- Commit `6878d6d` исправил только escaping `\n` в двух `DEBUG_TRACE` строках IPv4/IPv6 worker; diff сверён. Сама логика RTNL snapshot и pending-bit requeue не менялась. Run #57 остаётся в очереди за #16.
 - #16 остаётся `in_progress` на более раннем commit `5bcad81`; его full-build step не завершился. Этот run не содержит candidate patch 9002 и не подтверждает его сборку.
 - Patch 0014 ручным `git apply --check` подтверждён против точного upstream Makefile с совпадающим blob SHA; Kconfig effect всё ещё требует свежего PREPARE_ONLY.
 - Candidate ECM patch 9002 использует v2 `*_stop_temp()` counters, атомарный FIB callback → workqueue → per-family connection defunct и RTNL publication barrier. Worker снимает IPv4/IPv6 pending bits под RTNL, затем отпускает RTNL и только после этого запускает ECM DB walk. Это не даёт новому rule event потеряться в уже выполняющемся старом проходе.
@@ -284,6 +285,7 @@ CI-образ на temporary key/`example.invalid` годится как док�
 - Создан `tools/test-ecm-fib-rule-patch.sh`: проверяет PKG_HASH, `git apply --check`/apply и assertions for callback/worker/teardown. Workflow PREPARE_ONLY вызывает этот script.
 - `verify-v2.sh` проверяет runtime notifier marker внутри `ecm.ko` в финальном sysupgrade rootfs; ECM patch fingerprints проверяются по всему source tree.
 - CI snapshot на момент последней API-проверки: #16 IN PROGRESS на старом source commit; #43–#56 CANCELLED последующими push; #57 PENDING на актуальном code HEAD `6878d6d` и содержит свежие patch/preflight проверки.
+- Проверен diff #57 (`6878d6d`): исправлены две C-строки `DEBUG_TRACE` на корректный `\n`; это исправление диагностики, алгоритм не меняет. #16 всё ещё IN PROGRESS; #57 WAITING за ним.
 - Обновлены `docs/ecm-policy-routing-port.md`, `docs/CI_BUILD.md`, `docs/DEVELOPMENT_MANUAL_RU.md` и этот handoff.
 - Следующий шаг: проверить результаты #16 и #57. Для актуального patch 9002 нужны PASS pinned archive preflight, анализ `.config`/Kconfig, затем компиляция ECM с полной feed patch series и проверка runtime marker; ни один из этих критериев пока не пройден на актуальном code HEAD.
 
