@@ -1,73 +1,135 @@
 # Dual-WAN baseline for Xiaomi AX3000T RD03v2
 
-This branch adds the upstream `mwan3` daemon and `luci-app-mwan3` to the
-RD03v2 image. The package selections are resolved against the feed revisions
-pinned in `feeds.lock`; the image verifier requires both packages to be present.
+This branch adds upstream `mwan3` and `luci-app-mwan3` to the RD03v2 image.
+The package selections use the feed revisions pinned in `feeds.lock`:
+`mwan3` 2.12.5 from the packages feed and `luci-app-mwan3` from the LuCI
+feed. Their declared package dependencies are resolved by OpenWrt Kconfig.
+
+This is a **packaging baseline**, not yet a production-validated Dual-WAN/NSS
+firmware. The image has not been built or tested on hardware from this branch.
 
 ## What this change does
 
-- Ships mwan3 2.12.5 and its LuCI application in the image.
-- Keeps the Qualcomm NSS/ECM source tree and existing patches unchanged.
-- Does not add an unreviewed ECM patch or claim that accelerated connections are
-  reclassified safely when mwan3 changes policy-routing rules.
-- Does not preconfigure either WAN. The physical port-to-netifd mapping differs
-  between board configuration and user setup, so the operator must first identify
-  the actual logical interface names.
+- Ships the mwan3 daemon and LuCI application in the root filesystem.
+- Leaves Qualcomm NSS/ECM source and patch queues unchanged.
+- Does not add an experimental FIB notifier or claim that accelerated flows
+  always recover correctly after a mwan3 policy-rule change.
+- Does not preconfigure WANs. First identify the actual netifd logical interface
+  names and DSA port mapping on the target router.
 
-## Important limitation: NSS/ECM and mwan3
+## Important: a known v1.x fix exists, but it is not in v2
 
-The project's validation notes record that issue #36 (ECM/mwan3 IPv6 flow
-stall) was not reproduced on the bench, but the current v2 ECM lacks a FIB-rule
-notifier. A full mwan3 + PPPoE test rig is still needed to settle the interaction.
-Therefore this branch is a **mwan3 packaging baseline**, not an NSS failover fix.
+The ADCDS v1.x line already addressed the ECM/mwan3 policy-routing problem in
+[PR #40](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/pull/40).
+The fix was included in v1.14 as ECM patch 0030. It registers a FIB notifier
+for `FIB_EVENT_RULE_ADD` and `FIB_EVENT_RULE_DEL`, then defuncts accelerated
+connections of the affected address family from a work item. Deferring the
+flush is necessary because the notifier callback runs in atomic context.
 
-Until the test matrix below passes on the exact RD03v2 hardware and exact image,
-do not treat load balancing or failover as production-validated with NSS enabled.
-For initial diagnosis, compare behaviour with NSS acceleration enabled and
-disabled, and capture both IPv4 and IPv6 results separately.
+The v1.x maintainer and reporter documented the following evidence:
 
-## Configuration notes
+- The wrong-WAN stall was reproduced with stock ECM on a bench topology using
+  PPPoE, a second WAN, per-WAN fwmark rules and routed IPv6.
+- With rules restored last, a routed IPv6 upload could remain at 0 Mbit/s for
+  the rest of a 40-second run. With the notifier patch, it recovered as soon as
+  the rules returned.
+- 800 policy-rule changes in 4.4 seconds produced no kernel warnings in the
+  maintainer's test.
+- The reporter ran the patched module for about 16 hours and deliberately
+  triggered three `mwan3 restart` operations; routed IPv6 flows recovered
+  rather than remaining stalled.
 
-1. Identify the two netifd logical interfaces and their physical DSA devices.
-   Do not assume the second interface is named `wanb`; mwan3's UCI section name
-   must refer to the actual logical interface name.
-2. Configure each WAN independently in `/etc/config/network` first. Verify
-   DHCP/static/PPPoE, DNS, gateway and MTU before adding mwan3.
-3. Configure mwan3 tracking targets that answer reliably through each ISP.
-   Use separate IPv4 and IPv6 tracking only when the provider actually supplies
-   working IPv6. This user's two ISP links have not yet been confirmed to provide
-   IPv6.
-4. Start with failover (different metrics), not load balancing. Confirm that new
-   flows move to the surviving WAN after physically disconnecting either uplink.
-5. Only after failover tests pass, test weighted per-connection balancing.
-   mwan3 distributes flows; it does not bond the links into one faster TCP flow.
-6. Test VPN policy separately. AmneziaWG packets are CPU-path traffic on this
-   platform; ordinary non-VPN NAT may still use NSS. Do not assume tunnel traffic
-   is NSS-offloaded.
+This is meaningful evidence for that **v1.x ECM/kernel combination**. It is
+not proof for v2. The v2.1.3 validation notes explicitly say that v2 ECM has
+no FIB-rule notifier and that a full mwan3 + PPPoE rig is needed to settle the
+interaction. The v1 patch must not be copied into v2 without adapting it to
+the exact pinned source and compiling it.
 
-## Required validation matrix
+The current v2 pins are materially different:
 
-Record firmware tag, kernel, feed pins, NSS/ECM mode, WAN interface names and
-ISP encapsulation with every run.
+- OpenWrt/NSS tree: `c36db6321c11595dc45a160cdab36b5c2d787744`, Linux 6.18.
+- NSS feed: `57c0fa18f847f6cb23992ff3493c6a9131246f4c`.
+- `qca-nss-ecm` source: QSDK 14.0, source commit
+  `7894b769eeb64f1c44fde547a107a8b866997590`, dated 2026-09-06.
 
-| Test | NSS | WAN topology | Expected evidence |
+See [v2 validation](../VALIDATION.md), [PR #40](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/pull/40)
+and [the v1.14 release](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/releases/tag/v1.14).
+
+## What the v1 fix does not promise
+
+- IPv4 NAT sessions are not guaranteed to survive WAN migration. Conntrack/NAT
+  state is tied to the path and mwan3 may flush affected connections. The
+  expected success criterion is that new connections use the surviving WAN.
+- NAT66 was observed in the v1 investigation to stay on the host/slow path,
+  rather than ECM NSS acceleration. Its behaviour must be confirmed against
+  the v2 image; do not assume the FIB notifier makes NAT66 sessions survive.
+- The notifier invalidates accelerated flows for the affected IP family. That
+  creates a brief slow-path/re-acceleration interval on policy-rule changes.
+- mwan3 performs per-connection policy distribution/failover. It does not
+  bond two WANs into one faster TCP stream.
+
+## WAN and VPN configuration sequence
+
+1. Bring up each WAN independently in `/etc/config/network`. Verify address,
+   gateway, DNS, MTU and physical DSA device before configuring mwan3.
+2. Use the actual netifd logical interface names in mwan3. Do not assume the
+   second interface is named `wanb`.
+3. Start with failover using different metrics. Confirm both new and existing
+   traffic behaviour separately when either uplink is physically disconnected.
+4. Add weighted balancing only after failover is understood. Test multiple
+   independent flows and inspect per-WAN counters; one TCP flow is not an
+   aggregation benchmark.
+5. Test IPv4 and IPv6 separately. Configure IPv6 tracking only if both ISPs
+   actually provide usable IPv6; no working IPv6 has been confirmed on the
+   user's two links.
+6. Test AmneziaWG policy separately. The AWG packages are built separately
+   for the exact image/kernel and installed from the project's signed package
+   repository; they are not installed in the base image. VPN traffic is CPU
+   path on this platform, while ordinary non-VPN NAT can still use NSS.
+
+## Required v2 validation
+
+Record image tag, kernel, feed pins, NSS mode, actual WAN logical names,
+encapsulation and source prefixes for every run.
+
+| Test | NSS | Topology | Required evidence |
 |---|---|---|---|
-| Baseline single WAN | on | WAN1 only | NAT throughput, CPU, ECM counters |
-| Baseline single WAN | on | WAN2 only | NAT throughput, CPU, ECM counters |
-| Failover IPv4 | on | WAN1 + WAN2 | new and established TCP/UDP flows; route and conntrack state |
-| Failover IPv6 | on | WAN1 + WAN2 with real IPv6 | same checks, plus ECM IPv6 counters |
-| Failover comparison | off | WAN1 + WAN2 | determine whether any stall is ECM-specific |
-| Weighted balancing | on/off | WAN1 + WAN2 | many parallel flows, per-WAN byte counters |
-| AWG policy | on | WAN1 + WAN2 + AWG | tunnel handshake, endpoint reachability, non-VPN NAT |
-| Recovery | on | repeated link loss/restore | no stale flows pinned to failed WAN |
+| Single-WAN baseline | on | WAN1 only, then WAN2 only | throughput, CPU, NSS/ECM counters |
+| Baseline comparison | off | WAN1 only, then WAN2 only | isolate NSS-specific behaviour |
+| Policy-rule churn | on | both WANs, routed IPv6 if available | TCP upload/download, `ip -6 rule`, route tables, ECM counters |
+| Failover IPv4 | on | both WANs | new flows, conntrack/NAT, route and per-WAN counters |
+| Failover IPv6 | on | both WANs with real IPv6 | routed flows before/during/after cable pull |
+| Route/rule ordering | on | controlled test rig | routes-first vs rules-first restore order |
+| Stress | on | two WANs | 800 rule changes / 4.4 s, kernel warnings, memory |
+| Weighted balancing | on/off | both WANs | many parallel flows, per-WAN byte counts |
+| AWG policy | on | both WANs + AWG | handshake, endpoint reachability, tunnel throughput, ordinary NAT throughput |
+| Recovery | on | repeated loss/restore | no stale flow remains pinned to the failed WAN |
 
-A pass is not just a successful ping. Check actual traffic counters and existing
+A pass is not just a successful ping. Check actual traffic and existing
 connections across each transition. Save `ip rule`, `ip route show table all`,
-`conntrack -L`, mwan3 status, ECM/NSS counters and packet captures where
-possible.
+`conntrack -L`, `mwan3 status`, `logread`, ECM/NSS counters and packet
+captures where possible.
 
-## Scope of this branch
+## ECM v2 porting gate
 
-This is intentionally conservative: package integration and documentation only.
-An ECM/FIB-rule change must be developed against the exact pinned ECM source,
-reviewed, compiled, and validated before it is included in a firmware image.
+Before adding a v2 patch:
+
+1. Extract the exact source archive pinned by the v2 NSS package Makefile and
+   verify its SHA-256 against the package hash.
+2. Compare the v1 patch's touched functions with v2's `ecm_db/ecm_db.c`.
+   Confirm that `ecm_db_connection_defunct_ip_version()`, the front-end stop
+   helpers, notifier registration API and cleanup labels have the expected
+   signatures and locking semantics.
+3. Add the v2 patch as a new final patch (currently after 0059) in
+   `feed-overlay/nss/qca-nss-ecm/patches/`. Do not replace or renumber an
+   upstream patch.
+4. Compile `kmod-qca-nss-ecm` against the pinned Linux 6.18 tree. Add a
+   verifier check for the registration log string and a runtime check that the
+   notifier registers successfully.
+5. Re-run the stock-vs-patched reproduction, rule-order tests, repeated
+   `mwan3 restart`, actual cable-pull failover and IPv4/IPv6 test matrix.
+   Only then call the v2 ECM change validated.
+
+Do not work around this by permanently disabling IPv6 acceleration or by
+writing to `front_end_ipv6_stop`: the v1 maintainer established that this is
+an internal pause flag, not a persistent configuration setting.
