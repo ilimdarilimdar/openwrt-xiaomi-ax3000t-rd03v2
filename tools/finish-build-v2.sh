@@ -25,11 +25,11 @@ done < "$V2/feeds.lock"
 python3 "$V2/tools/feed-overlay-v2.py" --check "$TREE"
 [ -f "$TREE/files/etc/rd03v2-release" ] && [ -f "$TREE/.config.v2-wanted" ] || die 'tree is not prepared'
 
-# Validate and install the workspace signing key pair (also supports PREPARE_ONLY resume).
-"$V2/tools/install-v2-signing-key.sh" "$TREE"
 for f in $(cd "$V2/overlay" && find . -type f); do
  cmp -s "$V2/overlay/$f" "$TREE/$f" || die "prepared overlay differs: $f"
 done
+# Copy secrets only after all non-secret prepared-tree checks have passed.
+"$V2/tools/install-v2-signing-key.sh" "$TREE"
 # TAG (and V2_REPO_URL) given: build this tree as another release, stamped the way build.sh
 # stamps a new one. Without TAG the tree keeps the stamp it was prepared with.
 if [ -n "${TAG:-}" ]; then
