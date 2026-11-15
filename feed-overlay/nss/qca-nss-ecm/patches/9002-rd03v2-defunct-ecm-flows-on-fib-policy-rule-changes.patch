@@ -233,7 +233,6 @@ index c97f625..0000000 100644
  	spin_lock_bh(&ecm_db_lock);
  	ecm_db_terminate_pending = true;
  	spin_unlock_bh(&ecm_db_lock);
-
 diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
 --- a/ecm_db/ecm_db.h
 +++ b/ecm_db/ecm_db.h
@@ -264,7 +263,6 @@ diff --git a/ecm_init.c b/ecm_init.c
  
 +	ecm_db_fib_rule_notifier_stop();
  	/* call stop on anything that requires a prepare-to-exit signal */
-
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
@@ -385,4 +383,4 @@ diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
  
  /*
   * Management thread control
- 
+ */
