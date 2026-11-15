@@ -2,15 +2,17 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-15, около 15:29 UTC.
+**Последняя сверка:** 2026-11-15, после проверки GitHub Actions и pinned kernel source.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
+**Текущий docs-only HEAD:** `07bd5d0750ee75a2d5d203c2fdcfb7622ee6186d`.
+**Последний code/test HEAD:** `a0e72ce6fa04a243849a96825f4891e0f0608b39` (строгий тест callback; C исходники не меняет).
 **Последняя функциональная ревизия ECM patch 9002:** `006e14a5d0348528a021943b1fd595cc233451db`.
-Последующие коммиты `eba9d02` и `a0e72ce` меняют только регрессионные проверки, не C-исходники прошивки.
 
 ## Текущая контрольная точка
 
 - Устройство: Xiaomi Mi Router AX3000T **RD03v2**, Qualcomm IPQ5018, 256 MiB RAM, NAND. Не переносить образ на другие аппаратные ревизии.
-- OpenWrt/NSS base: `c36db6321c11595dc45a160cdab36b5c2d787744`, Linux 6.18.
+- OpenWrt/NSS base: `c36db6321c11595dc45a160cdab36b5c2d787744`.
+- Kernel package pin: **Linux 6.18.55** (из `target/linux/generic/kernel-6.18`: `LINUX_VERSION-6.18 = .55`).
 - QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`.
 - NSS feed: `57c0fa18f847f6cb23992ff3493c6a9131246f4c`; packages feed: `3a4f118a016af8a250fc77bb51b92aa2daf91f0a`.
 - QSDK source archive SHA-256: `a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`.
@@ -19,21 +21,38 @@
 
 - [#105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924), commit `d51baa7`: Static, PREPARE_ONLY, raw source apply and pinned feed-series preflight **PASS**.
 - [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036), functional commit `006e14a`: Static and PREPARE_ONLY **PASS**; complete ECM preflight **PASS**.
-- Evidence from #106 preflight log: 9 file sections/19 hunks validate; raw patch applies to SHA-verified QSDK archive; patch 9002 applies after **all 31 pinned ECM feed patches**, including 9001; stop-counter/packet-hook lock consistency, RTNL pending-bit snapshot, frontend-gate closure before `synchronize_net()`, notifier registration/unwind/exit order and worker drain checks pass.
-- [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069), test-only commit `eba9d02`: Static and PREPARE_ONLY **PASS**; full signed-image build and `verify-v2` step **IN PROGRESS** at last check.
-- [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928), test-only commit `a0e72ce`: **QUEUED** behind #107. The second guard verifies the atomic FIB callback contains only family-bit updates and workqueue scheduling. It is not a different firmware-code revision.
-- Full C compilation, signed CI image generation and `verify-v2` have **no final result yet**. Runtime module loading and hardware Dual-WAN/NSS testing remain **NOT TESTED**.
+- Evidence from #106 preflight log: 9 file sections / 19 hunks validate; raw patch applies to the SHA-verified QSDK archive; patch 9002 applies after **all 31 pinned ECM feed patches**, including 9001; stop-counter/packet-hook lock consistency, RTNL pending-bit snapshot, frontend-gate closure before `synchronize_net()`, notifier registration/unwind/exit order and worker drain checks pass.
+- [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069), test-only commit `eba9d02`: Static **PASS**, PREPARE_ONLY **PASS**, atomic callback regression guard **PASS**. Full signed-image build and `verify-v2` remain **IN PROGRESS** at the latest check. Last reported run update was 15:28:33 UTC; log download was not yet available at 15:51 UTC. Do not interpret this as a build failure or success.
+- [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928), test-only commit `a0e72ce`: **PENDING** behind #107. Its callback guard requires only `set_bit()` and `schedule_work()`; it is not a new firmware-code revision.
+- Full C compilation, notifier marker in built `ecm.ko`, CI image generation and `verify-v2` have **no final result yet**. Runtime module loading and hardware Dual-WAN/NSS testing remain **NOT TESTED**.
+
+### Linux 6.18.55 source/API review
+
+- Exact stable source reviewed: `gregkh/linux` tag `v6.18.55`, `net/core/fib_rules.c`. `fib_newrule()` and `fib_delrule()` take `rtnl_net_lock(net)` when `rtnl_held == false`, and call the FIB rule notifier while that lock is held. Worker acquisition of `rtnl_net_lock(&init_net)` therefore waits for a normal live init_net rule update to finish before clearing its pending bits.
+- The in-kernel VRF path calls `fib_newrule()/fib_delrule(..., true)`; the same pinned `net/core/rtnetlink.c` wraps `__rtnl_newlink()` in `rtnl_nets_lock()/rtnl_nets_unlock()`, which includes the target network's per-net RTNL lock. This covers the `rtnl_held` exception in the reviewed in-tree caller.
+- FIB notifier dispatch uses `atomic_notifier_call_chain()`. The patch callback only sets the family pending bit and queues work. `atomic_notifier_chain_unregister()` runs `synchronize_rcu()`; the subsequent `cancel_work_sync()` drains deferred work before ECM teardown.
+- Worker releases RTNL before `synchronize_net()` and before ECM DB traversal. The affected frontend stop gate is raised before the network-reader grace period.
+- `register_fib_notifier()` performs an initial FIB dump that replays existing rules as ADD events. This can queue one broad family-specific defunct pass during ECM initialization; test module load/reload ordering and impact. Do not label this a defect without runtime evidence.
+- This is source/API review only. It does not prove the exact ECM module compiles, that module lifecycle is safe under stress, or that NSS offload and mwan3 failover work on the router.
+
+### Configuration status
+
+- PREPARE_ONLY selects `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper, `iptables-nft`, `ip6tables-nft`, `xtables-nft` and `ipset`.
+- Pinned generic kernel config enables `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` and `CONFIG_IP_MULTIPLE_TABLES`; project config requests IPv6 multiple tables. `verify-v2.sh` checks final built kernel symbols.
+- Three unrelated Kconfig recursive-dependency diagnostics remain: Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom. Those packages are unset in final `.config`; the selected NSS cycle is absent after tree patch 0014. Keep warnings visible and re-check after feed changes.
 
 ### Next actions
 
-1. Monitor #107 through build completion and inspect its complete logs for package compile failures, image creation and `verify-v2` result.
-2. Review #108's stricter atomic-callback guard if it executes. Do not count #107 and #108 as independent firmware architecture validations.
-3. If build and verify pass, inspect the actual image manifests, target/profile identity, kernel/module package versions, SHA-256, and signing/public-key handling. The workflow uploads logs only; it does not publish an installable release.
-4. Only then prepare a separate second RD03v2 test device and recovery method. Keep the primary home router on stock MiWiFi.
+1. Monitor #107 to completion; inspect full `build.log` and per-package `logs/package/feeds/nss/**` if build fails. Distinguish source/compiler errors from runner resource/time limits.
+2. Confirm successful `kmod-qca-nss-ecm` compilation and the FIB notifier runtime marker inside built `ecm.ko`.
+3. Confirm `verify-v2.sh` passes against the built rootfs/image, then inspect target/profile, package manifest, kernel/module versions, SHA-256 and key/repository stamps.
+4. Review #108's stricter callback guard when it runs. Do not count #107 and #108 as independent firmware architecture validations.
+5. Only after build/verify, prepare a separate second RD03v2 test device and recovery method. Test module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, real `ifdown`/cable-pull; IPv4 and IPv6 separately; conntrack marks, NSS/ECM counters, throughput, CPU, latency and packet loss.
+6. Keep the primary router on stock MiWiFi. Do not flash any CI artifact.
 
 ### Safety and release limits
 
-The full-build workflow creates a temporary CI-only P-256 signing key and uses the placeholder package URL `example.invalid`; build artifacts are not published as a usable release. **Do not flash any CI image** to either router. A real release needs durable controlled signing, a reachable package repository, verified image hashes and a recovery-tested installation path.
+The full-build workflow creates a temporary CI-only P-256 signing key and uses the placeholder package URL `example.invalid`; build artifacts are not published as a usable release. **Do not flash a CI image** to either router. A real release needs durable controlled signing, a reachable package repository, verified image hashes and a recovery-tested installation path.
 
 The ECM notifier broadly defuncts accelerated connections for the affected IP family after policy-rule updates. This may return flows to the host path and allow re-acceleration; it does not guarantee preservation of existing NAT/TCP/UDP sessions across different public WAN addresses. Conntrack marks can remain associated with the old WAN. mwan3 distributes/failovers individual flows; it does not bond two WANs into higher bandwidth for one TCP flow.
 
