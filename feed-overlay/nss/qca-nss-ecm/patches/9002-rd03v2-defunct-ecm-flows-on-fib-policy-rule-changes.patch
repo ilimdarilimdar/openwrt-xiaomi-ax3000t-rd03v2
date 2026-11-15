@@ -16,8 +16,8 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 112 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 112 insertions(+)
+ ecm_db/ecm_db.c | 113 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 113 insertions(+)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
@@ -34,7 +34,7 @@ index c97f625..0000000 100644
  #include <linux/inet.h>
  #include <linux/in.h>
 
-@@ -469,9 +473,92 @@
+@@ -469,9 +473,93 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -128,7 +128,7 @@ index c97f625..0000000 100644
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
 
-@@ -763,4 +850,18 @@
+@@ -763,4 +851,18 @@
  	}
  #endif
 +
@@ -147,7 +147,7 @@ index c97f625..0000000 100644
 +
  	return ret;
 
-@@ -785,9 +886,20 @@
+@@ -785,9 +887,20 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");
