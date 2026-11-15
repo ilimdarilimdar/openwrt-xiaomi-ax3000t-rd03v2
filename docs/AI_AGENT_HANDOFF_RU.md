@@ -4,49 +4,23 @@
 
 **Последняя сверка исходного состояния:** 2026-11-15, текущая сессия
 **Последний code/patch commit:** `bd9867c8bdb4042280f571e57b0c75071ffc582e` (patch 9002: atomic refcount для общего ECM temporary-stop API и исправленные hunk counts).
-**Текущий branch HEAD на момент записи:** `5255da82c7a856dbc42f797419f8c4da636da398` (после документационных исправлений); перед изменениями всегда получать актуальный HEAD из GitHub.
+**Последняя сверенная документационная точка:** `622aab14803859f150db7704686f9772714a6111`; branch HEAD следует перепроверять через GitHub перед каждым действием.
 ## Актуальная контрольная точка — 2026-11-15
 
-Последняя live-сверка GitHub Actions: 2026-11-15 13:45 UTC.
+Последняя сверка GitHub Actions: 2026-11-15 13:47 UTC.
 
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
-- Последний code/patch commit: `bd9867c8bdb4042280f571e57b0c75071ffc582e`.
-  Он исправляет hunk counts в patch 9002 после добавления atomic temporary-stop accounting.
-- Branch HEAD на момент этой записи: `5255da82c7a856dbc42f797419f8c4da636da398`.
-  Более поздний HEAD включает только документационные уточнения.
-- CI #77, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS; pinned QSDK archive hash
-  и применение старой 9002 revision после 31 feed-патча подтверждены. Full build
-  завершился **FAIL** в `package/feeds/nss/qca-nss-ecm`; старый artifact не содержит
-  per-package compiler log, поэтому первопричина остаётся **UNKNOWN**.
-- CI #78, source `3614994`: Static PASS, PREPARE_ONLY PASS и lifecycle preflight PASS.
-  На последней live-проверке Full build ещё **IN_PROGRESS**. Этот run не содержит
-  per-net RTNL update `e80f964` и не содержит atomic temporary-stop refcount update.
-- CI #82, run `43715272931`, commit `70f92cc`: **CANCELLED** последующими push
-  до выполнения актуального полного preflight. Не использовать как evidence для
-  per-net RTNL или последующих изменений.
-- CI #83, run `43720520592`, commit `8ce56c7`: **CANCELLED**.
-- CI #84, run `43720561061`, commit `2fba10a`: **CANCELLED**.
-- CI #85, run `43720607768`, commit `bd9867c`: **PENDING** на последней live-проверке,
-  ожидает сериализованный слот за #78. Именно он должен проверить обновлённый
-  patch 9002 и preflight assertions. Commit message не содержит `[full-build]`,
-  поэтому этот запуск рассчитан на Static + PREPARE_ONLY/preflight, а не на полную компиляцию.
-- Patch 9002 теперь преобразует исходные QSDK plain 0/1 temporary-stop flags в
-  `atomic_t` nesting counters: `atomic_inc()`, `atomic_dec_if_positive()`; все
-  шесть IPv4/IPv6 packet hook reads используют `atomic_read()`. Причина:
-  route notifier, interface notifier и новый FIB worker используют один и тот же
-  helper, поэтому plain assignment допускал premature re-enable при overlap.
-- `tools/test-ecm-fib-rule-patch.sh` теперь проверяет counter type, обе helper
-  операции, оба заголовка, все шесть atomic reads и выполняет assertions как на
-  clean pinned source, так и после полного feed patch series.
-- Важно: atomic nesting gate **не является quiescence barrier**. Он не ждёт
-  packet hooks, уже прошедшие stop check. Это отдельно требует lockdep/stress
-  и аппаратного тестирования.
-- Workflow artifact glob исправлен на `openwrt-v2/logs/package/feeds/nss/**`,
-  чтобы следующая полная сборка могла сохранить реальные per-package компиляторные логи.
-- Полная компиляция обновлённой atomic revision, marker в `ecm.ko`,
-  `verify-v2.sh` и аппаратная проверка остаются **NOT TESTED**.
-  Основной роутер остаётся на штатной MiWiFi.
-
+- Последняя функциональная ревизия patch 9002: `bd9867c8bdb4042280f571e57b0c75071ffc582e`; commit `6f54049` корректирует только diffstat patch. Последний проверенный branch HEAD после документационного коммита CI status: `622aab14803859f150db7704686f9772714a6111`.
+- CI #77, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS, pinned archive hash и применение прежней версии patch 9002 после 31 feed-патча подтверждены. Full build **FAIL** в `package/feeds/nss/qca-nss-ecm`; пакетного compiler log в старом artifact нет, поэтому первопричина **UNKNOWN**.
+- CI #78, source `3614994`: Static PASS, PREPARE_ONLY и lifecycle preflight PASS. Full build всё ещё **IN_PROGRESS** на последней live-проверке. Это старая ревизия: без per-net RTNL correction `e80f964` и без atomic stop refcount.
+- CI #82 (`70f92cc`), #83 (`8ce56c7`), #84 (`2fba10a`) и #85 (`bd9867c`) были **CANCELLED** последующими push до получения результата по новой atomic preflight.
+- CI #86, run `43720816145`, commit `6f54049`: **PENDING** за #78 из-за сериализации workflow. Ожидаемая область запуска — Static + PREPARE_ONLY/preflight; в commit message нет `[full-build]`, следовательно он не должен строить полный образ.
+- Patch 9002 исправляет concurrency flaw исходного QSDK temporary-stop API. В pinned QSDK функции `ecm_front_end_ipv4_stop_temp()` и IPv6 были plain 0/1 assignment, а не atomic counters. Их одновременно используют route notifier, interface notifier и новый FIB worker. Одновременные вызовы могли преждевременно снять stop-флаг.
+- Candidate patch преобразует эти flags в `atomic_t`: stop использует `atomic_inc()`, release использует `atomic_dec_if_positive()`, все три packet-hook reads для каждой IP family используют `atomic_read()`. Так предотвращается premature re-enable и отрицательный счётчик.
+- Это nesting gate, **не quiescence barrier**: packet hooks, прошедшие stop-check до установки флага, не дожидаются завершения. Нужны дальнейшие lockdep/stress и hardware tests.
+- `tools/test-ecm-fib-rule-patch.sh` проверяет counter declarations, headers, acquire/release operations и все шесть atomic reads как на чистом pinned source, так и после полного feed patch series.
+- Текущая workflow upload-маска включает `openwrt-v2/logs/package/feeds/nss/**`; будущая полная сборка должна сохранить per-package compiler logs для установления фактической причины возможного ECM build failure.
+- Актуальная atomic patch revision пока **NOT TESTED by CI**: ожидает CI #86. Полная компиляция, notifier marker в `ecm.ko`, `verify-v2.sh` и аппаратная проверка также **NOT TESTED**. Основной роутер остаётся на штатной MiWiFi.
 Исторические записи ниже сохранены как журнал; при расхождении использовать
 эту контрольную точку и актуальное состояние GitHub.
 
