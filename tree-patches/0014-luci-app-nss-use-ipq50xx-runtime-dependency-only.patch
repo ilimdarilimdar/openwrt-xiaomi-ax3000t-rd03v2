@@ -28,7 +28,7 @@ index c7ac95e..0000000 100644
   cores, ports, Wi-Fi radios, ECM acceleration counts, SQM and fast-lane health), and \
   adds the NSS core load and the ECM-accelerated connections to Status -> Overview.
 -LUCI_DEPENDS:=+luci-base +TARGET_qualcommax_ipq50xx:nss-tools-dwmac \
--\t+!TARGET_qualcommax_ipq50xx:nss-tools
+-	+!TARGET_qualcommax_ipq50xx:nss-tools
 +# RD03v2/IPQ50xx is this fork's only target; avoid the legacy nss-tools fallback.
 +LUCI_DEPENDS:=+luci-base +nss-tools-dwmac
  LUCI_PKGARCH:=all
