@@ -221,11 +221,11 @@ index c97f625..0000000 100644
 +
  	return ret;
  
-@@ -785,2 +950,4 @@
+@@ -785,3 +950,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
-+
+ 	DEBUG_INFO("ECM DB Module exit\\n");
 diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
 --- a/ecm_db/ecm_db.h
 +++ b/ecm_db/ecm_db.h
@@ -249,11 +249,11 @@ diff --git a/ecm_init.c b/ecm_init.c
  err_fe_ipv4:
 +	ecm_db_fib_rule_notifier_stop();
  #ifdef ECM_INTERFACE_BOND_ENABLE
-@@ -378,2 +381,4 @@
+@@ -378,3 +381,4 @@
  static void __exit ecm_exit(void)
  {
+ 	printk(KERN_INFO "ECM exit\\n");
 +	ecm_db_fib_rule_notifier_stop();
-+
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
