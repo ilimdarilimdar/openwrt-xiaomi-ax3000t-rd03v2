@@ -83,7 +83,10 @@
 - Тест `tools/test-install-v2-signing-key.sh` локально прошёл четыре сценария. CI-проверка этого теста ещё не завершена.
 - Workflow #16 (полная сборка на более раннем commit) оставался IN PROGRESS на последней проверке; последний branch workflow ожидал освобождения сериализованного runner.
 - Workflow #16, commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`: статические проверки — PASS; полная сборка запущена и на момент последней проверки ещё выполнялась. Итог `make` и `verify-v2.sh` пока не подтверждён.
-- CI full-build создаёт временный P-256 ключ, встраивает URL репозитория `example.invalid` и загружает только логи. Даже успешный результат этого задания не является устанавливаемым релизом и не должен прошиваться.
+- Добавлен экспериментальный ECM patch 9002: FIB rule ADD/DEL уведомления ставят в очередь family-specific defunct работу; worker использует v2 `ecm_front_end_ipv*_stop_temp()`, не legacy v1 stop API. Teardown снимает notifier и дожидается worker до DB termination.
+- `tools/test-ecm-fib-rule-patch.sh` проверяет точный pinned QSDK archive по PKG_HASH, затем применимость patch и наличие worker/teardown. Workflow PREPARE_ONLY запускает этот preflight.
+- `tools/verify-v2.sh` проверяет runtime notifier marker внутри `ecm.ko` из root squashfs и применимость ECM patch fingerprints по полному ECM source tree.
+- Candidate 9002 пока NOT TESTED: pinned archive apply, compile, and hardware checks должны пройти. Текущий CI: #16 full build IN PROGRESS; #47 ожидает его завершения. См. [docs/ecm-policy-routing-port.md](ecm-policy-routing-port.md) и [docs/CI_BUILD.md](CI_BUILD.md).
 
 Подробный порядок приёмки: [docs/TEST_PLAN_RU.md](TEST_PLAN_RU.md). Общая схема CI: [docs/CI_BUILD.md](CI_BUILD.md).
 
