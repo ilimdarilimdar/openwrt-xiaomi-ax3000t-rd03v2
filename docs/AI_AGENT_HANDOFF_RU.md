@@ -2,11 +2,11 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-15, после запуска CI #120.
+**Последняя сверка:** 2026-11-16, после исправления patch 9002; CI #121 выполняется.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Текущий code/test HEAD:** `558d3ca0a740787a43a6e1f33c4ad5fc6180206f`.
-**Текущая ревизия ECM patch 9002:** commit `558d3ca0a740787a43a6e1f33c4ad5fc6180206f`; lifecycle stop в `ecm_exit()` привязан к стабильному teardown-комментарию.
-**Последний подтверждённый результат:** Static checks #120 PASS; PREPARE_ONLY ещё выполняется, verdict ECM preflight пока отсутствует.
+**Текущий code/test HEAD:** `2823543a937edd5883aafa350009be53f68b215e`.
+**Текущая ревизия ECM patch 9002:** commit `2823543a937edd5883aafa350009be53f68b215e`; удалена ошибочная Git index-строка, помечавшая `ecm_db/ecm_db.c` как удаляемый файл.
+**Последний подтверждённый результат:** CI #121 Static checks PASS; PREPARE_ONLY ещё выполняется, результат raw patch preflight и полной patch series пока не получен.
 
 ## Текущая контрольная точка
 
@@ -21,10 +21,12 @@
 
 - [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069) и [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928): Static/PREPARE_ONLY проходили, но полный `make` остановился на применении ECM patch 9002 после pinned NSS feed patch queue. До компиляции `qca-nss-ecm` дело не дошло. Это не доказательство ошибки C-компилятора.
 - Ранний PASS workflow [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036) не считать достаточным подтверждением: его preflight использовал проверку через `git apply`, тогда как фактическая сборка использует OpenWrt `scripts/patch-kernel.sh` и GNU `patch -f -p1`. Позднейшие реальные build-запуски выявили расхождение.
-- [#118](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43757950832), HEAD `981a60a`: Static PASS; исправленный raw-source preflight с настоящим `patch -f -p1` дошёл до pinned QSDK source и отверг lifecycle hunk в `ecm_init.c`.
-- [#119](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43758676305), HEAD `e211beb`: Static PASS; raw-source preflight подтвердил, что оставшийся отказ связан с нестабильным контекстом `ecm_exit()`. Другие затронутые файлы применились.
-- [#120](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43759217102), HEAD `558d3ca`: Static PASS. На момент последней проверки job PREPARE_ONLY находился на шаге подготовки pinned sources/feeds/Kconfig; ECM preflight ещё не завершился. Проверка включает новый lifecycle hunk, привязанный к комментарию teardown.
-- Текущий preflight воспроизводит фактический механизм из pinned `scripts/patch-kernel.sh`: последовательное применение через `${PATCH:-patch} -f -p1`, отдельно к чистому QSDK archive и после всей сортированной очереди ECM feed patches. Сначала нужен PASS обеих проверок.
+- [#118](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43757950832), HEAD `981a60a`: Static PASS; raw-source preflight с реальным `patch -f -p1` дошёл до pinned QSDK source и отверг lifecycle hunk в `ecm_init.c`.
+- [#119](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43758676305), HEAD `e211beb`: Static PASS; preflight выявил нестабильный контекст `ecm_exit()`.
+- [#120](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43759217102), HEAD `558d3ca`: Static PASS и PREPARE_ONLY config/feed preparation PASS, но raw patch application FAILED. GNU `patch` сообщил `Not deleting file ecm_db/ecm_db.c as content differs from patch`. Причина — ошибочная строка `index c97f625..0000000 100644`: нулевой новый blob ID помечал файл как удаляемый, хотя hunk добавлял код. Reject-файлов не обнаружено; до C-компиляции дело не дошло.
+- Исправление в commit `2823543a937edd5883aafa350009be53f68b215e`: удалена только ошибочная `index`-строка; C-код и контекст hunks не менялись.
+- [#121](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43761943330), HEAD `2823543`: Static checks **PASS**; PREPARE_ONLY job выполняется. Итог raw QSDK preflight и применения всей feed patch series пока не подтверждён.
+- Preflight воспроизводит pinned `scripts/patch-kernel.sh`: `${PATCH:-patch} -f -p1` отдельно к чистому QSDK archive и последовательно после всей сортированной очереди ECM feed patches. Нужен PASS обоих путей.
 - Kconfig продолжает выводить три unrelated recursive-dependency diagnostics (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); `defconfig` завершается, эти пакеты не выбраны. Это не причина отказа 9002.
 - Полная C-компиляция ECM, marker в собранном `ecm.ko`, image generation, `verify-v2`, загрузка модуля и Dual-WAN/NSS hardware tests пока **NOT TESTED**. Главный домашний роутер остаётся на штатной MiWiFi.
 
@@ -45,8 +47,8 @@
 
 ### Next actions
 
-1. Получить финальный результат [CI #120](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43759217102). Проверить raw QSDK apply и полную feed-series отдельно; при отказе разобрать конкретный `.rej`, а не менять номера строк наугад.
-2. После PASS обеих patch-очередей запустить отдельный full build/verify. Полная компиляция должна подтвердить именно `qca-nss-ecm`, затем проверить notifier marker в собранном `ecm.ko`, образ и `verify-v2.sh`.
+1. Получить финальный результат [CI #121](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43761943330). Обязательно проверить PASS raw QSDK apply и всей feed patch series; одного Static PASS недостаточно.
+2. После PASS обеих patch-очередей запустить отдельный full build/verify. Компиляция должна подтвердить именно `qca-nss-ecm`, затем проверить notifier marker в собранном `ecm.ko`, образ и `verify-v2.sh`.
 3. Не считать PREPARE_ONLY или Static checks сборкой прошивки. Не выпускать и не прошивать образ до отдельного контроля target/profile, package manifest, kernel/module versions, hashes, signing и recovery.
 4. Только после успешной сборки подготовить отдельное второе RD03v2 и recovery-метод. Проверять module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, conntrack marks, NSS/ECM counters, throughput, CPU, latency и packet loss.
 5. Основной домашний маршрутизатор оставить на stock MiWiFi. Никакие CI артефакты не прошивать.
