@@ -72,6 +72,37 @@ grep -qF 'rtnl_unlock();' "$ECM_DB" ||
   die "worker does not release RTNL before walking the ECM database"
 grep -qF 'Rule ADD/DEL callbacks run inside the RTNL-protected rule update.' "$ECM_DB" ||
   die "RTNL barrier rationale is missing"
+
+python3 - "$ECM_DB" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text()
+start = source.find("static void ecm_db_fib_rule_work_fn")
+end = source.find("static DECLARE_WORK", start)
+if start < 0 or end < 0:
+    sys.exit("FAIL: ECM FIB-rule worker body not found")
+worker = source[start:end]
+
+ordered = [
+    "rtnl_lock();",
+    "ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4",
+    "ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6",
+    "rtnl_unlock();",
+    "if (ipv4_pending)",
+    "ecm_front_end_ipv4_stop_temp(1)",
+    "ecm_db_connection_defunct_ip_version(4)",
+    "if (ipv6_pending)",
+    "ecm_front_end_ipv6_stop_temp(1)",
+    "ecm_db_connection_defunct_ip_version(6)",
+]
+positions = [worker.find(token) for token in ordered]
+if any(position < 0 for position in positions):
+    sys.exit("FAIL: RTNL snapshot or IPv4/IPv6 worker operation is missing")
+if positions != sorted(positions):
+    sys.exit("FAIL: pending bits must be snapshotted under RTNL, then RTNL released before the DB walk")
+print("PASS: pending-bit snapshot is atomic with respect to RTNL rule updates")
+PY
 grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
 grep -qF 'ecm_db_connection_defunct_ip_version(4)' "$ECM_DB" ||
