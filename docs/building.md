@@ -9,12 +9,32 @@ TAG=DEV-<name> ./build.sh            # or a release tag; PREPARE_ONLY=1 stops be
 `PREPARE_ONLY=1` fetches the pinned source mirrors and feeds, applies the
 overlay, and runs `make defconfig`, then exits before package/image compilation
 and signing. This preparation mode does not require the private signing key.
-A local full/release build still requires the private EC key in
-`keys/v2/private-key.pem` (mode 0600), matching `keys/v2/public-key.pem`
-and the repository's committed `keys/public-key.pem`. The GitHub Actions
-CI-only full build instead generates a temporary keypair on its ephemeral runner;
-it does not publish installable images or packages and does not replace the
-owner's release key.
+A local full/release build requires the private EC key in `keys/v2/private-key.pem`
+(mode 0600), matching `keys/v2/public-key.pem` and the repository's committed
+`keys/public-key.pem`.
+
+To resume the same tree after PREPARE_ONLY, do not run `build.sh` again (it
+refuses to overwrite an existing tree). Use:
+
+```sh
+JOBS=2 ./tools/finish-build-v2.sh ./openwrt-v2
+```
+
+The resume helper validates the workspace keypair against the committed public
+key and installs it in the prepared tree only when no keypair is present. An
+incomplete or mismatched tree keypair is a hard stop; it is never overwritten.
+Set `V2_KEY_DIR` when the keypair is stored outside the default workspace
+`keys/v2/` directory. Never commit or upload the private key.
+
+For a clean full build from scratch (when the target tree does not exist):
+
+```sh
+TAG=DEV-<name> JOBS=2 ./build.sh
+```
+
+The GitHub Actions CI-only full build instead generates a temporary keypair on
+its ephemeral runner; it does not publish installable images or packages and
+does not replace the owner's release key.
 
 - The workspace is this repository plus, next to it: `mirrors/` (kuncy7's tree and his nss feed,
   never pruned, with reflogs), `keys/v2/` (the signing key), `dl-v2/` (the download cache),
