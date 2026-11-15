@@ -190,7 +190,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./tools/test-ecm-fib-rule-patch.sh
+          bash ./tools/test-ecm-fib-rule-patch.sh
 
       - name: Upload preparation logs and config only
         if: always()
