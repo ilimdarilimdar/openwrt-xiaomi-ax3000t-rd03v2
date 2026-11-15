@@ -136,7 +136,7 @@ index c97f625..0000000 100644
  /*
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
- */
+  */
 @@ -763,4 +861,18 @@
  	}
  #endif
