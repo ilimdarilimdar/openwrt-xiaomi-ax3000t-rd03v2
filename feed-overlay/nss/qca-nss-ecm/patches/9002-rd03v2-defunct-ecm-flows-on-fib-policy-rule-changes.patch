@@ -1,0 +1,158 @@
+From: RD03v2 AI-assisted development <ai-assisted@localhost>
+Subject: [PATCH] ecm: defunct accelerated flows on FIB policy-rule changes
+
+The v2 ECM tree already handles route-table updates, but a policy-rule-only
+change made by mwan3 can move a flow to another WAN without a route event.
+Defunct accelerated connections of the affected address family so their next
+packets are routed using the current policy rules.
+
+The FIB notifier callback is atomic, so it only sets a pending family bit and
+queues work. The worker uses the v2 temporary frontend stop counters around the
+existing process-context connection defunct routine. Teardown unregisters the
+notifier and drains the worker before the database is freed.
+
+This is a broad invalidation: existing accelerated flows may briefly return to
+the host path and be re-accelerated. It does not promise preservation of
+conntrack/NAT sessions across a public-WAN change.
+
+---
+ ecm_db/ecm_db.c | 100 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 100 insertions(+)
+
+diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
+index c97f625..0000000 100644
+--- a/ecm_db/ecm_db.c
++++ b/ecm_db/ecm_db.c
+@@ -24,5 +24,7 @@
+ #include <asm/uaccess.h>	/* for put_user */
+ #include <net/ipv6.h>
+ #include <net/ip6_route.h>
++#include <net/fib_notifier.h>
++#include <linux/workqueue.h>
+ #include <linux/inet.h>
+ #include <linux/in.h>
+
+@@ -469,8 +469,84 @@
+ static struct notifier_block ecm_db_ip6route_table_update_nb = {
+ 	.notifier_call = ecm_db_ipv6_route_table_update_event,
+ };
+ #endif
+ 
++/*
++ * FIB policy-rule changes.
++ *
++ * mwan3 changes the policy rules when it changes WAN selection. A rule-only
++ * change does not necessarily generate a route-table notification, so ECM
++ * can otherwise keep an accelerated connection on its previous egress.
++ * FIB notifier callbacks run in atomic context: only record the address
++ * family here and defer connection defuncting to a work item.
++ */
++#define ECM_DB_FIB_RULE_PENDING_IPV4 0
++#ifdef ECM_IPV6_ENABLE
++#define ECM_DB_FIB_RULE_PENDING_IPV6 1
++#endif
++
++static unsigned long ecm_db_fib_rule_pending;
++static bool ecm_db_fib_rule_registered;
++
++/*
++ * ecm_db_fib_rule_work_fn()
++ * 	Defunct connections for every address family with a policy-rule change.
++ */
++static void ecm_db_fib_rule_work_fn(struct work_struct *work)
++{
++	(void)work;
++
++	if (test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)) {
++		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
++		ecm_front_end_ipv4_stop_temp(1);
++		ecm_db_connection_defunct_ip_version(4);
++		ecm_front_end_ipv4_stop_temp(0);
++	}
++#ifdef ECM_IPV6_ENABLE
++	if (test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending)) {
++		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\n");
++		ecm_front_end_ipv6_stop_temp(1);
++		ecm_db_connection_defunct_ip_version(6);
++		ecm_front_end_ipv6_stop_temp(0);
++	}
++#endif
++}
++
++static DECLARE_WORK(ecm_db_fib_rule_work, ecm_db_fib_rule_work_fn);
++
++/*
++ * ecm_db_fib_rule_event()
++ * 	Atomic FIB notifier callback: queue work for rule add/delete events.
++ */
++static int ecm_db_fib_rule_event(struct notifier_block *nb, unsigned long event, void *ptr)
++{
++	struct fib_notifier_info *info = ptr;
++
++	if (!info || ((event != FIB_EVENT_RULE_ADD) && (event != FIB_EVENT_RULE_DEL))) {
++		return NOTIFY_DONE;
++	}
++
++	switch (info->family) {
++	case AF_INET:
++		set_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
++		break;
++#ifdef ECM_IPV6_ENABLE
++	case AF_INET6:
++		set_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
++		break;
++#endif
++	default:
++		return NOTIFY_DONE;
++	}
++
++	schedule_work(&ecm_db_fib_rule_work);
++	return NOTIFY_DONE;
++}
++
++static struct notifier_block ecm_db_fib_rule_nb = {
++	.notifier_call = ecm_db_fib_rule_event,
++};
++
+ /*
+  * ecm_db_defunct_all_handler()
+  * 	Proc handler to defunct ecm db
+
+@@ -757,3 +757,18 @@
+ 	}
+ #endif
++
++	/*
++	 * Register for policy-rule modifications (used by mwan3 and other
++	 * policy-routing managers). Failure is non-fatal, but without this
++	 * notifier ECM cannot invalidate accelerated flows on rule-only changes.
++	 */
++	ret = register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL);
++	if (ret) {
++		cancel_work_sync(&ecm_db_fib_rule_work);
++		printk(KERN_WARNING "ECM: failed to register FIB rule notifier (%d); policy-rule changes will not defunct accelerated connections\n", ret);
++	} else {
++		ecm_db_fib_rule_registered = true;
++		printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\n");
++	}
++
+ 	return ret;
+
+@@ -791,6 +791,17 @@
+ 	spin_lock_bh(&ecm_db_lock);
+ 	ecm_db_terminate_pending = true;
+ 	spin_unlock_bh(&ecm_db_lock);
+ 
++	/* Stop new FIB callbacks and drain any queued defunct worker before the
++	 * connection database is torn down. */
++	if (ecm_db_fib_rule_registered) {
++		ret = unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb);
++		if (ret) {
++			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\n", ret);
++		}
++		ecm_db_fib_rule_registered = false;
++	}
++	cancel_work_sync(&ecm_db_fib_rule_work);
++
+ 	/*
+ 	 * unregister for route table update events only if registered.
