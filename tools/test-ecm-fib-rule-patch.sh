@@ -21,6 +21,7 @@ check_stop_temp_refcount() {
   local ecm_root=$1
   python3 - "$ecm_root" <<'PY'
 from pathlib import Path
+import re
 import sys
 
 root = Path(sys.argv[1])
@@ -86,7 +87,12 @@ for family, spec in families.items():
     unlock_token = f"spin_unlock_bh(&{lock});"
     inc_token = f"atomic_inc(&{counter});"
     dec_token = f"atomic_dec_if_positive(&{counter});"
-    positions = [body.find(lock_token), body.find(inc_token), body.find(dec_token), body.find(unlock_token)]
+    positions = [
+        body.find(lock_token),
+        body.find(inc_token),
+        body.find(dec_token),
+        body.find(unlock_token),
+    ]
     if any(position < 0 for position in positions):
         raise SystemExit(f"FAIL: {family} stop_temp() does not take the packet-hook lock around both counter updates")
     if positions != sorted(positions):
@@ -105,11 +111,10 @@ for family, spec in families.items():
     if f"unlikely({counter})" in common:
         raise SystemExit(f"FAIL: {family} has a non-atomic temporary-stop read")
 
-print("PASS: IPv4/IPv6 temporary-stop helpers use balanced atomic refcounts")
-print("PASS: all six IPv4/IPv6 packet hooks read the atomic stop state")
+print("PASS: IPv4/IPv6 temporary-stop counters are updated under packet-hook locks")
+print("PASS: all six packet-hook stop reads use the same lock as stop_temp()")
 PY
 }
-
 [[ -s "$MAKEFILE" ]] || die "prepared qca-nss-ecm Makefile not found: $MAKEFILE"
 [[ -s "$PATCH_FILE" ]] || die "feed overlay patch not found: $PATCH_FILE"
 
