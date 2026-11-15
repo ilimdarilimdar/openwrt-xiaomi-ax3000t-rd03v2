@@ -504,7 +504,7 @@ for patch_name in "${FEED_PATCHES[@]}"; do
   [[ -f "$PATCH_DIR/$patch_name" ]] || die "non-file entry in ECM patch directory: $patch_name"
   [[ "$patch_name" == 9001-rd03v2-frontends-give-both-qos-tags-a-value.patch ]] && found_9001=1
   series_count=$((series_count + 1))
-  if ! patch -f -p1 -d "$SERIES_ROOT" < "$PATCH_DIR/$patch_name" >>"$WORK/feed-series-apply.log" 2>&1; then
+  if ! ${PATCH:-patch} -f -p1 -d "$SERIES_ROOT" < "$PATCH_DIR/$patch_name" >>"$WORK/feed-series-apply.log" 2>&1; then
     echo "DIAGNOSTIC: OpenWrt patch-kernel.sh-equivalent queue failed at $patch_name" >&2
     cat "$WORK/feed-series-apply.log" >&2
     while IFS= read -r reject; do
