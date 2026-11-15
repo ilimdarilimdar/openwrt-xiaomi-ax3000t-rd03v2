@@ -13,10 +13,10 @@ die() {
 }
 
 
-# The pinned QSDK source uses a plain 0/1 assignment in stop_temp(). All
-# existing route/interface notifiers share that helper with the new FIB worker.
-# Require a real atomic nesting count so one caller cannot reopen the frontend
-# while another caller is still defuncting connections.
+# The pinned QSDK source already uses atomic_t nesting counters, but its
+# read-then-decrement update is not serialized with packet-hook stop checks.
+# Require stop updates and hook reads to share the family frontend lock, with a
+# guarded decrement so overlapping callers cannot reopen the frontend early.
 check_stop_temp_refcount() {
   local ecm_root=$1
   python3 - "$ecm_root" <<'PY'
