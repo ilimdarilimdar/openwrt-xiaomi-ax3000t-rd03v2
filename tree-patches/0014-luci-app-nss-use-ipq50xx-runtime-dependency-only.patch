@@ -1,0 +1,36 @@
+From 22c8e9dd82ff13b5f19a02e96ef977fe464c399d Mon Sep 17 00:00:00 2001
+From: AI-assisted RD03v2 project <ai-assisted@localhost>
+Date: Sun, 15 Nov 2026 09:00:00 +0300
+Subject: [PATCH] luci-app-nss: use the IPQ50xx NSS runtime dependency only
+
+This fork builds the Xiaomi AX3000T RD03v2 (IPQ50xx) target only. Keep the
+IPQ50xx DWMAC runtime package as the sole luci-app-nss dependency. Retaining
+the generic nss-tools fallback introduces a Kconfig cycle because
+nss-tools-dwmac conflicts with nss-tools while pulling in the NSS kernel
+stack. The cycle was observed in the generated package Kconfig as:
+
+luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac
+-> nss-tools -> luci-app-nss
+
+The legacy fallback is not needed for this RD03v2-only image. Do not change
+the NSS kernel packages or runtime implementation.
+
+---
+ package/nss/luci-app-nss/Makefile | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/package/nss/luci-app-nss/Makefile b/package/nss/luci-app-nss/Makefile
+index c7ac95e..0000000 100644
+--- a/package/nss/luci-app-nss/Makefile
++++ b/package/nss/luci-app-nss/Makefile
+@@ -16,6 +16,6 @@ LUCI_TITLE:=LuCI status page for NSS offloading
+ LUCI_DESCRIPTION:=Status -> NSS Offload: renders 'nss-status -j' (firmware state, \
+  cores, ports, Wi-Fi radios, ECM acceleration counts, SQM and fast-lane health), and \
+  adds the NSS core load and the ECM-accelerated connections to Status -> Overview.
+-LUCI_DEPENDS:=+luci-base +TARGET_qualcommax_ipq50xx:nss-tools-dwmac \
+-\t+!TARGET_qualcommax_ipq50xx:nss-tools
++# RD03v2/IPQ50xx is this fork's only target; avoid the legacy nss-tools fallback.
++LUCI_DEPENDS:=+luci-base +nss-tools-dwmac
+ LUCI_PKGARCH:=all
+--
+2.47.0

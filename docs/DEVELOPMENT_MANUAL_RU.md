@@ -7,7 +7,7 @@
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
-**HEAD рабочей ветки на момент этой редакции:** `5bcad81cfe911b91f4ac928e53f424e1580ddfd7` (15.11.2026). Перед любой работой обязательно сверять актуальный SHA.
+**Текущий SHA:** всегда получать из GitHub перед работой; зафиксированные здесь SHA используются только как исторические точки проверки.
 
 ## Происхождение материалов и использование ИИ
 
@@ -50,7 +50,7 @@
 - Родительский проект: `ADCDS/openwrt-xiaomi-ax3000t-rd03v2`
 - `main`: `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`
-- HEAD рабочей ветки на момент этой редакции: `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`
+- SHA рабочей ветки: сверять через GitHub перед каждым прогоном
 
 Сверять SHA заново перед каждой работой: ветки и upstream со временем меняются.
 
@@ -61,6 +61,9 @@
 - `config/rd03v2.config`
 - `config/image-must-have.txt`
 - `tools/verify-v2.sh`
+- `tools/install-v2-signing-key.sh` — безопасная установка ключа в уже подготовленное дерево
+- `tools/test-install-v2-signing-key.sh` — тест установки, идемпотентности и отказов
+- `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch` — исключает legacy fallback, образующий цикл для target-only RD03v2
 - `.github/workflows/rd03v2-validation.yml`
 - `docs/CI_BUILD.md`
 - `docs/TEST_PLAN_RU.md`
@@ -73,7 +76,11 @@
 
 - Workflow #15, commit `c5a64af9a23996401eb22c2a275023c419bbe547`: статические проверки — PASS; `PREPARE_ONLY` — PASS; артефакт подготовки создан. Полная сборка в этом запуске была пропущена по условию workflow.
 - По выгруженному `config.final.txt` сохранены целевая плата RD03v2, NSS-профиль 256 MiB/LOW, `mwan3`, `luci-app-mwan3`, nft-backed iptables, ipset и предусмотренные пакеты WireGuard/AmneziaWG.
-- В `defconfig.log` присутствуют сообщения Kconfig `recursive dependency detected` для нескольких пакетов, включая цепочку `luci-app-nss`. `make defconfig` завершился и записал `.config`, но предупреждения остаются предметом аудита и не должны замалчиваться.
+- В `defconfig.log` присутствовали четыре Kconfig recursive-dependency diagnostics: Qt5 GUI, fwknopd, NSS и squeezelite-custom. Три сторонних пакета не были выбраны в итоговом `.config`; NSS UI и NSS kernel stack были выбраны.
+- В pinned upstream `scripts/package-metadata.pl` уже есть исправление OpenWrt #25091 (commit `87215b42ce7cfd2f43a9423788184a74e09917f0`); повторно переносить этот patch нельзя.
+- Добавлен локальный tree-patch 0014, удаляющий только ненужный legacy `nss-tools` fallback из `luci-app-nss` для RD03v2/IPQ50xx. Он должен убрать найденный cycle; статус пока NOT TESTED до следующего PREPARE_ONLY и анализа `tmp/.config-package.in`.
+- Тест `tools/test-install-v2-signing-key.sh` локально прошёл четыре сценария. CI-проверка этого теста ещё не завершена.
+- Workflow #16 (полная сборка на более раннем commit) оставался IN PROGRESS на последней проверке; последний branch workflow ожидал освобождения сериализованного runner.
 - Workflow #16, commit `5bcad81cfe911b91f4ac928e53f424e1580ddfd7`: статические проверки — PASS; полная сборка запущена и на момент последней проверки ещё выполнялась. Итог `make` и `verify-v2.sh` пока не подтверждён.
 - CI full-build создаёт временный P-256 ключ, встраивает URL репозитория `example.invalid` и загружает только логи. Даже успешный результат этого задания не является устанавливаемым релизом и не должен прошиваться.
 
@@ -198,7 +205,7 @@ TAG=DEV-rd03v2-baseline PREPARE_ONLY=1 JOBS=2 ./build.sh
 
 Для `PREPARE_ONLY=1` приватный ключ подписи не требуется: скрипт проверяет pinned upstream, зеркала, patches, feeds, overlay и конфигурацию, выполняет `make defconfig`, сохраняет `.config` и `diffconfig.txt`, затем останавливается до package/image compilation. В этом режиме ключ не валидируется и не копируется в build tree.
 
-Для локального продолжения подготовленного дерева ключ должен находиться в защищённом workspace-каталоге `keys/v2/` (или в каталоге `V2_KEY_DIR`): `private-key.pem` с правами `0600` и соответствующий `public-key.pem`. Публичный ключ должен совпадать с `keys/public-key.pem` в репозитории. Обновлённый `finish-build-v2.sh` проверяет пару и устанавливает её в подготовленное дерево только если ключи там отсутствуют. Если в дереве есть неполная или несовпадающая пара, helper останавливается, ничего не перезаписывая. Приватный ключ не добавлять в Git и не загружать в CI artifacts.
+Для локального продолжения подготовленного дерева ключ должен находиться в защищённом workspace-каталоге `keys/v2/` (или в каталоге `V2_KEY_DIR`): `private-key.pem` с правами `0600` и соответствующий `public-key.pem`. Публичный ключ должен совпадать с `keys/public-key.pem` в репозитории. `finish-build-v2.sh` вызывает отдельный `tools/install-v2-signing-key.sh`, который проверяет пару и устанавливает её в подготовленное дерево только если ключи там отсутствуют. Если в дереве есть неполная или несовпадающая пара, helper останавливается, ничего не перезаписывая. Локальный тест подтвердил установку, повторный идемпотентный запуск и отказ при mismatch/partial pair. Приватный ключ не добавлять в Git и не загружать в CI artifacts.
 
 `build.sh` ожидает чистое имя дерева (по умолчанию `openwrt-v2`) и завершится, если такое дерево уже существует. Не запускай его повторно после `PREPARE_ONLY=1` на том же пути и не удаляй существующее дерево автоматически: оно может содержать результаты предыдущей подготовки/сборки.
 
@@ -224,6 +231,7 @@ TAG=DEV-rd03v2-baseline JOBS=2 ./build.sh
 - `feeds-update.log`
 - `feeds-install.log`
 - `defconfig.log`
+- `tmp/.config-package.in` — generated Kconfig dependency graph (available in the updated CI preparation artifact)
 - `download.log`
 - `build.log`
 - `wifi-initramfs.log`

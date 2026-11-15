@@ -55,6 +55,19 @@ jobs:
           set -euo pipefail
           bash tools/test-install-v2-signing-key.sh
 
+      - name: Check RD03v2 NSS Kconfig cycle guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          patch=tree-patches/0014-luci-app-nss-use-ipq50xx-runtime.patch
+          test -s "$patch"
+          grep -qxF '+LUCI_DEPENDS:=+luci-base +nss-tools-dwmac' "$patch"
+          if grep -q '^+.*+!TARGET_qualcommax_ipq50xx:nss-tools' "$patch"; then
+            echo "::error::The legacy nss-tools fallback was reintroduced."
+            exit 1
+          fi
+          echo "PASS: RD03v2 selects only the DWMAC-specific NSS runtime helper"
+
       - name: Validate RD03v2 config and package manifest
         shell: bash
         run: |
