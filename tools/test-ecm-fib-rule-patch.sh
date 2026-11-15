@@ -111,6 +111,19 @@ for family, spec in families.items():
     if f"unlikely({counter})" in common:
         raise SystemExit(f"FAIL: {family} has a non-atomic temporary-stop read")
 
+    references = []
+    for source_path in root.rglob("*"):
+        if source_path.suffix not in {".c", ".h"} or not source_path.is_file():
+            continue
+        if counter in source_path.read_text(errors="replace"):
+            references.append(source_path.relative_to(root).as_posix())
+    expected_reference = spec["common"].relative_to(root).as_posix()
+    if references != [expected_reference]:
+        raise SystemExit(
+            f"FAIL: {family} temporary-stop state must have exactly one source owner "
+            f"({expected_reference}); references found: {references}"
+        )
+
 print("PASS: IPv4/IPv6 temporary-stop counters are updated under packet-hook locks")
 print("PASS: all six packet-hook stop reads use the same lock as stop_temp()")
 PY
@@ -352,8 +365,8 @@ grep -qF '#include <linux/netdevice.h>' "$ECM_DB" ||
   die "ECM DB does not include the synchronize_net() declaration"
 grep -qF 'synchronize_net();' "$ECM_DB" ||
   die "FIB worker does not drain pre-existing network readers"
-grep -qF "Rule ADD/DEL callbacks run inside init_net's per-net RTNL update." "$ECM_DB" ||
-  die "RTNL barrier rationale is missing"
+grep -qF "register_fib_notifier() replay instead runs under RCU without RTNL." "$ECM_DB" ||
+  die "initial FIB replay / live RTNL distinction is missing"
 
 python3 - "$ECM_DB" <<'PY'
 from pathlib import Path

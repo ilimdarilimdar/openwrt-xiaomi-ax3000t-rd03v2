@@ -84,10 +84,10 @@ index c97f625..0000000 100644
 +	(void)work;
 +
 +	/*
-+	 * Rule ADD/DEL callbacks run inside init_net's per-net RTNL update.
-+	 * Snapshot and clear pending bits while holding RTNL. Events after the
-+	 * unlock set fresh bits and queue a later pass. Do not hold RTNL during
-+	 * the ECM database walk or network grace period.
++	 * Live rule ADD/DEL changes run under init_net's per-net RTNL. Initial
++	 * register_fib_notifier() replay instead runs under RCU without RTNL.
++	 * Snapshot and clear pending bits under RTNL for live updates; atomic
++	 * pending bits and work re-queueing preserve replay events too.
 +	 */
 +	rtnl_net_lock(&init_net);
 +	ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
@@ -275,7 +275,7 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 -atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
  
  /*
-@@ -428,17 +424,4 @@
+@@ -428,19 +424,6 @@
  }
  
 -/*
@@ -307,7 +307,7 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 -atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
  
  /*
-@@ -503,17 +499,4 @@
+@@ -503,19 +499,6 @@
  }
  
 -/*
