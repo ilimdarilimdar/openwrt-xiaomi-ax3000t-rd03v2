@@ -86,8 +86,8 @@
 - Добавлен экспериментальный ECM patch 9002: FIB rule ADD/DEL уведомления ставят в очередь family-specific defunct работу; worker использует v2 `ecm_front_end_ipv*_stop_temp()`, не legacy v1 stop API. Teardown снимает notifier и дожидается worker до DB termination.
 - `tools/test-ecm-fib-rule-patch.sh` проверяет точный pinned QSDK archive по PKG_HASH, затем применимость patch и наличие worker/teardown. Workflow PREPARE_ONLY запускает этот preflight.
 - `tools/verify-v2.sh` проверяет runtime notifier marker внутри `ecm.ko` из root squashfs и применимость ECM patch fingerprints по полному ECM source tree.
-- Candidate 9002 теперь содержит RTNL barrier: worker ждёт завершения критической секции rule ADD/DEL, затем отпускает RTNL перед обходом ECM DB. Linux 6.18 источники подтверждают этот порядок; детали и ссылки внесены в `docs/ecm-policy-routing-port.md`.
-- Candidate 9002 пока NOT TESTED: pinned archive apply, compile, and hardware checks должны пройти. Текущий CI: #16 full build IN PROGRESS; #54 ждёт его завершения. См. [docs/ecm-policy-routing-port.md](ecm-policy-routing-port.md) и [docs/CI_BUILD.md](CI_BUILD.md).
+- Candidate 9002 использует RTNL publication barrier и снимает IPv4/IPv6 pending bits под RTNL, затем отпускает RTNL до обхода ECM DB. Это предотвращает обработку нового rule event старым проходом worker.
+- Candidate 9002 пока NOT TESTED: pinned archive apply, compile, and hardware checks должны пройти. На последней сверке #16 full build оставался IN PROGRESS на более раннем commit без 9002, а #57 ожидал старта с актуальным кодом. См. [docs/ecm-policy-routing-port.md](ecm-policy-routing-port.md) и [docs/CI_BUILD.md](CI_BUILD.md).
 
 Подробный порядок приёмки: [docs/TEST_PLAN_RU.md](TEST_PLAN_RU.md). Общая схема CI: [docs/CI_BUILD.md](CI_BUILD.md).
 
