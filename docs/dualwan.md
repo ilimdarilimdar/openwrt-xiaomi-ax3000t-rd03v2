@@ -14,16 +14,22 @@ firmware. The image has not been built or tested on hardware from this branch.
 - Adds a separate RD03v2 ECM patch 9002 for FIB policy-rule ADD/DEL events.
 - The candidate defers rule-change handling from the atomic notifier callback
   to a work item, then invalidates accelerated connections by address family.
-- Patch 9002 is a candidate implementation, but it has **not** passed the
-  pinned-source preflight yet. CI runs #96-#99 failed at raw application to the
-  pristine QSDK 14.0 source; no full ECM build has run.
-- Commit `5b709d0` adds exact context to the stop-state hunks. Workflow
-  [#100](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43727888918)
-  is testing that revision (Static PASS; PREPARE_ONLY still in progress at last
-  check). Commit `55171b1` adds byte-exact diagnostics if the next apply still
-  fails; workflow
-  [#101](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728125583)
-  is queued behind #100.
+- Patch 9002 is still a candidate implementation; it has **not** passed
+  the pinned-source preflight. CI runs #96-#101 all failed before raw apply or
+  during patch structure/context validation. No full ECM build has run.
+- Workflow [#100](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43727888918)
+  passed static checks and PREPARE_ONLY source/config preparation, but its ECM
+  preflight failed in the local unified-diff validator: the IPv4 helper hunk's
+  declared counts did not cover all context lines.
+- Workflow [#101](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728125583)
+  passed static checks and PREPARE_ONLY preparation, then failed at the same
+  structural check. It tests the older 5b709d0 patch revision.
+- Commits `e1a6818` and `3637215` adjusted deletion-hunk sizes, added a guard
+  that temporary-stop counters have one source owner, and added the final
+  IPv6-lock context. Commit `552f134` then corrected the last IPv6 common-lock
+  hunk size. Workflow [#103](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728459690)
+  tests the 3637215 revision; [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
+  is queued for the latest 552f134 revision.
 - Do not treat structural diff validation as proof of source compatibility.
   The gate is raw apply to the pinned archive **and** the full pinned ECM feed
   patch series, followed by compilation and hardware validation.
