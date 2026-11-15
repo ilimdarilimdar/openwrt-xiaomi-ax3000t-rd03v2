@@ -67,35 +67,39 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
 ## Current validation snapshot — 2026-11-15
-_Last live GitHub Actions check: 2026-11-15 14:48 UTC._
+_Last live GitHub Actions check: 2026-11-15._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Current firmware/source patch commit: `1121ec832d1903ee530fd824681a32f3b7b39a6e`. Documentation-only handoff refreshes may move branch HEAD without changing this source revision.
-- The pinned QSDK 14.0 source already has `atomic_t` temporary-stop counters and `atomic_read()` packet-hook checks. The corrected functional patch moves the counters and helper implementations beside the common frontend locks, serializing stop updates with the checks. It does not rewrite the six existing packet-hook expressions.
-- The FIB worker keeps the per-net RTNL snapshot, stop-gate, `synchronize_net()`, DB-defunct and teardown ordering described above.
+- Branch HEAD: `a0e72ce6fa04a243849a96825f4891e0f0608b39` (test-only callback guard).
+- Functional firmware-source revision: `006e14a5d0348528a021943b1fd595cc233451db`; later commits `eba9d02` and `a0e72ce` modify regression tests only.
+- Pinned target tree: `c36db6321c11595dc45a160cdab36b5c2d787744`; the kernel version file pins Linux **6.18.55**.
+- Pinned QSDK ECM: `7894b769eeb64f1c44fde547a107a8b866997590`; QSDK archive SHA-256 is checked by the preflight script.
 
 ### Latest workflow results
 
-- Workflow [#93](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43723568587), source `f9b71d764caa9061d544a0a52b4f944b9dfa6fa3`: Static checks **PASS**. PREPARE_ONLY source/config preparation **PASS**. ECM preflight **FAIL** because the patch expected a plain-integer QSDK baseline while the pinned source actually used `atomic_t` plus atomic reads. The archive checksum was verified; this was a patch-context mismatch. Full build **SKIPPED**.
-- Workflow [#94](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43725992804), source `d08e5d8`: Static checks **PASS**; PREPARE_ONLY source/config preparation **PASS**; ECM preflight **FAIL** with `corrupt patch` at patch line 369. The two common-lock hunk counts and the IPv6 include hunk count were wrong. The archive hash was verified; full build **SKIPPED**.
-- Source patch commit `1121ec8` corrects those hunk counts. A structural parser found 19 hunks and verified all declared old/new line counts against the patch bodies. Workflow [#95](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43726388183), source `1121ec8`, was **QUEUED** at 14:48 UTC. This is not yet a `git apply` PASS.
-- Earlier runs #82–#92 were cancelled or failed while correcting the patch series; do not treat their cancelled status as code validation.
+- Workflow [#105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924), source `d51baa7`: Static and PREPARE_ONLY **PASS**; the corrected raw ECM patch apply and full pinned feed-series preflight passed.
+- Workflow [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036), functional source `006e14a`: Static **PASS**, PREPARE_ONLY **PASS**, ECM preflight **PASS**. The log confirms 9 diff file sections, 19 valid hunks, exact QSDK archive checksum, and patch 9002 applying after all 31 pinned ECM feed patches including 9001. Stop-counter lock alignment, six packet-hook reads, RTNL pending-bit snapshot, stop-gate plus `synchronize_net()` ordering, notifier init/unwind/exit and worker-drain checks all passed.
+- Workflow [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069), test-only commit `eba9d02`: Static **PASS**, PREPARE_ONLY **PASS**, atomic callback regression guard **PASS**. The full signed-image build and `verify-v2.sh` job are **IN PROGRESS** at the latest live check.
+- Workflow [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928), test-only commit `a0e72ce`: **PENDING** behind #107. It tightens the callback assertion to require only `set_bit()` operations and `schedule_work()`; it does not introduce a new firmware-source revision.
+- Earlier runs #100–#104 failed or were cancelled while correcting patch context and unified-diff hunk counts. They are superseded by the successful #105/#106 raw source and full-series preflight; do not report those early failures as the current patch status.
 
-### Source-level findings
+### Source-level and configuration findings
 
-- Linux v6.18 FIB rule changes use the matching per-net RTNL lock; worker pending-bit snapshots are taken under `rtnl_net_lock(&init_net)`, then RTNL is released before waiting or walking ECM DB.
-- The exact pinned QSDK source already uses atomic temporary-stop counters. The original helper updates them without taking the family lock, while packet-hook stop checks read the same counters under that lock. The corrected patch serializes helper updates with those checks and uses `atomic_dec_if_positive()` to avoid a check-then-decrement race.
-- The FIB worker raises every affected stop gate before `synchronize_net()`, then defuncts the selected family connections. This drains pre-existing Netfilter hook readers before the ECM DB walk. It does not add a global mutex around unrelated route/interface notifier DB walks or preserve conntrack/NAT sessions.
-- FIB notifier registration replays existing rules as ADD events. Loading/reloading ECM can therefore trigger a broad family-wide defunct/re-acceleration pass.
-- Static checks and PREPARE_ONLY do not prove successful ECM compilation, module load safety, NSS offload behavior or Dual-WAN correctness.
+- The pinned kernel is Linux 6.18.55. In the v6.18 FIB-rule path, `fib_newrule()` and `fib_delrule()` hold the matching per-net RTNL while notifying and publishing ADD/DEL changes. Patch 9002's `rtnl_net_lock(&init_net)` snapshot therefore waits until the live rule update has completed. Release RTNL before `synchronize_net()` and ECM DB traversal.
+- FIB notifier dispatch uses an atomic notifier chain. The callback may not block; patch 9002 only sets family pending bits and queues work. `atomic_notifier_chain_unregister()` synchronizes with in-flight callbacks through RCU; `cancel_work_sync()` then drains the deferred worker before ECM DB/frontend teardown.
+- The worker closes the affected frontend stop gate before `synchronize_net()`, then defuncts connections of that address family. Temporary-stop counter updates are serialized with the same family lock used by packet-hook stop checks. This is broad invalidation; it neither rewrites conntrack marks nor guarantees session continuity across different public WAN addresses.
+- The pinned generic kernel config fragment enables `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` and `CONFIG_IP_MULTIPLE_TABLES`; the project config requests IPv6 multiple tables. `verify-v2.sh` checks these symbols in the final built kernel config.
+- PREPARE_ONLY selects `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper, iptables/ip6tables nft frontends, xtables-nft and ipset.
+- Three Kconfig recursive-dependency diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom. These packages are unset in final `.config`; the previous selected NSS dependency cycle is absent after tree patch 0014. Keep warnings visible and re-check when feeds change.
+- PREPARE_ONLY and patch preflight do **not** prove C compilation, presence of the notifier marker in built `ecm.ko`, successful `verify-v2.sh`, safe module loading, NSS acceleration or Dual-WAN behavior.
 
 ### Required gates still open
 
-1. Corrected patch 9002 must pass raw pinned-source apply and the complete ECM feed-series preflight.
-2. The exact functional revision must complete full `kmod-qca-nss-ecm` compilation.
-3. The built `ecm.ko` must contain the expected notifier marker.
-4. `verify-v2.sh` must pass against the generated root filesystem/image.
-5. Controlled second-router tests must cover overlapping route/interface/FIB stop events, Netfilter hook drain, module load/unload, FIB rule churn, mwan3 restart and cable-pull failover; IPv4/IPv6 separately; NSS/ECM counters, throughput, CPU, latency and packet loss.
-6. No primary-router flashing until source, full build/image and second-router hardware gates pass.
+1. Finish the full build of the exact functional revision and inspect per-package NSS/ECM compile logs if it fails.
+2. Confirm `kmod-qca-nss-ecm` compilation and the expected FIB notifier marker inside the built `ecm.ko`.
+3. Confirm `verify-v2.sh` passes against the generated root filesystem/image and inspect its target/profile/manifests.
+4. Run module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, real `ifdown`/cable-pull, IPv4 and IPv6 separately on a second RD03v2.
+5. Measure conntrack marks, route selection for new/existing flows, NSS/ECM counters, throughput, CPU, RTT and packet loss.
+6. Do not flash the primary router. CI full-build uses a disposable signing key and `example.invalid`; it uploads logs only and never publishes a usable release image.
 
-CI full-build jobs use a disposable signing key and an `example.invalid` repository URL. They upload logs only and do not publish a usable release image. Hardware validation remains **NOT TESTED**; keep the primary router on stock firmware.
+Hardware validation remains **NOT TESTED**. A successful source preflight, build or `verify-v2.sh` is not a hardware stability claim.
