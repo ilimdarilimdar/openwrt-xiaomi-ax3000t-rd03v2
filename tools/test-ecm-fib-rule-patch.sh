@@ -12,6 +12,83 @@ die() {
   exit 1
 }
 
+
+# The pinned QSDK source uses a plain 0/1 assignment in stop_temp(). All
+# existing route/interface notifiers share that helper with the new FIB worker.
+# Require a real atomic nesting count so one caller cannot reopen the frontend
+# while another caller is still defuncting connections.
+check_stop_temp_refcount() {
+  local ecm_root=$1
+  python3 - "$ecm_root" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+families = {
+    "ipv4": {
+        "front": root / "frontends/ecm_front_end_ipv4.c",
+        "common": root / "frontends/cmn/ecm_ipv4.c",
+        "header": root / "frontends/include/ecm_front_end_ipv4.h",
+        "counter": "ecm_front_end_ipv4_stopped_temp",
+        "stop_fn": "ecm_front_end_ipv4_stop_temp(int num)",
+    },
+    "ipv6": {
+        "front": root / "frontends/ecm_front_end_ipv6.c",
+        "common": root / "frontends/cmn/ecm_ipv6.c",
+        "header": root / "frontends/include/ecm_front_end_ipv6.h",
+        "counter": "ecm_front_end_ipv6_stopped_temp",
+        "stop_fn": "ecm_front_end_ipv6_stop_temp(int num)",
+    },
+}
+
+def function_body(source: str, signature: str) -> str:
+    start = source.find(signature)
+    if start < 0:
+        raise SystemExit(f"FAIL: missing {signature}")
+    brace = source.find("{", start)
+    if brace < 0:
+        raise SystemExit(f"FAIL: missing function body for {signature}")
+    depth = 0
+    for pos in range(brace, len(source)):
+        if source[pos] == "{":
+            depth += 1
+        elif source[pos] == "}":
+            depth -= 1
+            if depth == 0:
+                return source[brace:pos + 1]
+    raise SystemExit(f"FAIL: unterminated function {signature}")
+
+for family, spec in families.items():
+    front = spec["front"].read_text()
+    common = spec["common"].read_text()
+    header = spec["header"].read_text()
+    counter = spec["counter"]
+
+    declaration = f"atomic_t {counter} = ATOMIC_INIT(0);"
+    if declaration not in front:
+        raise SystemExit(f"FAIL: {family} temporary-stop counter is not atomic_t/ATOMIC_INIT")
+    if "#include <linux/atomic.h>" not in header:
+        raise SystemExit(f"FAIL: {family} frontend header does not include linux/atomic.h")
+    if f"extern atomic_t {counter};" not in header:
+        raise SystemExit(f"FAIL: {family} frontend header does not export atomic_t")
+
+    body = function_body(front, spec["stop_fn"])
+    if f"atomic_inc(&{counter});" not in body:
+        raise SystemExit(f"FAIL: {family} stop_temp(1) does not increment its nesting count")
+    if f"atomic_dec_if_positive(&{counter});" not in body:
+        raise SystemExit(f"FAIL: {family} stop_temp(0) is not a guarded atomic decrement")
+
+    reads = common.count(f"atomic_read(&{counter})")
+    if reads != 3:
+        raise SystemExit(f"FAIL: {family} packet hooks use {reads} atomic reads; expected 3")
+    if f"unlikely({counter})" in common:
+        raise SystemExit(f"FAIL: {family} has a non-atomic temporary-stop read")
+
+print("PASS: IPv4/IPv6 temporary-stop helpers use balanced atomic refcounts")
+print("PASS: all six IPv4/IPv6 packet hooks read the atomic stop state")
+PY
+}
+
 [[ -s "$MAKEFILE" ]] || die "prepared qca-nss-ecm Makefile not found: $MAKEFILE"
 [[ -s "$PATCH_FILE" ]] || die "feed overlay patch not found: $PATCH_FILE"
 
@@ -65,6 +142,8 @@ cp -a "$ECM_ROOT" "$SERIES_ROOT"
 echo "Checking patch against QSDK $QSDK_VERSION source $PKG_SOURCE_VERSION"
 git -C "$ECM_ROOT" apply --whitespace=error-all --check "$PATCH_FILE"
 git -C "$ECM_ROOT" apply --whitespace=error-all "$PATCH_FILE"
+
+check_stop_temp_refcount "$ECM_ROOT"
 
 grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$ECM_DB" ||
   die "FIB notifier registration is missing after patch"
@@ -177,6 +256,7 @@ grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$S
   die "FIB notifier registration is missing after applying the complete feed series"
 grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SERIES_ECM_DB" ||
   die "runtime registration diagnostic is missing after applying the complete feed series"
+check_stop_temp_refcount "$SERIES_ROOT"
 echo "PASS: patch 9002 applies after $series_count pinned ECM feed patches, including 9001"
 
 # ecm_db_init() must not register the new FIB notifier if its existing
