@@ -19,6 +19,9 @@ wpad-mbedtls
 !wpad-basic-mbedtls
 i2c-tools
 ethtool
+# Dual-WAN baseline UI and service
+mwan3
+luci-app-mwan3
 # in our repository only, never in the image
 !kmod-tun
 !kmod-inet-diag
