@@ -19,9 +19,15 @@ conntrack/NAT sessions across a public-WAN change.
 
 ---
  ecm_db/ecm_db.c | 140 ++++++++++++++++++++++++++++++
-ecm_db/ecm_db.h | 1 +
-ecm_init.c | 4 ++++
- 3 files changed, 145 insertions(+), 0 deletions(-)
+ ecm_db/ecm_db.h | 1 +
+ ecm_init.c | 4 ++++
+ frontends/cmn/ecm_ipv4.c | 6 +++---
+ frontends/cmn/ecm_ipv6.c | 6 +++---
+ frontends/ecm_front_end_ipv4.c | 8 ++++++--
+ frontends/ecm_front_end_ipv6.c | 8 ++++++--
+ frontends/include/ecm_front_end_ipv4.h | 4 +++-
+ frontends/include/ecm_front_end_ipv6.h | 4 +++-
+ 9 files changed, 169 insertions(+), 12 deletions(-)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
