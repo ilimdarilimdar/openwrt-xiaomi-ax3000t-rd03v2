@@ -26,8 +26,8 @@ ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
 frontends/ecm_front_end_ipv6.c | +0 -17
-frontends/include/ecm_front_end_ipv4.h | +0 -1
-frontends/include/ecm_front_end_ipv6.h | +0 -1
+frontends/include/ecm_front_end_ipv4.h | +1 -1
+frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
  9 files changed, 200 insertions(+), 36 deletions(-)
@@ -321,16 +321,16 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
 --- a/frontends/include/ecm_front_end_ipv4.h
 +++ b/frontends/include/ecm_front_end_ipv4.h
-@@ -19,3 +19,2 @@
+@@ -19,3 +19,3 @@
  extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
--extern atomic_t ecm_front_end_ipv4_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
++extern void ecm_front_end_ipv4_stop_temp(int num);
  
 diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_front_end_ipv6.h
 --- a/frontends/include/ecm_front_end_ipv6.h
 +++ b/frontends/include/ecm_front_end_ipv6.h
-@@ -19,3 +19,2 @@
+@@ -19,3 +19,3 @@
  extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
--extern atomic_t ecm_front_end_ipv6_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
++extern void ecm_front_end_ipv6_stop_temp(int num);
  
 diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 --- a/frontends/cmn/ecm_ipv4.c
