@@ -397,7 +397,7 @@ host_mode() {
 # step: one --check run (arms on the first of a boot, else one sample).
 step() {
 	NSTEP=$((NSTEP + 1))
-	env -i PATH="$STUBS:$TB" ROOT="$ROOT" QEMU_LD_PREFIX="$RFS" \
+	env -i PATH="$STUBS:$TB" ROOT="$ROOT" WD_TEST_STUB_DIR="$STUBS" QEMU_LD_PREFIX="$RFS" \
 		"$TB/sh" "$WD" --check > "$ROOT/out.$NSTEP" 2>&1
 	if [ -s "$ROOT/out.$NSTEP" ]; then
 		FAILS="$FAILS
@@ -861,7 +861,7 @@ sc_root_crash_running() {
  [ "$(count calls 'wd rmmod ath11k_ahb')" = "$_before" ] || FAILS="$FAILS replayed crash"
 }
 policy_step() {
-	env -i PATH="$STUBS:$TB" ROOT="$ROOT" QEMU_LD_PREFIX="$RFS" \
+	env -i PATH="$STUBS:$TB" ROOT="$ROOT" WD_TEST_STUB_DIR="$STUBS" QEMU_LD_PREFIX="$RFS" \
 		"$TB/sh" "$ROOT/usr/sbin/rd03v2-q6-policy" > "$ROOT/policy.out" 2>&1
 }
 sc_same_boot_receipt() {
