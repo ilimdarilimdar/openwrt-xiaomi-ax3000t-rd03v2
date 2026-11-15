@@ -297,7 +297,40 @@ for rel, terms in specs.items():
                     emitted.add(i)
             print("-----")
 PY
-  die "patch does not apply to the pristine pinned QSDK source; inspect the context dump above"
+  echo "DIAGNOSTIC: verbose git apply output" >&2
+  git -C "$ECM_ROOT" apply --verbose --whitespace=error-all --check "$PATCH_FILE" >&2 || true
+  echo "DIAGNOSTIC: byte-exact source and patch hunk lines" >&2
+  python3 - "$ECM_ROOT" "$PATCH_FILE" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+patch = Path(sys.argv[2]).read_text().splitlines()
+specs = {
+    "frontends/ecm_front_end_ipv4.c": [(54, 70), (425, 447)],
+    "frontends/ecm_front_end_ipv6.c": [(55, 72), (500, 522)],
+    "frontends/cmn/ecm_ipv4.c": [(90, 112)],
+    "frontends/cmn/ecm_ipv6.c": [(96, 118)],
+}
+for rel, ranges in specs.items():
+    source_lines = (root / rel).read_text(errors="replace").splitlines()
+    print(f"===== SOURCE {rel} =====")
+    for lo, hi in ranges:
+        for n in range(lo, min(hi, len(source_lines)) + 1):
+            print(f"SRC {n:5}: {source_lines[n - 1]!r}")
+    current = False
+    print(f"===== PATCH HUNKS {rel} =====")
+    for n, line in enumerate(patch, 1):
+        if line == f"diff --git a/{rel} b/{rel}":
+            current = True
+            continue
+        if line.startswith("diff --git "):
+            current = False
+        if current and (line.startswith("@@ ") or line.startswith(" ") or line.startswith("-") or line.startswith("+")):
+            print(f"PAT {n:5}: {line!r}")
+PY
+  die "patch does not apply to the pristine pinned QSDK source; inspect byte-exact diagnostics above"
 fi
 git -C "$ECM_ROOT" apply --whitespace=error-all "$PATCH_FILE"
 
