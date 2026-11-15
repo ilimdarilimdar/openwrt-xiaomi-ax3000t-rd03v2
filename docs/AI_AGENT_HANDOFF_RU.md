@@ -2,14 +2,14 @@
 
 > **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
 
-**Последняя сверка исходного состояния:** 2026-11-15, текущая сессия  
-**Последний проверенный firmware source/code HEAD:** `6878d6d16ab9858a136a6c4d224e0b53d07942cc`  
-**Текущий branch HEAD на момент документального обновления:** `453106b968359a2c5c346caf623fc920e48def06` (последующие commits после source HEAD меняли только документацию)  
-**Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
-**Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
-**Последний baseline source/config commit до экспериментального ECM notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`  
-**Текущий экспериментальный source delta:** feed overlay patch `9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`; статус NOT TESTED до pinned archive preflight и компиляции.  
-**Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`  
+**Последняя сверка исходного состояния:** 2026-11-15, текущая сессия
+**Последний проверенный firmware source/code HEAD:** `6878d6d16ab9858a136a6c4d224e0b53d07942cc`
+**Текущий branch HEAD на момент документального обновления:** `453106b968359a2c5c346caf623fc920e48def06` (последующие commits после source HEAD меняли только документацию)
+**Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
+**Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
+**Последний baseline source/config commit до экспериментального ECM notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`
+**Текущий экспериментальный source delta:** feed overlay patch `9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`; статус NOT TESTED до pinned archive preflight и компиляции.
+**Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`
 **Последующие commits:** `4a0a9146086cebd4b8c8471870187c6986ae1de3` и `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7` меняют только CI workflow; `50b15707fedc0354a6ac175352ba21a3f1985f9a`, `0a5ea92c8f80dd2e045954b2e225ea1d7c6b5501`, `16b01367564d62091a3e966b56c8629fd3ff94f0` и `bcfad8813a164a38f59444534cd7f4983d9d345` обновляют CI-документацию; `8039a4795cc66434e17deca5f76d0e9e8a1d4fc8`, `331ce2f8328c900bd777b426e098c2450e2f0c06` и `7b55792f980412afd6678e2539cd78496dbc0940` создали/уточнили handoff и ссылку README. Ни один из этих commits не меняет firmware source, kernel, NSS code patches или WAN config.
 
 **Последний статус на момент аудита:** активная разработка; базовая конфигурация и автоматические проверки есть, полная сборка Dual-WAN-ветки и её аппаратная пригодность не подтверждены.
