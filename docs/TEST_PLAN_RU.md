@@ -27,12 +27,13 @@
 
 | Этап | Результат |
 |---|---|
-| Статические проверки workflow #104, commit `552f134` | **PASS** |
+| Статические проверки workflow #105, commit `d51baa7` | **PASS** |
 | PREPARE_ONLY workflow #100, commit `5b709d0` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
 | PREPARE_ONLY workflow #101, commit `55171b1` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
 | PREPARE_ONLY workflow #103, commit `3637215` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
+| PREPARE_ONLY workflow #104, commit `552f134` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
 | Workflow #102, commit `e1a6818` | **CANCELLED** |
-| Workflow #104, commit `552f134` | Static **PASS**; PREPARE_ONLY source/config preparation **IN PROGRESS** |
+| Workflow #105, commit `d51baa7` | Static **PASS**; PREPARE_ONLY source/config preparation **IN PROGRESS** |
 | Raw apply ECM patch 9002 to pristine pinned QSDK | **NOT CONFIRMED** |
 | Полная компиляция ECM/NSS и образ | **NOT STARTED** |
 | `verify-v2.sh` для этой ветки | **NOT TESTED** |
@@ -44,27 +45,25 @@
 Закреплённый QSDK 14.0 source archive загружается с ожидаемым SHA-256
 `a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`.
 Статические проверки и подготовка pinned sources/feeds/defconfig проходят.
-Текущая блокировка находится в unified diff ECM patch 9002, до C-компиляции.
+Текущая блокировка находится в raw apply ECM patch 9002 к чистому QSDK,
+до C-компиляции.
 
-Workflow #100/#101 выявили недообъявленный размер IPv4 helper deletion hunk.
-Workflow #103 выявил аналогичную ошибку в IPv6 common-lock hunk:
-`@@ -100,10 +101,23 @@` объявлял на одну строку больше, чем содержало тело патча, поэтому
-валидатор сообщил `truncated hunk`. Это ошибка разметки unified diff, а не
-доказательство функциональной ошибки в ECM.
+Workflow #100/#101 выявили ошибки количества строк IPv4 deletion hunk.
+Workflow #103 выявил лишнюю строку в заголовке IPv6 common-lock hunk.
+Workflow #104 прошёл структурный валидатор (19 hunks, точные счётчики),
+но `git apply --check` отказался применять только
+`frontends/cmn/ecm_ipv6.c:100`: последняя строка закрывающего комментария
+в patch была без одного пробела, тогда как pinned source содержит ` */`.
+Verbose diagnostics подтвердили, что остальные hunks применились.
 
-Последовательность исправлений:
-- `e1a6818`: корректировка размеров IPv4/IPv6 deletion hunks и проверка,
-  что временный stop-counter имеет единственного владельца в исходниках.
-- `3637215`: добавлен последний контекст IPv6 common-lock hunk; workflow
-  #103 выявил, что размер его hunk затем нужно было уменьшить.
-- `552f134`: исправлен последний IPv6 common-lock hunk до
-  `@@ -100,9 +101,22 @@`.
+Commit `d51baa7` исправляет ровно этот пробел без изменения C-логики.
+[Workflow #105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924)
+тестирует текущую ревизию: Static **PASS**, PREPARE_ONLY выполняется на момент
+последней проверки.
 
-[Workflow #104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
-тестирует commit `552f134`: Static **PASS**, PREPARE_ONLY выполняется.
-Не считать patch применимым, пока не пройдут структурный валидатор,
-`git apply --check` на чистом pinned QSDK 14.0 и полный закреплённый ECM feed
-patch series. Только после этого разрешать полную компиляцию.
+**Критерий PASS:** structural validator, raw `git apply --check` на чистом
+pinned QSDK 14.0 и полный закреплённый ECM feed patch series должны пройти
+в одном и том же запуске. Только после этого разрешать полную компиляцию.
 
 ### Ограничения CI и конфигурации
 
