@@ -191,3 +191,70 @@ source and hardware before inclusion in a flashable image.
 
 No v2 ECM patch is implemented by this document. It records the next
 engineering step and the evidence required to accept it.
+
+
+## Linux 6.18: initial FIB dump and replay
+
+The notifier registration path has an important side effect that must be included
+in the test plan. In Linux 6.18, `register_fib_notifier()` first runs the
+registered FIB dump callbacks before it attaches the notifier to the live
+atomic chain. Both family dump paths replay existing policy rules to the
+provided notifier:
+
+- IPv4: `fib4_dump()` calls `fib4_rules_dump()`.
+- IPv6: `fib6_dump()` calls `fib6_rules_dump()`.
+- `fib_rules_dump()` reports each existing rule as
+  `FIB_EVENT_RULE_ADD`.
+
+The candidate callback does not distinguish a replayed rule from a live rule
+change. Consequently, registering or reloading ECM while policy rules already
+exist schedules the worker to defunct accelerated connections for the
+corresponding address family. The per-family pending bits coalesce events
+while a worker pass is pending, but repeated events during/after a pass may
+cause another pass.
+
+This is a deliberate broad invalidation, not evidence of a WAN failure. On a
+cold boot before useful traffic exists it should have little practical impact.
+Reloading ECM on a live router may briefly move existing accelerated traffic
+back to the host path and trigger re-acceleration. Record this as expected
+behavior and measure its duration; do not describe it as session preservation.
+
+The third argument passed to `register_fib_notifier()` is the optional reset
+callback used if the FIB changes while the initial dump is in progress. Linux
+retries an inconsistent dump (up to five attempts); with a NULL callback it
+does not run a driver-specific reset function between attempts. The candidate
+does not mirror routes/rules into a separate hardware FIB table, so do not
+blindly transplant reset logic from hardware-switch FIB offload drivers.
+Nevertheless, repeated rule churn during ECM module registration must be
+tested. A registration warning means this feature is unavailable and is a
+test failure for the Dual-WAN/ECM acceptance criteria.
+
+Required bench cases added by this finding:
+
+1. Load ECM with the normal local/main/default IPv4 and IPv6 rules already
+   present; confirm registration succeeds and no kernel warning/oops occurs.
+2. With active accelerated flows, reload ECM and record the expected
+   family-wide defunct/re-acceleration interval.
+3. Cause rapid mwan3 rule changes during registration; verify registration
+   either completes with the notifier active or reports a clear failure, with
+   no stale work, warning, hang or use-after-free.
+4. Repeat module unload/load and inspect workqueue completion and notifier
+   registration/unregistration logs.
+
+Primary Linux 6.18 source references:
+
+- [FIB notifier API](https://raw.githubusercontent.com/torvalds/linux/v6.18/include/net/fib_notifier.h)
+- [FIB notifier registration and consistency retries](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_notifier.c)
+- [IPv4 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv4/fib_notifier.c)
+- [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
+- [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
+
+## Current preflight limitation
+
+`tools/test-ecm-fib-rule-patch.sh` currently verifies the hash-pinned raw QSDK
+archive and applies patch 9002 to that pristine source snapshot. This is useful
+for checking the patch's base context, but it does **not** prove that patch 9002
+applies after the NSS feed's existing package patch series (0000–0059), nor
+that `ecm.ko` compiles. The actual package preparation/compile and the final
+`verify-v2.sh` marker check remain mandatory gates. A green raw-archive
+preflight must not be reported as an ECM build PASS.
