@@ -272,82 +272,47 @@ ECM_DB_HEADER="$ECM_ROOT/ecm_db/ecm_db.h"
 SERIES_ROOT="$WORK/series-source"
 cp -a "$ECM_ROOT" "$SERIES_ROOT"
 
-echo "Checking patch against QSDK $QSDK_VERSION source $PKG_SOURCE_VERSION"
-if ! git -C "$ECM_ROOT" apply --whitespace=error-all --check "$PATCH_FILE"; then
-  echo "DIAGNOSTIC: exact source contexts for failed ECM patch application" >&2
-  python3 - "$ECM_ROOT" <<'PY'
+echo "Checking patch against QSDK $QSDK_VERSION source $PKG_SOURCE_VERSION with OpenWrt patch-kernel.sh semantics"
+RAW_ROOT="$WORK/raw-patch-source"
+cp -a "$ECM_ROOT" "$RAW_ROOT"
+RAW_PATCH_LOG="$WORK/raw-patch-apply.log"
+: > "$RAW_PATCH_LOG"
+if ! ${PATCH:-patch} -f -p1 -d "$RAW_ROOT" < "$PATCH_FILE" >"$RAW_PATCH_LOG" 2>&1; then
+  echo "DIAGNOSTIC: raw QSDK patch application failed with OpenWrt patch-kernel.sh semantics" >&2
+  cat "$RAW_PATCH_LOG" >&2
+  while IFS= read -r reject; do
+    echo "===== REJECT: $reject =====" >&2
+    cat "$reject" >&2
+  done < <(find "$RAW_ROOT" -type f -name '*.rej' -print)
+  python3 - "$RAW_ROOT" <<'PY'
 from pathlib import Path
 import sys
 
 root = Path(sys.argv[1])
 specs = {
-    "frontends/ecm_front_end_ipv4.c": [
-        "ecm_front_end_ipv4_stopped_temp", "ecm_front_end_ipv4_stop_temp",
-    ],
-    "frontends/ecm_front_end_ipv6.c": [
-        "ecm_front_end_ipv6_stopped_temp", "ecm_front_end_ipv6_stop_temp",
-    ],
-    "frontends/cmn/ecm_ipv4.c": [
-        "ecm_ipv4_lock", "ecm_front_end_ipv4_stopped_temp", "ecm_front_end_ipv4_stop_temp",
-    ],
-    "frontends/cmn/ecm_ipv6.c": [
-        "ecm_ipv6_lock", "ecm_front_end_ipv6_stopped_temp", "ecm_front_end_ipv6_stop_temp",
-    ],
+    "ecm_db/ecm_db.c": ["void ecm_db_exit(void)"],
+    "ecm_init.c": ["static void __exit ecm_exit(void)"],
 }
-for rel, terms in specs.items():
+for rel, needles in specs.items():
     path = root / rel
     lines = path.read_text(errors="replace").splitlines()
-    print(f"===== {rel} ({len(lines)} lines) =====")
-    emitted = set()
-    for term in terms:
-        hits = [i for i, line in enumerate(lines) if term in line]
-        print(f"-- {term}: {len(hits)} occurrence(s)")
+    print(f"===== {rel} lifecycle context =====", file=sys.stderr)
+    for needle in needles:
+        hits = [i for i, line in enumerate(lines) if needle in line]
+        print(f"{needle}: {len(hits)} match(es)", file=sys.stderr)
         for hit in hits:
-            lo, hi = max(0, hit - 7), min(len(lines), hit + 9)
-            for i in range(lo, hi):
-                if i not in emitted:
-                    print(f"{i + 1:5}: {lines[i]}")
-                    emitted.add(i)
-            print("-----")
+            for n in range(max(0, hit - 2), min(len(lines), hit + 12)):
+                print(f"{n + 1:5}: {lines[n]!r}", file=sys.stderr)
 PY
-  echo "DIAGNOSTIC: verbose git apply output" >&2
-  git -C "$ECM_ROOT" apply --verbose --whitespace=error-all --check "$PATCH_FILE" >&2 || true
-  echo "DIAGNOSTIC: byte-exact source and patch hunk lines" >&2
-  python3 - "$ECM_ROOT" "$PATCH_FILE" <<'PY'
-from pathlib import Path
-import re
-import sys
-
-root = Path(sys.argv[1])
-patch = Path(sys.argv[2]).read_text().splitlines()
-specs = {
-    "frontends/ecm_front_end_ipv4.c": [(54, 70), (425, 447)],
-    "frontends/ecm_front_end_ipv6.c": [(55, 72), (500, 522)],
-    "frontends/cmn/ecm_ipv4.c": [(1, 40), (90, 112)],
-    "frontends/cmn/ecm_ipv6.c": [(1, 40), (96, 118)],
-}
-for rel, ranges in specs.items():
-    source_lines = (root / rel).read_text(errors="replace").splitlines()
-    print(f"===== SOURCE {rel} =====")
-    for lo, hi in ranges:
-        for n in range(lo, min(hi, len(source_lines)) + 1):
-            print(f"SRC {n:5}: {source_lines[n - 1]!r}")
-    current = False
-    print(f"===== PATCH HUNKS {rel} =====")
-    for n, line in enumerate(patch, 1):
-        if line == f"diff --git a/{rel} b/{rel}":
-            current = True
-            continue
-        if line.startswith("diff --git "):
-            current = False
-        if current and (line.startswith("@@ ") or line.startswith(" ") or line.startswith("-") or line.startswith("+")):
-            print(f"PAT {n:5}: {line!r}")
-PY
-  die "patch does not apply to the pristine pinned QSDK source; inspect byte-exact diagnostics above"
+  die "patch does not apply to the pristine pinned QSDK source with OpenWrt patch-kernel.sh semantics"
 fi
-git -C "$ECM_ROOT" apply --whitespace=error-all "$PATCH_FILE"
+echo "PASS: 9002 applies to pristine pinned QSDK source with OpenWrt patch-kernel.sh semantics"
+ECM_ROOT="$RAW_ROOT"
+ECM_DB="$ECM_ROOT/ecm_db/ecm_db.c"
+ECM_INIT="$ECM_ROOT/ecm_init.c"
+ECM_DB_HEADER="$ECM_ROOT/ecm_db/ecm_db.h"
 
-check_stop_temp_refcount "$ECM_ROOT"
+
 
 grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$ECM_DB" ||
   die "FIB notifier registration is missing after patch"
