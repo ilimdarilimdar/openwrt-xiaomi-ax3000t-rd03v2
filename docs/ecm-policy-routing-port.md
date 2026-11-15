@@ -98,13 +98,61 @@ Then inspect the produced `ecm.ko` for the runtime registration message
 `tools/verify-v2.sh`, and test the module on a controlled bench before
 building a sysupgrade image.
 
+## v2 source review and candidate patch status (2026-11-15)
+
+The exact pinned QSDK 14.0 source was inspected at
+`7894b769eeb64f1c44fde547a107a8b866997590`. The v2 code differs from the
+v1 reference in a critical API detail:
+
+- v2 exports `ecm_front_end_ipv4_stop_temp(int)` and
+  `ecm_front_end_ipv6_stop_temp(int)`, backed by atomic nesting counters.
+  A non-zero argument increments the temporary stop counter; zero decrements
+  it if positive. It prevents new processing only at the call sites that
+  check the counter. It is **not** a quiescence barrier and is not the old v1
+  `ecm_front_end_ipv*_stop()` API. The candidate uses the v2 `stop_temp`
+  helpers only.
+- `ecm_db_connection_defunct_ip_version(4/6)` already exists in v2. It walks
+  the connection database with references and short internal spin-lock
+  sections, so it must run from process context, not from the atomic FIB
+  callback.
+- `ecm_db_init()` initializes the connection database, listener and timer
+  before registering the existing IPv4/IPv6 route notifiers. The new FIB
+  notifier is registered after those route notifiers. A registration failure
+  is deliberately non-fatal and emits a warning; the return value is not
+  allowed to overwrite the existing `ret` from route-notifier initialization.
+- `ecm_db_exit()` sets its termination flag and unregisters route notifiers
+  before freeing the database. The candidate unregisters the FIB notifier and
+  calls `cancel_work_sync()` before setting the termination flag, so no
+  callback can queue work against a database being torn down.
+- Linux 6.18's `fib_notifier.h` exposes `struct fib_notifier_info.family`,
+  `FIB_EVENT_RULE_ADD/DEL` and `register_fib_notifier()`. The callback only
+  sets a per-family pending bit and schedules work; it does not walk the ECM
+  database or take its locks.
+
+An experimental candidate now exists at
+`feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`.
+It is separate from the pinned upstream feed, after existing patch 9001. It
+has **not yet passed the pinned-archive apply test, has not been compiled, and
+has not been tested on hardware**. Do not call this feature implemented or
+NSS-safe yet.
+
+The preparation workflow now runs
+`tools/test-ecm-fib-rule-patch.sh` after PREPARE_ONLY. The script reads the
+exact QSDK version, source commit, archive URL and SHA-256 from the prepared
+feed Makefile, downloads the archive, verifies its hash, applies patch 9002
+with `git apply --check`, then checks for the expected notifier events and v2
+temporary stop helpers. `verify-v2.sh` also checks the runtime registration
+string inside `ecm.ko` in the final sysupgrade root filesystem. These are
+intended gates; their CI results remain pending until a successful run reports
+them.
+
 ## Porting checklist
 
 - Extract and hash-verify the exact source archive from the pinned qca-nss-ecm
   package Makefile.
 - Check current v2 definitions/call sites for:
   - `ecm_db_connection_defunct_ip_version()`;
-  - `ecm_front_end_ipv4_stop()` and IPv6 equivalent;
+  - `ecm_front_end_ipv4_stop_temp()` and `ecm_front_end_ipv6_stop_temp()` (the current v2 API);
   - `register_fib_notifier()` / `unregister_fib_notifier()`;
   - the event structure and `FIB_EVENT_RULE_ADD/DEL` family field;
   - the module init/exit error and teardown paths.
