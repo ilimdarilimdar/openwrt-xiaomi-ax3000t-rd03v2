@@ -344,7 +344,7 @@ diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_fron
 diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 --- a/frontends/cmn/ecm_ipv4.c
 +++ b/frontends/cmn/ecm_ipv4.c
-@@ -24,5 +24,6 @@
+@@ -12,5 +12,6 @@
  #include <linux/tcp.h>
  #include <linux/module.h>
 +#include <linux/atomic.h>
@@ -375,7 +375,7 @@ diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
 --- a/frontends/cmn/ecm_ipv6.c
 +++ b/frontends/cmn/ecm_ipv6.c
-@@ -30,4 +30,5 @@
+@@ -13,4 +13,5 @@
  #include <linux/module.h>
 +#include <linux/atomic.h>
  #include <linux/skbuff.h>

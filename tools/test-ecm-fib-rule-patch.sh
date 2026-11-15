@@ -323,8 +323,8 @@ patch = Path(sys.argv[2]).read_text().splitlines()
 specs = {
     "frontends/ecm_front_end_ipv4.c": [(54, 70), (425, 447)],
     "frontends/ecm_front_end_ipv6.c": [(55, 72), (500, 522)],
-    "frontends/cmn/ecm_ipv4.c": [(90, 112)],
-    "frontends/cmn/ecm_ipv6.c": [(96, 118)],
+    "frontends/cmn/ecm_ipv4.c": [(1, 40), (90, 112)],
+    "frontends/cmn/ecm_ipv6.c": [(1, 40), (96, 118)],
 }
 for rel, ranges in specs.items():
     source_lines = (root / rel).read_text(errors="replace").splitlines()
