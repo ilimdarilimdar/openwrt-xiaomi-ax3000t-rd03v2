@@ -430,4 +430,3 @@ CI-образ на temporary key/`example.invalid` годится как док�
 - Userspace `conntrack` CLI не включён; selective conntrack cleanup по WAN mark остаётся будущей отдельной функцией.
 - Full signed-image build job #124 всё ещё **IN PROGRESS** при последней live-проверке. Компиляция ECM, marker в `ecm.ko`, image/manifest и полный `verify-v2` не подтверждены. Получение job logs во время исполнения вернуло `BlobNotFound`, что не трактуется как FAIL.
 - Изменения этого продолжения ограничены документацией; ECM patch, build config, pinned feeds и workflow не менялись. Основной роутер остаётся на stock MiWiFi; аппаратные Dual-WAN тесты не запускались.
-
