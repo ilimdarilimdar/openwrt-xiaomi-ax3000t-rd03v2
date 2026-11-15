@@ -115,6 +115,10 @@ grep -qF 'FIB_EVENT_RULE_ADD' "$ECM_DB" ||
   die "FIB_EVENT_RULE_ADD handling is missing after patch"
 grep -qF 'FIB_EVENT_RULE_DEL' "$ECM_DB" ||
   die "FIB_EVENT_RULE_DEL handling is missing after patch"
+grep -qF 'DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\\n");' "$ECM_DB" ||
+  die "IPv4 worker diagnostic string is malformed"
+grep -qF 'DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\\n");' "$ECM_DB" ||
+  die "IPv6 worker diagnostic string is malformed"
 grep -qF 'ecm_front_end_ipv4_stop_temp(1)' "$ECM_DB" ||
   die "v2 IPv4 temporary stop helper is not used"
 grep -qF 'ecm_front_end_ipv4_stop_temp(0)' "$ECM_DB" ||
