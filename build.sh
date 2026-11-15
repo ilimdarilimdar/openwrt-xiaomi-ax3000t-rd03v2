@@ -24,6 +24,7 @@ WS=${RD03V2_WS:-$(dirname "$REPO")}
 TAG=${TAG:?set TAG: a release name, or DEV-<something> for a local test build}
 TREE=${TREE:-$REPO/openwrt-v2}
 JOBS=${JOBS:-2}
+PREPARE_ONLY=${PREPARE_ONLY:-0}
 export TMPDIR=${TMPDIR:-$WS/v2-tmp}
 mkdir -p "$TMPDIR"
 KEYDIR=${V2_KEY_DIR:-$WS/keys/v2}
