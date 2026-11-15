@@ -11,6 +11,15 @@
 - CI #77, run `43708414463`, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS
   (проверены pinned QSDK SHA-256 и применение 9002 после 31 feed-патча).
   Полная сборка ещё выполняется; этот run не содержит нового shutdown hook.
+- Артефакт PREPARE_ONLY #77: ID `14159587339`. Проверка `defconfig.log`
+  показала отсутствие прежнего NSS Kconfig recursive dependency; остались
+  только три предупреждения для Qt5 GUI, fwknopd/LuCI fwknopd и
+  squeezelite-custom. Все три соответствующих package choices выключены
+  в итоговом `.config`.
+- `diffconfig.txt` артефакта #77 подтверждает выбранный IPQ50xx AX3000T v2
+  target, `ATH11K_NSS_MEM_PROFILE_256M`, `kmod-qca-nss-drv`,
+  `kmod-qca-nss-ecm`, `mwan3`, `luci-app-mwan3`, `iptables-nft`,
+  `ip6tables-nft` и `ipset`. Это проверка конфигурации, не runtime/offload test.
 - CI #78, run `43709621665`, source `3614994`: PENDING за #77 из-за
   сериализации workflow. Этот run должен проверить новый lifecycle patch.
 - В patch 9002 добавлен `ecm_db_fib_rule_notifier_stop()`: notifier
