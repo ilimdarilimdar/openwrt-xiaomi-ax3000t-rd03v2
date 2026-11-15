@@ -123,12 +123,22 @@ The exact pinned QSDK 14.0 source was inspected at
 v1 reference in a critical API detail:
 
 - v2 exports `ecm_front_end_ipv4_stop_temp(int)` and
-  `ecm_front_end_ipv6_stop_temp(int)`, backed by atomic nesting counters.
-  A non-zero argument increments the temporary stop counter; zero decrements
-  it if positive. It prevents new processing only at the call sites that
-  check the counter. It is **not** a quiescence barrier and is not the old v1
-  `ecm_front_end_ipv*_stop()` API. The candidate uses the v2 `stop_temp`
-  helpers only.
+  `ecm_front_end_ipv6_stop_temp(int)`. In the **pinned QSDK 14.0 source**,
+  these helpers originally assign a plain integer 0/1 flag; they are **not**
+  atomic nesting counters. That is unsafe when the route-table notifier,
+  interface notifier and the new FIB-rule worker overlap: one caller can
+  clear the flag while another caller is still defuncting connections.
+- Candidate patch 9002 now converts each flag to `atomic_t`. A non-zero
+  argument uses `atomic_inc()`; zero uses `atomic_dec_if_positive()`, and
+  all six IPv4/IPv6 packet-hook checks use `atomic_read()`. This makes the
+  temporary stop a balanced nesting gate across concurrent users and guards
+  against a negative count. The preflight checks both the raw pinned source
+  and the result after the complete feed patch series.
+- The helper still is **not a quiescence barrier**: it prevents new processing
+  only at the call sites that check the flag and does not wait for already
+  executing packet hooks to exit. It is not the old v1
+  `ecm_front_end_ipv*_stop()` API. The overlap fix remains compile/runtime/
+  hardware-unverified until CI and second-router tests pass.
 - `ecm_db_connection_defunct_ip_version(4/6)` already exists in v2. It walks
   the connection database with references and short internal spin-lock
   sections, so it must run from process context, not from the atomic FIB
@@ -286,3 +296,25 @@ Even a green source-apply test does not prove that `ecm.ko` compiles or runs.
 Required gates remain: revised preflight, complete `kmod-qca-nss-ecm`
 compilation, notifier marker in the built module, `verify-v2.sh`, and
 controlled second-router hardware tests.
+
+## Concurrent temporary-stop accounting — 2026-11-15
+
+A source-level review of the exact QSDK 14.0 base found that the original
+v2 `stop_temp()` helpers are plain integer assignments, not the nested
+atomic counters described in an earlier draft of this document. The helpers
+are shared by the existing IPv4/IPv6 route-table notifiers and interface
+notifier as well as patch 9002's new FIB-rule worker. An overlapping caller
+could therefore write zero while another caller still requires the front end
+to remain stopped.
+
+Patch 9002 now changes those shared flags to `atomic_t`, uses
+`atomic_inc()` for a stop and `atomic_dec_if_positive()` for a matching
+release, and converts all six relevant packet-hook checks to `atomic_read()`.
+The guarded decrement is intentionally stronger than the read-then-decrement
+backport pattern: a competing release cannot decrement below zero. The new
+preflight checks the counter type, helper body, all six reads and header API
+against both the clean pinned source and the complete pinned feed-patch order.
+
+This is still a nesting gate, not a quiescence barrier. It does not wait for
+packet hooks that were already past their stop check. Compile, lockdep/stress,
+module lifecycle and hardware validation remain required.
