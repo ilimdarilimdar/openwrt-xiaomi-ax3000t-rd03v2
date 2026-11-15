@@ -27,56 +27,60 @@
 
 | Этап | Результат |
 |---|---|
-| Статические проверки workflow #105, commit `d51baa7` | **PASS** |
-| PREPARE_ONLY workflow #100, commit `5b709d0` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
-| PREPARE_ONLY workflow #101, commit `55171b1` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
-| PREPARE_ONLY workflow #103, commit `3637215` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
-| PREPARE_ONLY workflow #104, commit `552f134` | Sources/feeds/defconfig **PASS**; ECM preflight **FAIL** |
-| Workflow #102, commit `e1a6818` | **CANCELLED** |
-| Workflow #105, commit `d51baa7` | Static **PASS**; PREPARE_ONLY source/config preparation **IN PROGRESS** |
-| Raw apply ECM patch 9002 to pristine pinned QSDK | **NOT CONFIRMED** |
-| Полная компиляция ECM/NSS и образ | **NOT STARTED** |
-| `verify-v2.sh` для этой ветки | **NOT TESTED** |
-| Испытание на RD03v2 | **NOT TESTED** |
-| Испытание Dual-WAN/NSS | **NOT TESTED** |
+| Static workflow #106, functional patch commit `006e14a` | **PASS** |
+| PREPARE_ONLY #106 | **PASS** |
+| ECM raw source apply to hash-verified pinned QSDK 14.0 | **PASS** |
+| ECM patch 9002 after all 31 pinned feed patches, including 9001 | **PASS** |
+| FIB notifier lifecycle/order and worker-drain guards | **PASS** |
+| Atomic callback regression guard, workflow #107 | **PASS** in PREPARE_ONLY |
+| Full image build + `verify-v2`, workflow #107 | **IN PROGRESS** |
+| Workflow #108, stricter callback guard | **QUEUED** behind #107 |
+| Runtime module load on RD03v2 | **NOT TESTED** |
+| Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
 
-### Что известно о блокировке ECM
+### Подтверждение ECM source preflight
 
-Закреплённый QSDK 14.0 source archive загружается с ожидаемым SHA-256
-`a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`.
-Статические проверки и подготовка pinned sources/feeds/defconfig проходят.
-Текущая блокировка находится в raw apply ECM patch 9002 к чистому QSDK,
-до C-компиляции.
+Workflow [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036)
+на функциональной ревизии `006e14a5d0348528a021943b1fd595cc233451db`
+прошёл Static и PREPARE_ONLY. Лог шага ECM preflight подтверждает:
 
-Workflow #100/#101 выявили ошибки количества строк IPv4 deletion hunk.
-Workflow #103 выявил лишнюю строку в заголовке IPv6 common-lock hunk.
-Workflow #104 прошёл структурный валидатор (19 hunks, точные счётчики),
-но `git apply --check` отказался применять только
-`frontends/cmn/ecm_ipv6.c:100`: последняя строка закрывающего комментария
-в patch была без одного пробела, тогда как pinned source содержит ` */`.
-Verbose diagnostics подтвердили, что остальные hunks применились.
+- 9 уникальных file sections и 19 корректных unified-diff hunks;
+- загрузку и SHA-256 проверку точного архива QSDK 14.0
+  (`7894b769eeb64f1c44fde547a107a8b866997590`);
+- успешный `git apply --check` к чистому pinned source;
+- успешное применение patch 9002 после всех 31 закреплённых feed patches,
+  включая RD03v2 patch 9001;
+- совпадение lock/counter операций для IPv4/IPv6 и шести packet-hook чтений;
+- атомарный snapshot pending bits под RTNL, закрытие frontend gates до
+  `synchronize_net()` и DB defunct walk;
+- порядок FIB notifier registration, init unwind, normal exit и drain worker
+  перед frontend teardown.
 
-Commit `d51baa7` исправляет ровно этот пробел без изменения C-логики.
-[Workflow #105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924)
-тестирует текущую ревизию: Static **PASS**, PREPARE_ONLY выполняется на момент
-последней проверки.
+Это подтверждает **применимость и статически проверенную последовательность
+кода**, но не компиляцию C и не runtime-корректность на роутере.
 
-**Критерий PASS:** structural validator, raw `git apply --check` на чистом
-pinned QSDK 14.0 и полный закреплённый ECM feed patch series должны пройти
-в одном и том же запуске. Только после этого разрешать полную компиляцию.
+### Полная сборка
+
+Workflow [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069)
+запущен commit `eba9d0231c6b85842f540bb0091c3d81ac76bb0a`: Static и PREPARE_ONLY
+успешны, job `Full signed-image build and verify-v2` находится в работе.
+Workflow [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928)
+поставлен в очередь из-за второго test-only commit `a0e72ce`; он проверяет
+более строгий callback guard при той же функциональной firmware revision.
+Два запуска не являются двумя независимыми проверками архитектуры.
+
+Оба full-build workflow используют временный P-256 signing key и URL пакетов
+`example.invalid`, загружают только build logs и не публикуют пользовательский
+release. Не устанавливать такой CI-образ на основной или тестовый роутер.
 
 ### Ограничения CI и конфигурации
 
-Полный CI-build использует одноразовый P-256 signing key, URL пакетов
-`example.invalid` и сохраняет только логи. Такой образ не является
-пользовательским релизом и не должен устанавливаться на домашний роутер.
-
-PREPARE_ONLY в предыдущих запусках успешно собирал pinned sources/feeds и
-генерировал итоговую конфигурацию, однако Kconfig-циклы Qt5 GUI, fwknopd и
-squeezelite-custom требуют классификации по сохранённым логам. NSS dependency
-guard patch 0014 ограничивает зависимость LuCI NSS на целевой IPQ50xx
-конфигурации до `nss-tools-dwmac`; workflow проверяет этот guard статически.
-Не удалять предупреждения из логов ради формально чистого отчёта.
+PREPARE_ONLY успешно собирает pinned sources/feeds и генерирует итоговую
+конфигурацию, однако Kconfig-циклы Qt5 GUI, fwknopd и squeezelite-custom
+требуют отдельной классификации по логам. NSS dependency guard patch 0014
+ограничивает зависимость LuCI NSS на целевой IPQ50xx конфигурации до
+`nss-tools-dwmac`; workflow проверяет этот guard статически. Не удалять
+предупреждения ради формально чистого отчёта.
 
 ## 3. Этап A — проверка исходников и конфигурации
 
