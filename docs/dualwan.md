@@ -257,7 +257,7 @@ patch queue and RD03v2 patch 9001.
 - The FIB worker uses Linux 6.18 rule ADD/DEL events, per-family pending bits,
   an RTNL snapshot barrier, and v2 temporary frontend-stop helpers.
 
-**Latest source revision (`3614994`), under CI #78:**
+**Latest source revision (`e80f964`), awaiting CI #82:**
 
 - Adds an exported, idempotent stop helper which unregisters the FIB notifier
   and drains the work item before ECM front-end shutdown.
@@ -265,12 +265,14 @@ patch queue and RD03v2 patch 9001.
   paths; retains a fallback call before DB termination.
 - Extends preflight assertions to check the shutdown ordering on raw and fully
   feed-patched source.
-- CI #78 has started: Static checks are PASS; PREPARE_ONLY and the revised
-  preflight were still running/pending at the last live inspection. The
-  shutdown-order assertions for this commit have not yet been confirmed.
+- CI #78 confirmed the lifecycle preflight on the previous source revision
+  `3614994`; its full-build job was still running at the last live inspection.
+- Source commit `e80f964` changes the worker to the matching Linux 6.18
+  `rtnl_net_lock(&init_net)` API. Updated preflight assertions and Bash quoting
+  are queued in CI #82; compile remains NOT VERIFIED.
 - CI #77's full-build job failed while compiling `package/feeds/nss/qca-nss-ecm`.
-  The high-level build log identifies the failed package, but its detailed
-  compiler log was omitted from the artifact. This is not a compile PASS.
+  Its detailed compiler log was omitted from the artifact. The corrected
+  workflow now collects `openwrt-v2/logs/package/feeds/nss/**`.
 
 **Still NOT VERIFIED:**
 

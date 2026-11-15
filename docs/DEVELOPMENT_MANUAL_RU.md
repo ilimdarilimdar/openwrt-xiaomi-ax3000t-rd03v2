@@ -17,7 +17,7 @@
 
 Результат, созданный ИИ, не считается автоматически корректным. Если изменение явно не отмечено как скомпилированное и проверенное на аппаратуре, оно считается непроверенным. Статусы проверки: PASS, FAIL, NOT TESTED и INCONCLUSIVE.
 
-> Это инженерный план, а не сертификат готовности прошивки. На 15.11.2026 CI #77 прошёл Static и PREPARE_ONLY, но full build завершился ошибкой при компиляции `qca-nss-ecm`. Причина компиляционной ошибки ещё не локализована: подробный per-package log не был включён в artifact. CI #78 с новой lifecycle revision сейчас выполняется; Static PASS, PREPARE_ONLY ещё не завершён на последней live-проверке. На устройстве наша ветка не испытывалась. CI-сборка использует временный ключ и `example.invalid`, поэтому её результат не является пользовательским релизом и не предназначен для установки. Основной роутер не прошивать.
+> Это инженерный план, а не сертификат готовности прошивки. На 15.11.2026 CI #77 прошёл Static и PREPARE_ONLY, но full build завершился ошибкой в `qca-nss-ecm`; подробный per-package log не попал в старый artifact. CI #78 прошёл Static, PREPARE_ONLY и ECM preflight для lifecycle revision `3614994`, но full build ещё выполняется. Source commit `e80f964` дополнительно согласовал RTNL lock worker с API Linux 6.18; его проверка ожидает CI #82. На устройстве наша ветка не испытывалась. CI-сборка использует временный ключ и `example.invalid`, поэтому её результат не является пользовательским релизом и не предназначен для установки. Основной роутер не прошивать.
 
 
 ### Live CI checkpoint — 2026-11-15, актуальнее исторических записей ниже
@@ -25,11 +25,13 @@
 - CI #77 (ac4ee43): Static PASS; PREPARE_ONLY PASS; full build FAIL в
   package/feeds/nss/qca-nss-ecm. Точный compiler error пока не восстановлен,
   поскольку artifact не включал OpenWrt per-package log.
-- CI #78 (3614994): in_progress; Static PASS, PREPARE_ONLY ещё выполнялся
-  на последней live-проверке. Результат обновлённого ECM lifecycle preflight
-  пока не подтверждён.
-- Workflow настроен загружать openwrt-v2/logs/package/feeds/nss/**, чтобы следующая
-  полная сборка сохраняла диагностические логи NSS/ECM пакетов.
+- CI #78 (3614994): Static PASS, PREPARE_ONLY PASS, ECM preflight PASS;
+  full-build ещё выполнялся на последней live-проверке.
+- Source commit e80f964 меняет worker на `rtnl_net_lock(&init_net)`/
+  `rtnl_net_unlock(&init_net)`. CI #82 ожидает запуска с обновлёнными
+  assertions и Bash quoting.
+- Workflow настроен загружать `openwrt-v2/logs/package/feeds/nss/**`, чтобы
+  следующая полная сборка сохраняла диагностические логи NSS/ECM пакетов.
 - Не переносить test image на primary router. Требуются ECM compile, marker
   в ecm.ko, verify-v2.sh и контролируемые испытания на втором устройстве.
 

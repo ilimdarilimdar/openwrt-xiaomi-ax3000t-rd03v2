@@ -102,7 +102,7 @@ building a sysupgrade image.
 
 ## v2 source review and candidate patch status (2026-11-15)
 
-**RTNL publication-order and pending-bit race:** Linux 6.18 calls the rule-add notifier before the new rule is linked into the rules list, and the delete notifier after `list_del_rcu()` but before RTNL is released. The worker must therefore wait until the originating rule transaction commits before invalidating accelerated connections. The candidate takes RTNL, snapshots and clears the IPv4/IPv6 pending bits while still holding RTNL, then releases RTNL before walking the ECM database. This ordering closes a second race: if the worker cleared pending bits after releasing RTNL, a newer rule event could set a bit in between and have that event consumed by the older worker pass. An event arriving after the snapshot instead sets a fresh bit and schedules another pass. For `init_net`, `rtnl_net_lock()` acquires the global RTNL lock before the per-net lock, so the worker's RTNL acquisition acts as a publication barrier. RTNL is not held during ECM database traversal. The preflight script checks the relative order of lock, pending-bit snapshots, unlock and both family-specific defunct paths.
+**Per-net RTNL publication-order and pending-bit race:** Linux 6.18 calls the rule-add notifier before the new rule is linked into the rules list, and the delete notifier after `list_del_rcu()` but before the per-net RTNL lock is released. The worker now uses the exact same `rtnl_net_lock(&init_net)` / `rtnl_net_unlock(&init_net)` pair as the `init_net` rule update. This is important when `CONFIG_DEBUG_NET_SMALL_RTNL` is enabled: a plain global `rtnl_lock()` alone would not serialize with the additional per-net mutex. The worker snapshots and clears IPv4/IPv6 pending bits while holding the matching per-net lock, then releases it before walking the ECM database. This also closes the pending-bit race: an event arriving after the snapshot sets a fresh bit and can schedule another pass. The preflight script checks lock, pending-bit snapshots, unlock and both family-specific defunct paths.
 The Linux 6.18 event path was also checked in the exact tagged kernel sources:
 
 - `net/core/fib_rules.c` builds `fib_rule_notifier_info` with
@@ -260,8 +260,7 @@ then applies 9002 to the resulting tree. CI #77 passed the current
 pre-shutdown revision against both clean source and the complete feed series.
 Its separate full-build job later failed at `package/feeds/nss/qca-nss-ecm`.
 
-The latest source commit
-`36149940c8eb00df46d14b7bb10e747ec9666f3b` extends patch 9002 with
+The source revision `36149940c8eb00df46d14b7bb10e747ec9666f3b` extended patch 9002 with
 `ecm_db_fib_rule_notifier_stop()` and adds explicit shutdown-order checks:
 
 - Normal `ecm_exit()` unregisters the FIB notifier and drains the worker before
@@ -274,14 +273,14 @@ The latest source commit
 - The preflight script asserts these ordering constraints on both pristine
   pinned source and the fully feed-patched source.
 
-This newest shutdown-order revision has **not yet passed CI**. Workflow #78
-is now `in_progress`: Static checks passed, while PREPARE_ONLY was still
-running and the revised preflight had not yet started at the last live check.
-Run #77 must not be counted as a compile result for commit `3614994`.
-Its full build failed in `qca-nss-ecm`; the summary artifact omitted the
-per-package compiler log. The next workflow includes
-`openwrt-v2/logs/package/feeds/nss/**` in the build artifact so a subsequent run can
-expose the detailed NSS/ECM diagnostics.
+CI #78 has now confirmed the lifecycle preflight for `3614994` (including raw
+and fully feed-patched source), but its full build is still in progress at the
+last live check. Source commit `e80f964` additionally aligns the worker with
+Linux 6.18's per-net RTNL lock API. The updated lock assertions and Bash fix
+are queued for CI #82. CI #77's full build failed in `qca-nss-ecm`; the old
+artifact omitted the per-package compiler log. The workflow now uploads
+`openwrt-v2/logs/package/feeds/nss/**` so the next full build exposes detailed
+NSS/ECM diagnostics.
 
 Even a green source-apply test does not prove that `ecm.ko` compiles or runs.
 Required gates remain: revised preflight, complete `kmod-qca-nss-ecm`
