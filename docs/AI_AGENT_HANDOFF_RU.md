@@ -3,11 +3,11 @@
 > **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
 
 **Последняя сверка исходного состояния:** 2026-11-15, примерно 07:30 UTC  
-**Последнее обновление журнала CI:** 2026-11-15, примерно 07:36 UTC  
+**Последнее обновление журнала CI:** 2026-11-15, примерно 07:45 UTC  
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
 **Последний подтверждённый commit с изменениями кода/CI на момент аудита:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`  
-**Документационные commits после этого аудита:** `8039a4795cc66434e17deca5f76d0e9e8a1d4fc8` (создание handoff), `331ce2f8328c900bd777b426e098c2450e2f0c06` (ссылка из README) и `7b55792f980412afd6678e2539cd78496dbc0940` (уточнение снимка handoff). Они не меняют код прошивки.  
+**Последующие commits:** `4a0a9146086cebd4b8c8471870187c6986ae1de3` и `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7` меняют только CI workflow (отсечение docs-only запусков и исправление пути к patch 0014); `50b15707fedc0354a6ac175352ba21a3f1985f9a` и `0a5ea92c8f80dd2e045954b2e225ea1d7c6b5501` обновляют CI-документацию; `8039a4795cc66434e17deca5f76d0e9e8a1d4fc8`, `331ce2f8328c900bd777b426e098c2450e2f0c06` и `7b55792f980412afd6678e2539cd78496dbc0940` создали/уточнили handoff и ссылку README. Ни один из них не менял firmware source, kernel, NSS code patches или WAN config.  
 **Последний статус на момент аудита:** активная разработка; базовая конфигурация и автоматические проверки есть, полная сборка Dual-WAN-ветки и её аппаратная пригодность не подтверждены.
 
 > Перед любым действием получить живой HEAD. Последующие обновления этого handoff тоже создают documentation-only commit и двигают branch HEAD; не считать такой сдвиг изменением firmware code.
@@ -55,9 +55,9 @@ RD03v2 — не MediaTek RD03/RD23. Образы, device tree, инструкц�
 
 - `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 - рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`
-- последний подтверждённый source-code HEAD на момент аудита: `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`;
+- последний подтверждённый firmware source/config HEAD на момент аудита: `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`;
 - его сообщение: `nss: fix tab context in IPQ50xx Kconfig patch`;
-- последующие commits `8039a479...` и `331ce2f8...` добавили handoff и ссылку в README, не меняя исходники/конфигурацию прошивки.
+- последующие commits меняли только CI workflow и документацию; firmware source/config считать неизменными до отдельного source diff review.
 
 Контрольная точка предыдущего инженерного аудита — `88ca871cb02074ede9138563e1f007d53d2fb440`. По GitHub compare рабочая ветка на момент последней сверки содержала 32 коммита после этой контрольной точки. Не ориентироваться на старый SHA из предыдущего мануала: получать HEAD заново.
 
@@ -91,32 +91,37 @@ RD03v2 — не MediaTek RD03/RD23. Образы, device tree, инструкц�
 
 ## 5. Состояние CI при последней подтверждённой проверке
 
-Проверка GitHub Actions была выполнена 2026-11-15 около 07:30 UTC.
+Проверка GitHub Actions обновлена 2026-11-15 около 07:45 UTC.
 
 | Workflow | Commit | Последний известный результат |
 |---|---|---|
-| #15 | `c5a64af9a23996401eb22c2a275023c419bbe547` | Static PASS; PREPARE_ONLY PASS |
-| #16 | `5bcad81cfe911b91f4ac928e53f424e1580ddfd7` | Static PASS; full build ещё IN PROGRESS |
-| #29 | `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb` | CANCELLED после появления более нового запроса |
+| #15 | `c5a64af9a23996401eb22c2a275023c419bbe547` | Static PASS; PREPARE_ONLY PASS; artifact inspected |
+| #16 | `5bcad81cfe911b91f4ac928e53f424e1580ddfd7` | Static PASS; full build step IN PROGRESS |
+| #29 | `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb` | CANCELLED by newer pushes |
+| #34 | `4a0a9146086cebd4b8c8471870187c6986ae1de3` | CANCELLED by subsequent workflow fix |
+| #35 | `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7` | WAITING behind #16 |
 
 Подробности:
 
-- В #15 завершились статические проверки и подготовка закреплённых исходников/feeds/defconfig. Это **не** компиляция прошивки.
-- В #16 этапы checkout, ресурсов runner и генерации временного CI signing key завершились успешно. На момент последней проверки job `Build and run verify-v2` оставался `in_progress`; итог компиляции и `verify-v2` не получен.
-- #16 использует более ранний commit `5bcad81`, а не текущий HEAD `f5e828f`.
-- #29 — проверка актуального HEAD; страница Actions показывала, что он ждёт окончания #16 из-за concurrency group.
-- После документационных commits создались #30 (`8039a47`), #31 (`331ce2f`) и #32 (`7b55792`). #30 и #31 отменены как устаревшие, #32 на последней проверке ожидал завершения #16 в той же concurrency group. #29 также отменён последующим запросом.
-- Следующее изменение этого handoff создаст ещё один docs-only push и, вероятно, новый workflow run. Не трактовать отмену старого run как провал компиляции; каждый раз смотреть самый новый запуск и его commit.
-- Статусные API-ответы для HEAD ранее были пустыми; это не является PASS.
-- На дату этой записи CI не подтверждает сборку полного образа на актуальном HEAD.
+- Артефакт #15: ID `14150612353`, `rd03v2-prepare-c5a64af9a23996401eb22c2a275023c419bbe547`. Извлечены `defconfig.log`, `config.final.txt`, `diffconfig.txt`, feed logs.
+- В #15 `defconfig.log` подтвердил NSS цикл: `luci-app-nss -> kmod-qca-nss-drv -> kmod-qca-dsa-nss -> nss-tools-dwmac -> nss-tools -> luci-app-nss`. В том же логе есть Qt5, fwknopd и squeezelite recursive diagnostics. Это реальный результат старой ветки, а не догадка.
+- Проверено, что #15 выполнялся на commit `c5a64af`, где патча `tree-patches/0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch` ещё не существовало. Поэтому #15 **не** проверяет устранение NSS цикла патчем 0014.
+- #15 также содержал override warnings для `ATH11K_MEM_PROFILE_256M` и `NSS_MEM_PROFILE_LOW`; в актуальном firmware config эти два выбора уже оставлены upstream-фрагменту `256m.config`, локально остаётся отдельный `ATH11K_NSS_MEM_PROFILE_256M`.
+- В #16 checkout, runner resource check и генерация временного CI signing key завершились успешно. Job `Build and run verify-v2` всё ещё `in_progress`; лог недоступен до завершения, артефактов пока нет. Не объявлять сборку зависшей только из-за длительности: timeout настроен на 360 минут.
+- #29 был отменён новыми push до получения подтверждённого артефакта актуального PREPARE_ONLY.
+- В workflow найден и исправлен статический path typo: раньше проверка ссылалась на несуществующий `0014-luci-app-nss-use-ipq50xx-runtime.patch`; теперь путь совпадает с реальным именем `0014-luci-app-nss-use-ipq50xx-runtime-dependency-only.patch`. Исправление — commit `472ed0c`.
+- Добавлен `paths-ignore` для Markdown и `docs/**` на push и pull_request. Смешанные изменения документации вместе с кодом всё равно запускают CI. Это должно прекратить расходование сериализованного слота на одни только README/мануалы.
+- Workflow #35 на commit #472ed0c ожидает окончания #16; следующий запуск должен проверить исправленный static check и выполнить актуальный PREPARE_ONLY. Последующие документационные изменения не меняют firmware code.
+- CI full-build использует disposable key и `example.invalid`, поэтому не является пользовательским образом. Аппаратной валидации нашей Dual-WAN-ветки нет.
 
 Ссылки:
 
 - [Actions workflow](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/workflows/rd03v2-validation.yml)
+- [Run #15 — PREPARE_ONLY artifact](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686096014)
 - [Run #16 — full build](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656)
-- [Run #29 — latest HEAD](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43688355508)
+- [Run #35 — corrected workflow](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43690850704)
 
-**Первое действие следующего агента:** обновить эти статусы через GitHub, получить jobs/steps и artifacts/logs для #16, затем просмотреть #29 и дождаться/изучить PREPARE_ONLY-артефакт для актуального HEAD. Не начинать новую тяжёлую сборку, пока предыдущий runner не классифицирован.
+**Первое действие следующего агента:** проверить окончание #16, затем run #35. Скачать PREPARE_ONLY artifact #35 и убедиться, что NSS recursive cycle исчез, а оставшиеся warnings объяснены. Не начинать вторую полную сборку и не трогать основной роутер.
 
 ## 6. Подпись, CI и безопасность артефактов
 
@@ -261,7 +266,9 @@ CI-образ на temporary key/`example.invalid` годится как док�
 
 - Сверен рабочий репозиторий и ветка; HEAD `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`.
 - Создана эта опорная запись для будущих ИИ-агентов.
-- Подтверждены #15 (Static PASS + PREPARE_ONLY PASS), #16 (Static PASS, Full Build IN PROGRESS на более раннем SHA); #29 отменён; #30/#31 отменены как устаревшие; #32 ожидал runner после #16.
+- #15: static PASS + PREPARE_ONLY PASS; artifact ID `14150612353` скачан и исследован, NSS cycle подтверждён; #16: static PASS, full build IN PROGRESS; #29–#34 отменены новыми push; #35 ожидает #16.
+- Добавлен `paths-ignore` для Markdown/docs-only изменений (commit `4a0a914`) и исправлен неверный путь к patch 0014 в static validation (commit `472ed0c`).
+- Обновлён `docs/CI_BUILD.md` с результатами исследования artifact #15 и текущими CI blockers.
 - Подтверждено отсутствие аппаратной валидации нашей Dual-WAN-ветки.
 - Создана эта опорная запись: commit `8039a4795cc66434e17deca5f76d0e9e8a1d4fc8`.
 - В корневой README добавлена ссылка на неё: commit `331ce2f8328c900bd777b426e098c2450e2f0c06`.
