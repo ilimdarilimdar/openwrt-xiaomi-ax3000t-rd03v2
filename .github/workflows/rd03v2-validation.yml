@@ -4,9 +4,17 @@ on:
   push:
     branches:
       - work/rd03v2-dualwan-mwan3-baseline
+    # Documentation-only edits do not need a firmware source/configuration preflight.
+    # Mixed documentation + source changes still run because not every changed path is ignored.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
 
 permissions:
   contents: read
