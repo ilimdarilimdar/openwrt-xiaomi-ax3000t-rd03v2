@@ -66,8 +66,9 @@ index c97f625..0000000 100644
 +	(void)work;
 +
 +	/*
-+	 * Rule ADD/DEL callbacks run under RTNL before the rule is linked/unlinked.
-+	 * Wait for that update to commit, but do not hold RTNL during the DB walk.
++	 * Rule ADD/DEL callbacks run inside the RTNL-protected rule update. ADD is
++	 * notified before list insertion; DEL is notified before RTNL is released.
++	 * Wait for the update to commit, but do not hold RTNL during the DB walk.
 +	 */
 +	rtnl_lock();
 +	rtnl_unlock();
