@@ -12,6 +12,8 @@
 # Both use the image's own uci and jsonfilter (through qemu), from --rootfs, an
 # unpacked rootfs of a v2 image (or WD_ROOTFS); verify-v2.sh passes the image's own.
 #
+# WD_TEST_STUB_DIR pins --check hardware commands to absolute stub paths even
+# when BusyBox applet dispatch would otherwise bypass PATH.
 # The fake board lives in $ROOT/world, one file per fact (see world.sh below);
 # the stubs (iw, wifi, ubus, rmmod, modprobe, insmod, dmesg, reboot, sync,
 # logger) read and change it and render it as $ROOT/sys again, and record
