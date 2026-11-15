@@ -123,6 +123,7 @@ Details are in [VALIDATION.md](VALIDATION.md).
 
 ## Documentation
 
+- [Передача проекта следующему ИИ-агенту: текущее состояние, ограничения и план действий](docs/AI_AGENT_HANDOFF_RU.md) — начальная точка для продолжения разработки
 - [What this port adds to kuncy7's release](docs/what-this-port-adds.md), and what it no
   longer carries because his tree has it
 - [Packages](docs/packages.md): the repositories, kernel modules and pinned packages
