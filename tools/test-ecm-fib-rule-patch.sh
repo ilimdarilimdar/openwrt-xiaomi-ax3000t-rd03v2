@@ -65,6 +65,16 @@ for family, spec in families.items():
     counter = spec["counter"]
 
     declaration = f"atomic_t {counter} = ATOMIC_INIT(0);"
+    if "#include <linux/netdevice.h>" not in (root / "ecm_db/ecm_db.c").read_text():
+        raise SystemExit("FAIL: ECM DB source does not include linux/netdevice.h for synchronize_net()")
+    db_source = (root / "ecm_db/ecm_db.c").read_text()
+    worker_start = db_source.find("static void ecm_db_fib_rule_work_fn")
+    worker_end = db_source.find("static DECLARE_WORK", worker_start)
+    if worker_start < 0 or worker_end < 0:
+        raise SystemExit("FAIL: FIB worker source not found for synchronize_net() check")
+    worker = db_source[worker_start:worker_end]
+    if "synchronize_net();" not in worker:
+        raise SystemExit("FAIL: FIB worker lacks synchronize_net() quiescence barrier")
     if declaration not in front:
         raise SystemExit(f"FAIL: {family} temporary-stop counter is not atomic_t/ATOMIC_INIT")
     if "#include <linux/atomic.h>" not in header:
@@ -157,6 +167,10 @@ grep -qF 'rtnl_net_lock(&init_net);' "$ECM_DB" ||
   die "worker does not wait for the RTNL-protected rule update to finish"
 grep -qF 'rtnl_net_unlock(&init_net);' "$ECM_DB" ||
   die "worker does not release RTNL before walking the ECM database"
+grep -qF '#include <linux/netdevice.h>' "$ECM_DB" ||
+  die "ECM DB does not include the synchronize_net() declaration"
+grep -qF 'synchronize_net();' "$ECM_DB" ||
+  die "FIB worker does not drain pre-existing network readers"
 grep -qF "Rule ADD/DEL callbacks run inside init_net's per-net RTNL update." "$ECM_DB" ||
   die "RTNL barrier rationale is missing"
 
@@ -176,19 +190,33 @@ ordered = [
     "ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4",
     "ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6",
     "rtnl_net_unlock(&init_net);",
+    "any_pending = ipv4_pending;",
+    "any_pending |= ipv6_pending;",
     "if (ipv4_pending)",
     "ecm_front_end_ipv4_stop_temp(1)",
-    "ecm_db_connection_defunct_ip_version(4)",
     "if (ipv6_pending)",
     "ecm_front_end_ipv6_stop_temp(1)",
+    "if (any_pending)",
+    "synchronize_net();",
+    "if (ipv4_pending)",
+    "ecm_db_connection_defunct_ip_version(4)",
+    "ecm_front_end_ipv4_stop_temp(0)",
+    "if (ipv6_pending)",
     "ecm_db_connection_defunct_ip_version(6)",
+    "ecm_front_end_ipv6_stop_temp(0)",
 ]
-positions = [worker.find(token) for token in ordered]
-if any(position < 0 for position in positions):
-    sys.exit("FAIL: RTNL snapshot or IPv4/IPv6 worker operation is missing")
+positions = []
+offset = 0
+for token in ordered:
+    position = worker.find(token, offset)
+    if position < 0:
+        sys.exit(f"FAIL: required worker sequence element is missing: {token}")
+    positions.append(position)
+    offset = position + len(token)
 if positions != sorted(positions):
-    sys.exit("FAIL: pending bits must be snapshotted under RTNL, then RTNL released before the DB walk")
+    sys.exit("FAIL: worker must drain all in-flight Netfilter hooks before defuncting ECM DB entries")
 print("PASS: pending-bit snapshot is atomic with respect to RTNL rule updates")
+print("PASS: frontend stop gates close before synchronize_net() and DB walk")
 PY
 grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
