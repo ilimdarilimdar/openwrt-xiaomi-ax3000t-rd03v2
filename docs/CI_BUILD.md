@@ -68,39 +68,35 @@ The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recurs
 
 ## Current validation snapshot — 2026-11-15
 
-- Branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Commit `76ea1dfc2a20ed257fecfd6d083d2b26a21db807` repaired the Git mode of
-  `tools/install-v2-signing-key.sh` to `100755` and added a `test -x` guard.
-  Workflow #74 passed Static and PREPARE_ONLY, including hash-verified QSDK
-  archive and complete ECM feed-series preflight for the previous 9002 revision.
-- Workflow #73, commit `d1bc351ce1d28f608d47ed327ff068519da6f5f0`: Static PASS,
-  PREPARE_ONLY PASS and old-revision ECM preflight PASS. Full-build failed
-  before `make download` because the installer script was not executable.
-- Workflow #74,
-  [run 43707480293](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43707480293):
-  Static PASS and PREPARE_ONLY PASS. Full-build was SKIPPED because the
-  commit did not request `[full-build]`.
+- Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
+- Latest source-code commit: `36149940c8eb00df46d14b7bb10e747ec9666f3b`.
+- Workflow #77,
+  [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463),
+  uses the previous source commit `ac4ee43c79879c8bb557a26c252eb442aa5a3654`.
+  Static validation and PREPARE_ONLY passed, including SHA-256 verification,
+  clean-source patch application, full 31-patch ECM feed-series application,
+  and the `ecm_db_init()` route-notifier error guard. Its full-build job is
+  still running at `Build and run verify-v2`; no final compile/image result
+  is available yet.
+- Commit `36149940c8eb00df46d14b7bb10e747ec9666f3b` adds a common
+  `ecm_db_fib_rule_notifier_stop()` hook. It unregisters the FIB notifier,
+  waits for notifier callbacks to quiesce, and drains the queued worker before
+  front-end shutdown in normal module exit and init-unwind paths. The existing
+  `ecm_db_exit()` call is retained as an idempotent fallback.
+- Workflow #78,
+  [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665),
+  was triggered for that lifecycle change and is PENDING behind #77 because
+  the workflow serializes runs for this branch. Its PREPARE_ONLY preflight and
+  full build have not run yet.
 - The PREPARE_ONLY artifact from #73 (ID `14159280711`) has no selected NSS
   recursive-dependency diagnostic after tree patch 0014. Three remaining
-  diagnostics concern Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom;
-  those package choices are unset in the final `.config`.
-- Exact pinned `ecm_db.c` and `ecm_init.c` review found that the parent module
-  does not call `ecm_db_exit()` when `ecm_db_init()` itself returns an error.
-  Patch 9002 now returns on a non-zero existing route-notifier status before
-  registering the new FIB notifier. Its preflight now asserts the guard against
-  both pristine and fully feed-patched source.
-- Commit `6e5f0e737d447576027005fb17bd044b79e46dda` contains that lifecycle guard,
-  its new preflight assertion, and documentation updates. Workflow #75
-  [run 43708044368](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708044368)
-  stopped at Static validation because the updated `dualwan.md` wording no
-  longer matched the workflow's older literal safety reminder. It did not run
-  PREPARE_ONLY or compile anything. The next commit restores the safety
-  distinction and updates the workflow assertion to the new exact wording.
-- The revised 9002 guard has NOT YET passed CI. Full ECM compilation,
-  `ecm.ko` marker verification, full image verification and hardware tests
-  remain pending.
+  Kconfig diagnostics concern Qt5 GUI, fwknopd/LuCI fwknopd and
+  squeezelite-custom; those package choices are unset in the final `.config`.
 
-A successful CI full-build is still validation-only: it uses an ephemeral
-signing key and `example.invalid` package repository URL, uploads logs/config
-only, and does not publish a user-installable image. Hardware validation is
-NOT TESTED. Keep the primary router on stock firmware.
+Do not treat #77 as proof that the latest lifecycle revision compiles: it uses
+`ac4ee43`, not `3614994`. The revised patch must pass #78 PREPARE_ONLY,
+ECM package compilation, marker inspection in `ecm.ko`, and final
+`verify-v2.sh`. Hardware validation is still NOT TESTED. CI full-builds use
+an ephemeral signing key and `example.invalid` repository URL, upload logs
+only, and do not publish installable firmware. Keep the primary router on
+stock firmware.

@@ -3,8 +3,31 @@
 > **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
 
 **Последняя сверка исходного состояния:** 2026-11-15, текущая сессия
-**Последний проверенный firmware source/code HEAD:** `6878d6d16ab9858a136a6c4d224e0b53d07942cc`
-**Текущий branch HEAD на момент документального обновления:** `453106b968359a2c5c346caf623fc920e48def06` (последующие commits после source HEAD меняли только документацию)
+**Последний source-code commit:** `36149940c8eb00df46d14b7bb10e747ec9666f3b` (добавлен ECM FIB-worker shutdown hook)
+**Текущий branch:** `work/rd03v2-dualwan-mwan3-baseline`; перед изменениями всегда получить актуальный HEAD из GitHub.
+## Актуальная контрольная точка — 2026-11-15
+
+- Source-code HEAD: `36149940c8eb00df46d14b7bb10e747ec9666f3b`.
+- CI #77, run `43708414463`, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS
+  (проверены pinned QSDK SHA-256 и применение 9002 после 31 feed-патча).
+  Полная сборка ещё выполняется; этот run не содержит нового shutdown hook.
+- CI #78, run `43709621665`, source `3614994`: PENDING за #77 из-за
+  сериализации workflow. Этот run должен проверить новый lifecycle patch.
+- В patch 9002 добавлен `ecm_db_fib_rule_notifier_stop()`: notifier
+  unregister + RCU callback quiescence + `cancel_work_sync()` выполняются
+  до frontend teardown в обычном `ecm_exit()` и init error-unwind paths.
+  `ecm_db_exit()` сохраняет fallback stop перед DB termination.
+- `tools/test-ecm-fib-rule-patch.sh` теперь проверяет порядок stop hook на
+  чистом pinned source и после полной очереди feed-патчей. Для commit
+  `3614994` эти новые assertions ещё не прошли CI.
+- Не считать проект готовым к прошивке. Последовательность проверки:
+  CI #78 Static/PREPARE_ONLY, ECM compile, `ecm.ko` marker, `verify-v2.sh`,
+  затем контролируемые тесты на втором RD03v2. Основной роутер остаётся
+  на штатной прошивке.
+
+Исторические записи ниже сохранены как журнал; при расхождении использовать
+эту контрольную точку и актуальное состояние GitHub.
+
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
 **Последний baseline source/config commit до экспериментального ECM notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`

@@ -169,40 +169,36 @@ captures where possible.
 
 The candidate lives at
 `feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`.
-It is separate from the upstream feed patches and is applied after the existing
-queue, including RD03v2 patch 9001.
+It is a separate RD03v2 adaptation, applied after the pinned upstream ECM feed
+patch queue and RD03v2 patch 9001.
 
-**Source-level evidence already obtained:**
+**Verified for the previous source revision (`ac4ee43`):**
 
-- The exact QSDK 14.0 source archive is pinned by the NSS feed Makefile and
-  checked by SHA-256 before preflight.
-- CI #72 and #74 passed the then-current candidate's apply checks against the
-  raw archive and after all 31 preceding feed patches, including patch 9001.
-- The worker uses the Linux 6.18 FIB rule ADD/DEL notifier, per-family pending
-  bits, an RTNL publication barrier, and v2 `*_stop_temp()` helpers.
-- A source review found that `ecm_init()` does not call `ecm_db_exit()` when
-  `ecm_db_init()` itself returns an error. The candidate has now been tightened
-  to return before registering its new FIB notifier whenever the existing
-  IPv4/IPv6 route-notifier initialization leaves `ret != 0`. The new preflight
-  assertion for this guard has not yet run in CI.
+- The exact QSDK 14.0 source archive is SHA-256 checked before preflight.
+- CI #77 passed application to the clean archive and after all 31 preceding
+  ECM feed patches, including 9001.
+- The FIB worker uses Linux 6.18 rule ADD/DEL events, per-family pending bits,
+  an RTNL snapshot barrier, and v2 temporary frontend-stop helpers.
+
+**Latest source revision (`3614994`), awaiting CI #78:**
+
+- Adds an exported, idempotent stop helper which unregisters the FIB notifier
+  and drains the work item before ECM front-end shutdown.
+- Calls the helper in normal module exit and all relevant front-end init-unwind
+  paths; retains a fallback call before DB termination.
+- Extends preflight assertions to check the shutdown ordering on raw and fully
+  feed-patched source.
+- CI #78 is pending behind #77; none of these new lifecycle checks has yet
+  passed CI and this latest revision has not yet been compiled.
 
 **Still NOT VERIFIED:**
 
-- The revised patch 9002 has not yet passed its updated preflight.
-- `kmod-qca-nss-ecm` has not yet been compiled with the complete patch queue.
-- The notifier registration marker has not yet been checked inside a freshly
-  built `ecm.ko`.
-- No second-router boot, Dual-WAN failover, throughput, NSS counter or latency
-  test has been performed.
+- Compilation of the latest `qca-nss-ecm` patch queue and inspection of the
+  resulting `ecm.ko` marker.
+- Final image verification on the latest source revision.
+- Boot, Dual-WAN failover/load balancing, NSS/ECM counters, throughput, packet
+  loss, latency and repeated mwan3/module restart tests on the second router.
 
-The full build in CI #73 did not reach `make download` or package compilation:
-it stopped because `install-v2-signing-key.sh` lacked the executable bit in
-Git. Commit `76ea1dfc2a20ed257fecfd6d083d2b26a21db807` fixed the tracked mode
-and added a static guard. CI #74 then passed Static and PREPARE_ONLY; its full
-build was skipped because the commit did not request `[full-build]`.
-
-Do not call this candidate a production Dual-WAN/NSS fix until the revised
-preflight, module compilation, final image verification and controlled
-hardware tests pass. Do not work around this by permanently disabling IPv6
-acceleration or by writing to `front_end_ipv6_stop`: the v1 maintainer
-established that this is an internal pause flag, not a persistent setting.
+Do not call the firmware production-ready or flash the primary router. Keep
+the primary device on stock firmware until source verification, build/image
+checks and controlled hardware validation are all complete.

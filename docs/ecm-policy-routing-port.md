@@ -10,8 +10,10 @@ of the affected address family.
 The notifier callback does not flush the database directly: it runs in atomic
 context, sets a per-family pending bit and schedules work. The worker stops the
 relevant ECM front end, calls the existing per-IP-family defunct routine, then
-restarts the front end. Module teardown unregisters the notifier and cancels
-the work before final cleanup.
+restarts the front end. The v2 port additionally drains this work before the
+front-end shutdown sequence: unregister the FIB notifier, wait for any active
+atomic callbacks to quiesce, then call `cancel_work_sync()`. A fallback stop
+remains in `ecm_db_exit()`.
 
 ## Proven on v1.x, not yet proven on v2
 
@@ -250,14 +252,33 @@ Primary Linux 6.18 source references:
 - [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
 - [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
 
-## Current preflight boundary
+## Current preflight and lifecycle status
 
 `tools/test-ecm-fib-rule-patch.sh` verifies the hash-pinned raw QSDK archive,
 applies every preceding ECM feed patch in lexical/quilt order (including 9001),
-then applies 9002 to the resulting tree. CI #72 and #74 passed that full-series
-preflight for the previous revision of 9002. The current revision adds a guard
-for the `ecm_db_init()` error path and extends the script to assert the guard
-against both pristine and fully patched source. That revised guard has not yet
-passed CI. Even a green full-series apply test does not prove that `ecm.ko`
-compiles or runs: package compilation, the final `verify-v2.sh` marker check
-and controlled hardware tests remain mandatory.
+then applies 9002 to the resulting tree. CI #77 passed the current
+pre-shutdown revision against both clean source and the complete feed series.
+
+The latest source commit
+`36149940c8eb00df46d14b7bb10e747ec9666f3b` extends patch 9002 with
+`ecm_db_fib_rule_notifier_stop()` and adds explicit shutdown-order checks:
+
+- Normal `ecm_exit()` unregisters the FIB notifier and drains the worker before
+  stopping conntrack notifications or either ECM front end.
+- The `err_ct`, `err_fe_ipv6` and `err_fe_ipv4` init-unwind paths stop the
+  worker before tearing down any already-initialized front end.
+- `ecm_db_exit()` retains the same idempotent helper before DB termination.
+- The stop helper clears the registered flag only after successful notifier
+  unregistration, then waits for `cancel_work_sync()`.
+- The preflight script asserts these ordering constraints on both pristine
+  pinned source and the fully feed-patched source.
+
+This newest shutdown-order revision has **not yet passed CI**. Workflow #78
+is pending behind #77. Run #77 passed Static and PREPARE_ONLY for the previous
+revision and is still executing the full build; it must not be counted as a
+compile result for commit `3614994`.
+
+Even a green source-apply test does not prove that `ecm.ko` compiles or runs.
+Required gates remain: revised preflight, complete `kmod-qca-nss-ecm`
+compilation, notifier marker in the built module, `verify-v2.sh`, and
+controlled second-router hardware tests.
