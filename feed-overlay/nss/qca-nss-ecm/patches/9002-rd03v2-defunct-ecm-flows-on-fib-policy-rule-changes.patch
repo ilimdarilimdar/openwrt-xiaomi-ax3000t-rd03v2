@@ -16,8 +16,8 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
- ecm_db/ecm_db.c | 130 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 130 insertions(+)
+ ecm_db/ecm_db.c | 129 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 129 insertions(+)
 
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 index c97f625..0000000 100644
@@ -137,7 +137,7 @@ index c97f625..0000000 100644
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +861,25 @@
+@@ -763,4 +861,24 @@
  	}
  #endif
 +
@@ -162,7 +162,7 @@ index c97f625..0000000 100644
 +
  	return ret;
  
-@@ -785,9 +904,20 @@
+@@ -785,9 +903,20 @@
  void ecm_db_exit(void)
  {
  	DEBUG_INFO("ECM DB Module exit\n");
