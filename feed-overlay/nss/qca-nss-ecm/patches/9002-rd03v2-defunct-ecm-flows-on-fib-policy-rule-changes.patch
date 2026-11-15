@@ -249,10 +249,8 @@ diff --git a/ecm_init.c b/ecm_init.c
  err_fe_ipv4:
 +	ecm_db_fib_rule_notifier_stop();
  #ifdef ECM_INTERFACE_BOND_ENABLE
-@@ -378,3 +381,4 @@
- static void __exit ecm_exit(void)
- {
- 	printk(KERN_INFO "ECM exit\\n");
+@@ -385,1 +388,2 @@
+ 	/* call stop on anything that requires a prepare-to-exit signal */
 +	ecm_db_fib_rule_notifier_stop();
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
