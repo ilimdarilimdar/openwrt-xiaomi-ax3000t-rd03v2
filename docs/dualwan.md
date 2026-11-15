@@ -15,25 +15,20 @@ firmware. The image has not been built or tested on hardware from this branch.
 - The candidate defers rule-change handling from the atomic notifier callback
   to a work item, then invalidates accelerated connections by address family.
 - Patch 9002 is still a candidate implementation; it has **not** passed
-  the pinned-source preflight. CI runs #96-#101 all failed before raw apply or
-  during patch structure/context validation. No full ECM build has run.
-- Workflow [#100](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43727888918)
-  passed static checks and PREPARE_ONLY source/config preparation, but ECM
-  preflight failed in the local unified-diff validator: the IPv4 helper hunk's
-  declared counts did not cover all context lines.
-- Workflow [#101](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728125583)
-  passed static checks and PREPARE_ONLY preparation, then failed at the same
-  structural check. It tested the older 5b709d0 patch revision.
-- Commit `e1a6818` corrected IPv4/IPv6 deletion-hunk sizes and added a
-  single-owner guard for temporary-stop counters. Commit `3637215` added the
-  final IPv6 common-lock context, but workflow
-  [#103](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728459690)
-  failed its structural validator: the IPv6 common-lock hunk was truncated
-  because its declared count was one context line too large.
-- Commit `552f134` corrected that final IPv6 common-lock hunk size. Workflow
-  [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
-  is testing this latest patch revision (Static PASS; PREPARE_ONLY source/config
-  preparation still running at last check).
+  the pinned-source preflight. No full ECM build has run.
+- Workflows #100 and #101 passed Static and PREPARE_ONLY source/config
+  preparation but failed the local structural validator on IPv4 deletion-hunk
+  counts. Workflow #103 failed the same validator on a truncated IPv6
+  common-lock hunk.
+- Workflow [#104](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43728536752)
+  passed the structural validator (all 19 hunks, exact counts), and every
+  other hunk applied. Raw `git apply --check` then failed only at
+  `frontends/cmn/ecm_ipv6.c:100`: the final `*/` context line in the
+  management-thread comment was missing the source's leading space.
+- Commit `d51baa7` corrects that exact whitespace. Workflow
+  [#105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924)
+  is testing the corrected patch (Static **PASS**; PREPARE_ONLY source/config
+  preparation **IN PROGRESS** at last check).
 - Do not treat structural diff validation as proof of source compatibility.
   The gate is raw apply to the pinned archive **and** the full pinned ECM feed
   patch series, followed by compilation and hardware validation.
