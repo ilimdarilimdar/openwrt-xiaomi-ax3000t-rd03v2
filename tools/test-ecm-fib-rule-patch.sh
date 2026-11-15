@@ -123,6 +123,8 @@ grep -qF 'ecm_front_end_ipv4_stop_temp(1)' "$ECM_DB" ||
   die "v2 IPv4 temporary stop helper is not used"
 grep -qF 'ecm_front_end_ipv4_stop_temp(0)' "$ECM_DB" ||
   die "v2 IPv4 temporary start helper is not used"
+grep -qF 'ecm_front_end_ipv6_stop_temp(1)' "$ECM_DB" ||
+  die "v2 IPv6 temporary stop helper is not used"
 grep -qF 'ecm_front_end_ipv6_stop_temp(0)' "$ECM_DB" ||
   die "v2 IPv6 temporary start helper is not used"
 grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$ECM_DB" ||
