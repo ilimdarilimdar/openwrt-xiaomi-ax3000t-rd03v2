@@ -22,7 +22,8 @@
 
 ### Live CI checkpoint — 2026-11-15
 
-- Current branch HEAD: `a0e72ce6fa04a243849a96825f4891e0f0608b39`.
+- Latest code/test HEAD before the documentation-only refresh: `a0e72ce6fa04a243849a96825f4891e0f0608b39` (test-only callback guard).
+- Documentation-only commits after that checkpoint: `a8d15e9` (engineering manual) and `0b5bf9f` (CI snapshot); neither changes firmware source.
 - Firmware-source revision: `006e14a5d0348528a021943b1fd595cc233451db`. Commits `eba9d02` and `a0e72ce` update regression tests only; they do not change the ECM C patch.
 - Pinned OpenWrt/NSS tree: `c36db6321c11595dc45a160cdab36b5c2d787744`; kernel package version is **Linux 6.18.55**.
 - Pinned QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`; NSS/packages feed pins are recorded in `upstream.lock` and `feeds.lock`.
