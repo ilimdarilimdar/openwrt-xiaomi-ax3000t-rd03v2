@@ -282,6 +282,7 @@ done
 # (AUTOREMOVE), the feed check above already proves each one sits in the feed's patches
 # directory, so the package build applied it: a patch that fails stops the build.
 EC=$(ls -d "$TREE"/build_dir/target-*/linux-qualcommax_ipq50xx/qca-nss-ecm-* 2>/dev/null | head -1)
+# Regression gate: don't treat an AUTOREMOVE-cleaned package directory as patched source.
 # With CONFIG_AUTOREMOVE=y, OpenWrt may leave the package build directory name
 # behind while removing its source files. Only inspect the patched source when
 # the actual ECM database source is still present; otherwise verify the exact
