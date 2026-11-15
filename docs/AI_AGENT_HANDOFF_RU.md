@@ -3,31 +3,33 @@
 > **Назначение файла:** единая точка входа и рабочая опорная запись для любого следующего ИИ-агента, который продолжит разработку этой прошивки. Сначала прочитать этот файл, затем сверить живое состояние GitHub. Не считать сведения ниже неизменными: SHA, очередь CI и состояние сборки необходимо обновлять перед каждым действием.
 
 **Последняя сверка исходного состояния:** 2026-11-15, текущая сессия
-**Последний code/patch commit:** `bd9867c8bdb4042280f571e57b0c75071ffc582e` (patch 9002: atomic refcount для общего ECM temporary-stop API и исправленные hunk counts).
-**Последняя сверенная документационная точка:** `622aab14803859f150db7704686f9772714a6111`; branch HEAD следует перепроверять через GitHub перед каждым действием.
+**Последняя functional patch revision:** `eada97da6f1fa3c9f972cf0ac091ee988973fd48` (atomic stop refcount + `synchronize_net()` grace-period barrier).
+**Последний проверенный branch HEAD:** `d7be58a9e306a7fc565163c5104257f348163a12`; перед каждым действием получать актуальный HEAD из GitHub.
 ## Актуальная контрольная точка — 2026-11-15
 
-Последняя сверка GitHub Actions: 2026-11-15 13:47 UTC.
+Последняя live-сверка GitHub Actions: 2026-11-15 14:00 UTC.
 
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
-- Последняя функциональная ревизия patch 9002: `bd9867c8bdb4042280f571e57b0c75071ffc582e`; commit `6f54049` корректирует только diffstat patch. Последний проверенный branch HEAD после документационного коммита CI status: `622aab14803859f150db7704686f9772714a6111`.
-- CI #77, source `ac4ee43`: Static PASS и PREPARE_ONLY PASS, pinned archive hash и применение прежней версии patch 9002 после 31 feed-патча подтверждены. Full build **FAIL** в `package/feeds/nss/qca-nss-ecm`; пакетного compiler log в старом artifact нет, поэтому первопричина **UNKNOWN**.
-- CI #78, source `3614994`: Static PASS, PREPARE_ONLY и lifecycle preflight PASS. Full build всё ещё **IN_PROGRESS** на последней live-проверке. Это старая ревизия: без per-net RTNL correction `e80f964` и без atomic stop refcount.
-- CI #82 (`70f92cc`), #83 (`8ce56c7`), #84 (`2fba10a`) и #85 (`bd9867c`) были **CANCELLED** последующими push до получения результата по новой atomic preflight.
-- CI #86, run `43720816145`, commit `6f54049`: **PENDING** за #78 из-за сериализации workflow. Ожидаемая область запуска — Static + PREPARE_ONLY/preflight; в commit message нет `[full-build]`, следовательно он не должен строить полный образ.
-- Patch 9002 исправляет concurrency flaw исходного QSDK temporary-stop API. В pinned QSDK функции `ecm_front_end_ipv4_stop_temp()` и IPv6 были plain 0/1 assignment, а не atomic counters. Их одновременно используют route notifier, interface notifier и новый FIB worker. Одновременные вызовы могли преждевременно снять stop-флаг.
-- Candidate patch преобразует эти flags в `atomic_t`: stop использует `atomic_inc()`, release использует `atomic_dec_if_positive()`, все три packet-hook reads для каждой IP family используют `atomic_read()`. Так предотвращается premature re-enable и отрицательный счётчик.
-- Это nesting gate, **не quiescence barrier**: packet hooks, прошедшие stop-check до установки флага, не дожидаются завершения. Нужны дальнейшие lockdep/stress и hardware tests.
-- `tools/test-ecm-fib-rule-patch.sh` проверяет counter declarations, headers, acquire/release operations и все шесть atomic reads как на чистом pinned source, так и после полного feed patch series.
-- Текущая workflow upload-маска включает `openwrt-v2/logs/package/feeds/nss/**`; будущая полная сборка должна сохранить per-package compiler logs для установления фактической причины возможного ECM build failure.
-- Актуальная atomic patch revision пока **NOT TESTED by CI**: ожидает CI #86. Полная компиляция, notifier marker в `ecm.ko`, `verify-v2.sh` и аппаратная проверка также **NOT TESTED**. Основной роутер остаётся на штатной MiWiFi.
+- Последний проверенный source/patch HEAD перед этой документационной записью: `d7be58a9e306a7fc565163c5104257f348163a12`.
+- Functional patch 9002 обновлён commit `eada97da6f1fa3c9f972cf0ac091ee988973fd48`: после закрытия затронутых IPv4/IPv6 front-end stop gates worker вызывает `synchronize_net()` и только после grace period выполняет ECM DB defunct. Commit `d7be58a` корректирует hunk counts/diffstat этой patch revision.
+- Preflight script обновлён commit `c3261c761290a3b6a8be1f91f0b228172ce1d580`: он проверяет, что worker освобождает per-net RTNL, закрывает затронутые front-end gates, вызывает `synchronize_net()` и лишь затем делает DB walk.
+- CI #77, source `ac4ee43`: Static/PREPARE_ONLY PASS; Full build **FAIL** в `package/feeds/nss/qca-nss-ecm`. В старом artifact нет package compiler log; первопричина **UNKNOWN**.
+- CI #78, source `3614994`: Static и PREPARE_ONLY/lifecycle preflight PASS; Full build **IN_PROGRESS** на последней live-сверке. Это старая ревизия: без per-net RTNL correction, atomic stop refcount и нового `synchronize_net()` barrier.
+- CI #82 (`70f92cc`), #83 (`8ce56c7`), #84 (`2fba10a`), #85 (`bd9867c`), #86 (`6f54049`), #87 (`eada97d`) и #88 (`c3261c7`) **CANCELLED** последующими push до завершения соответствующих preflight.
+- CI #89, run `43721964323`, source commit `d7be58a`: **PENDING** за #78 из-за serialized workflow. Он содержит atomic stop counters, `synchronize_net()` barrier и новые preflight assertions. В commit message нет `[full-build]`, поэтому это Static + PREPARE_ONLY/preflight, не полноценная компиляция образа.
+- В pinned QSDK исходные `ecm_front_end_ipv4_stop_temp()` и IPv6 helper были plain 0/1 assignments. Они общие для route notifier, interface notifier и FIB worker, поэтому перекрывающиеся вызовы могли преждевременно снять stop-флаг.
+- Patch 9002 преобразует flags в `atomic_t`: `atomic_inc()` при stop, `atomic_dec_if_positive()` при release, все шесть IPv4/IPv6 packet-hook checks используют `atomic_read()`. Это предотвращает premature re-enable и отрицательный счётчик.
+- Atomic counter сам по себе не quiescence barrier. FIB worker дополнительно закрывает все затронутые gates, освобождает RTNL и ждёт `synchronize_net()`. Linux v6.18 `nf_hook()` выполняется внутри RCU read-side critical section; grace period ждёт уже вошедшие hooks. Новые hooks видят stop gate и пропускают ECM processing. Это не глобальный mutex для всех notifier DB walks и не гарантия сохранения conntrack/NAT-сессий.
+- `tools/test-ecm-fib-rule-patch.sh` проверяет atomic declarations/API, все шесть atomic reads, include для `synchronize_net()` и правильную последовательность RTNL unlock → stop gates → network grace period → DB defunct → release. Assertions запускаются на raw pinned QSDK и после полного feed-patch series.
+- CI artifact upload включает `openwrt-v2/logs/package/feeds/nss/**`; последующая полная сборка должна сохранить per-package compiler log, если ECM compile снова завершится ошибкой.
+- Новая atomic + quiescence revision пока **NOT TESTED by CI**: CI #89 ожидает слот за #78. Полная компиляция именно этой ревизии, marker в `ecm.ko`, `verify-v2.sh` и аппаратные tests остаются **NOT TESTED**. Основной роутер остаётся на штатной MiWiFi.
 Исторические записи ниже сохранены как журнал; при расхождении использовать
 эту контрольную точку и актуальное состояние GitHub.
 
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
 **Baseline source/config до эксперимента ECM FIB notifier:** `f5e828fa1cceb123fee81a1bafe5c9a71d0a81fb`.
-**Текущий source state:** firmware source HEAD `e80f964efb78331be0c5c8c26c29a724f0c668cb` включает candidate patch 9002, lifecycle shutdown hook и per-net RTNL barrier. Для более ранней lifecycle revision CI #78 подтвердил source preflight, но full build ещё выполняется. Новый per-net lock и обновлённый test script ждут CI #82. Ни одна ревизия 9002 пока не имеет подтверждённой успешной компиляции и hardware tests.
+**Текущий source state:** candidate patch 9002 содержит lifecycle shutdown hook, per-net RTNL snapshot barrier, atomic temporary-stop refcount и `synchronize_net()` grace period. CI #89 ожидает подтверждения этого source state. Ни одна актуальная ревизия 9002 пока не имеет подтверждённой полной компиляции и hardware tests.
 **Последний commit изменения CI workflow:** `472ed0ce1b2f2fa68c78f362edfc5b5f388bc7c7`.
 **История изменений:** после baseline добавлены source patch 9002 и lifecycle изменения в commit `3614994`; отдельные commits изменяли CI workflow и документацию. Не считать старую формулировку ниже, что после baseline были только docs/CI, актуальной.
 

@@ -67,38 +67,37 @@ Manual patch-context check (2026-11-15): the exact `package/nss/luci-app-nss/Mak
 The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recursive dependency is absent after patch 0014. Three unrelated diagnostics remain for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; all three package choices are unset in the generated final `.config`. Keep these warnings visible, but do not mistake them for a failure of the selected NSS image configuration.
 
 ## Current validation snapshot — 2026-11-15
-_Last live GitHub Actions check: 2026-11-15 13:47 UTC._
+_Last live GitHub Actions check: 2026-11-15 14:00 UTC._
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Latest functional ECM patch revision: `bd9867c8bdb4042280f571e57b0c75071ffc582e`; later commit `6f54049` corrects only its displayed diffstat. The current branch HEAD at this check is `6f54049aea05f93ef06adab74662f502943c89eb`.
-- Patch 9002 now adds an atomic nesting count to the pinned QSDK `stop_temp()` API. The pinned baseline had plain `int` assignment, so concurrent route notifier, interface notifier and FIB worker operations could clear one another's stop state. The candidate uses `atomic_inc()`, `atomic_dec_if_positive()` and `atomic_read()` at all six IPv4/IPv6 packet-hook checks. This corrects the earlier incorrect description that the original v2 helpers already used atomic nesting counters.
-- The stop counter is a nesting gate, **not** a quiescence barrier. It does not wait for packet hooks that already passed the stop check.
+- Last checked code/patch HEAD before this docs refresh: `d7be58a9e306a7fc565163c5104257f348163a12`. Functional patch update `eada97d` adds an RCU/network grace-period barrier; `d7be58a` recalculates hunk counts/diffstat. Preflight update `c3261c7` checks the new ordering.
+- Patch 9002 retains the atomic nesting fix for the original QSDK plain 0/1 `stop_temp()` flags: `atomic_inc()`, `atomic_dec_if_positive()`, and `atomic_read()` at all six IPv4/IPv6 packet-hook checks.
+- The FIB worker now closes all affected front-end gates, releases `init_net`'s per-net RTNL lock, calls `synchronize_net()` once, then defuncts the selected family connections and releases its gates. This drains pre-existing Netfilter hook readers before the ECM DB walk. It does not add a global mutex around unrelated route/interface notifier DB walks or preserve conntrack/NAT sessions.
 
 ### Workflow results
 
-- Workflow #77, [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463), tested source revision `ac4ee43c79879c8bb557a26c252eb442aa5a3654`. Static checks and PREPARE_ONLY passed; the full build failed at `package/feeds/nss/qca-nss-ecm`. The old artifact omitted package-specific logs, so the actual compiler diagnostic was not captured. The precise cause remains **UNKNOWN**.
-- Workflow #78, [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665), tests lifecycle revision `36149940c8eb00df46d14b7bb10e747ec9666f3b`. Static checks and PREPARE_ONLY/lifecycle preflight passed. Its full-build job was **IN_PROGRESS** at the last live check. It does not include later per-net RTNL or atomic stop-counter changes.
-- Workflow #82, run `43715272931`, commit `70f92cc`, was **CANCELLED** before the updated worker was validated.
-- Workflows #83 (`8ce56c7`), #84 (`2fba10a`) and #85 (`bd9867c`) were each **CANCELLED** by newer pushes before providing validation results.
-- Workflow #86, [run 43720816145](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43720816145), targets HEAD `6f54049`, which contains the atomic temporary-stop patch and its preflight checks. At the last live check it was **PENDING** behind #78 because runs are serialized on the branch. Its commit message does not include `[full-build]`, so it is expected to run Static + PREPARE_ONLY/preflight only, not a full image build.
+- Workflow #77, [run 43708414463](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43708414463), tested source `ac4ee43c79879c8bb557a26c252eb442aa5a3654`. Static/PREPARE_ONLY passed; full build failed at `package/feeds/nss/qca-nss-ecm`. The old artifact omitted package-specific logs, so the real compiler diagnostic was not captured. Cause remains **UNKNOWN**.
+- Workflow #78, [run 43709621665](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43709621665), tests lifecycle revision `36149940c8eb00df46d14b7bb10e747ec9666f3b`. Static and PREPARE_ONLY/lifecycle preflight passed; Full build remains **IN_PROGRESS** at last live check. This SHA does not include per-net RTNL, atomic stop counters or the new `synchronize_net()` barrier.
+- Workflow #82 (`70f92cc`), #83 (`8ce56c7`), #84 (`2fba10a`), #85 (`bd9867c`), #86 (`6f54049`), #87 (`eada97d`) and #88 (`c3261c7`) were **CANCELLED** by later pushes before their validation jobs finished.
+- Workflow #89, [run 43721964323](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43721964323), targets commit `d7be58a`. At last check it was **PENDING** behind #78 due to branch-level serialization. Its commit message does not include `[full-build]`, so it is expected to run Static + PREPARE_ONLY/preflight, not the full image build.
 
-The workflow now uploads package-specific NSS logs under `openwrt-v2/logs/package/feeds/nss/**`. This path matches the pinned OpenWrt `include/subdir.mk` logging layout: with `BUILD_LOG=1`, compile output is stored under `logs/package/<feed>/<package>/`. A subsequent full build should therefore expose the actual ECM compiler diagnostic if that package fails again.
+The workflow uploads package-specific NSS logs under `openwrt-v2/logs/package/feeds/nss/**`, matching the pinned OpenWrt `include/subdir.mk` layout when `BUILD_LOG=1`.
 
 ### Source-level findings
 
-- Linux v6.18 defines `rtnl_net_lock()` and `rtnl_net_unlock()`; FIB rule changes assert the matching per-net RTNL lock before notifier dispatch. The worker snapshots/clears pending family bits under `init_net`'s lock, then releases it before walking the ECM database.
-- Linux v6.18 workqueue code clears the work item's pending bit before invoking its function and handles a requeued work item without running it concurrently with itself. This supports the worker's ability to schedule another pass when a rule change arrives during a DB walk.
-- The exact pinned QSDK 14.0 baseline implements frontend `stop_temp()` as plain flag assignment. Patch 9002 changes this shared API to guarded atomic nesting semantics to prevent overlapping notifier/worker operations from re-enabling a frontend early. The preflight checks the type, acquire/release operations, headers and all six packet-hook reads on raw source and after the complete feed patch series.
-- These are source/API and preflight assertions only. They do not prove successful ECM compilation, module load safety, NSS offload behavior or Dual-WAN correctness.
-- FIB notifier registration replays existing rules as ADD events. Loading/reloading ECM can therefore cause a broad per-family defunct/re-acceleration pass. It is not session preservation across WAN address changes.
+- Linux v6.18 FIB rule changes use the matching per-net RTNL lock; worker pending-bit snapshots are taken under `rtnl_net_lock(&init_net)`, then RTNL is released before waiting or walking ECM DB.
+- The exact pinned QSDK 14.0 baseline implements frontend `stop_temp()` as plain flag assignment. Patch 9002 converts those shared flags to atomic nesting counters so concurrent route notifier, interface notifier and FIB worker callers cannot prematurely clear each other's stop state.
+- Linux v6.18 `nf_hook()` holds `rcu_read_lock()` across the complete hook chain ([source](https://github.com/torvalds/linux/blob/v6.18/include/linux/netfilter.h#L227-L277)). `synchronize_net()` waits for pre-existing network RCU readers ([implementation](https://github.com/torvalds/linux/blob/v6.18/net/core/dev.c#L12108-L12121)). Patch 9002 raises every affected stop gate before this grace period and runs the DB defunct pass only afterwards. Preflight checks this ordering on raw pinned source and after the complete ECM feed patch series.
+- These source/API and prepare-time assertions do not prove successful ECM compilation, module load safety, NSS offload behavior or Dual-WAN correctness.
+- FIB notifier registration replays existing rules as ADD events. Loading/reloading ECM can therefore trigger a broad family-wide defunct/re-acceleration pass; this is not session preservation across WAN address changes.
 
 ### Required gates still open
 
-1. Successful preflight of the latest atomic patch revision in CI #86.
-2. A separate successful full build of that exact patch revision, including compilation of `qca-nss-ecm`.
+1. CI #89 successful Static + PREPARE_ONLY, including pinned QSDK hash, full feed-series apply and the new hook-quiescence ordering assertions.
+2. A separate successful full build of that exact functional patch revision, including `qca-nss-ecm` compilation.
 3. Confirmation that the built `ecm.ko` contains the expected notifier marker.
-4. Successful final `verify-v2.sh` checks against the generated image/root filesystem.
-5. Controlled second-router tests: overlapping route/interface/FIB stop events, module load/unload, FIB rule churn, mwan3 restart and cable-pull failover; IPv4/IPv6 separately; NSS/ECM counters, throughput, CPU, latency and packet loss.
-6. No primary-router flashing until all source, build/image and second-router hardware gates pass.
+4. Successful final `verify-v2.sh` against the generated root filesystem/image.
+5. Controlled second-router tests: overlapping route/interface/FIB stop events, Netfilter hook drain, module load/unload, FIB rule churn, mwan3 restart and cable-pull failover; IPv4/IPv6 separately; NSS/ECM counters, throughput, CPU, latency and packet loss.
+6. No primary-router flashing until source, full build/image and second-router hardware gates pass.
 
 CI full-build jobs use a disposable signing key and an `example.invalid` repository URL. They upload logs only and do not publish a usable release image. Hardware validation remains **NOT TESTED**; keep the primary router on stock firmware.

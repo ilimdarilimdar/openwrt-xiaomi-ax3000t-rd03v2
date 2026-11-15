@@ -315,6 +315,26 @@ backport pattern: a competing release cannot decrement below zero. The new
 preflight checks the counter type, helper body, all six reads and header API
 against both the clean pinned source and the complete pinned feed-patch order.
 
-This is still a nesting gate, not a quiescence barrier. It does not wait for
-packet hooks that were already past their stop check. Compile, lockdep/stress,
-module lifecycle and hardware validation remain required.
+The atomic counter alone is not a grace-period barrier. The FIB worker now
+raises each affected frontend stop gate, then calls `synchronize_net()` once,
+after releasing `init_net`'s per-net RTNL lock and before the database walk.
+Linux v6.18's `nf_hook()` holds `rcu_read_lock()` across the complete hook
+chain, while `synchronize_net()` waits for pre-existing network RCU readers.
+Thus hooks that already passed the stop check finish before the FIB worker
+starts defuncting connections; later hooks see the raised atomic gate and
+return without ECM processing. The wait runs in workqueue context with RTNL
+released.
+
+This barrier is specific to the FIB worker. Existing route/interface notifier
+walks still rely on the shared atomic nesting gate and ECM DB locking; this
+change does not add a global mutex around every notifier walk. It also does
+not preserve conntrack/NAT sessions across WAN address changes. Compile,
+lockdep/stress, module lifecycle and hardware validation remain required.
+
+Kernel source references for the exact 6.18 API:
+- `nf_hook()` RCU critical section:
+  https://github.com/torvalds/linux/blob/v6.18/include/linux/netfilter.h#L227-L277
+- `synchronize_net()` implementation:
+  https://github.com/torvalds/linux/blob/v6.18/net/core/dev.c#L12108-L12121
+- `synchronize_net()` declaration:
+  https://github.com/torvalds/linux/blob/v6.18/include/linux/netdevice.h#L90
