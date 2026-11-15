@@ -98,7 +98,7 @@ jobs:
           if missing_packages:
               sys.exit(f"FAIL: missing image manifest entries: {missing_packages}")
 
-          if "does NOT include the v1.x ECM FIB-rule" not in Path("docs/dualwan.md").read_text():
+          if "must not be copied into v2" not in Path("docs/dualwan.md").read_text():
               sys.exit("FAIL: Dual-WAN documentation must state that the v1 ECM patch is not in v2")
 
           print("PASS: one RD03v2 target")
