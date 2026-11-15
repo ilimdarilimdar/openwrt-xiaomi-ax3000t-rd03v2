@@ -24,7 +24,7 @@
   `ip6tables-nft` и `ipset`. Это проверка конфигурации, не runtime/offload test.
 - Причина package-level build failure пока не установлена: workflow #77
   выгрузил верхнеуровневые `*.log`, но пропустил подробный OpenWrt build
-  log из `openwrt-v2/logs/feeds/nss/qca-nss-ecm/`. Workflow обновлён
+  log из `openwrt-v2/logs/package/feeds/nss/qca-nss-ecm/`. Workflow обновлён
   включать эту NSS package-log папку в следующие build artifacts.
 - CI #78, run `43709621665`, source `3614994`: на последней live-проверке
   `in_progress`; Static PASS, PREPARE_ONLY job выполнялся, ECM preflight

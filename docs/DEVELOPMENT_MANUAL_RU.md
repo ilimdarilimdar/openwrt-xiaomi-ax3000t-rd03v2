@@ -28,7 +28,7 @@
 - CI #78 (3614994): in_progress; Static PASS, PREPARE_ONLY ещё выполнялся
   на последней live-проверке. Результат обновлённого ECM lifecycle preflight
   пока не подтверждён.
-- Workflow дополнен загрузкой openwrt-v2/logs/feeds/nss/**, чтобы следующая
+- Workflow настроен загружать openwrt-v2/logs/package/feeds/nss/**, чтобы следующая
   полная сборка сохраняла диагностические логи NSS/ECM пакетов.
 - Не переносить test image на primary router. Требуются ECM compile, marker
   в ecm.ko, verify-v2.sh и контролируемые испытания на втором устройстве.

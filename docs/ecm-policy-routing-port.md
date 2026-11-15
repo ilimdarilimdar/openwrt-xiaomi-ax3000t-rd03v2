@@ -279,8 +279,8 @@ is now `in_progress`: Static checks passed, while PREPARE_ONLY was still
 running and the revised preflight had not yet started at the last live check.
 Run #77 must not be counted as a compile result for commit `3614994`.
 Its full build failed in `qca-nss-ecm`; the summary artifact omitted the
-per-package compiler log. The workflow now includes
-`openwrt-v2/logs/feeds/nss/**` in the build artifact so a subsequent run can
+per-package compiler log. The next workflow includes
+`openwrt-v2/logs/package/feeds/nss/**` in the build artifact so a subsequent run can
 expose the detailed NSS/ECM diagnostics.
 
 Even a green source-apply test does not prove that `ecm.ko` compiles or runs.

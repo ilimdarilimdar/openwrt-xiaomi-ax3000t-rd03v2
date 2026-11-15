@@ -270,7 +270,7 @@ jobs:
           name: rd03v2-build-logs-${{ github.sha }}
           path: |
             openwrt-v2/*.log
-            openwrt-v2/logs/feeds/nss/**
+            openwrt-v2/logs/package/feeds/nss/**
             openwrt-v2/diffconfig.txt
             openwrt-v2/watchdog-*-tests.log
           if-no-files-found: warn
