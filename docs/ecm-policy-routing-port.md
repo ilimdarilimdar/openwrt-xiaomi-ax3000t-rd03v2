@@ -100,6 +100,7 @@ building a sysupgrade image.
 
 ## v2 source review and candidate patch status (2026-11-15)
 
+**RTNL publication-order race and barrier:** source inspection found that Linux 6.18's rule-add notifier is called before the new rule is linked into the rules list, while rule-delete notifies after `list_del_rcu()` but before releasing RTNL. An asynchronously scheduled ECM worker could otherwise defunct flows before an ADD has become visible. The candidate therefore performs a short `rtnl_lock(); rtnl_unlock();` barrier at the beginning of its work function. For `init_net`, `rtnl_net_lock()` takes the global RTNL lock before the per-net lock; waiting for the global lock to become available ensures the originating rule-change transaction has left its RTNL critical section. The worker then releases RTNL **before** traversing the ECM database, avoiding a long RTNL hold or lock-order inversion. The preflight script asserts both calls.
 The Linux 6.18 event path was also checked in the exact tagged kernel sources:
 
 - `net/core/fib_rules.c` builds `fib_rule_notifier_info` with
