@@ -70,6 +70,8 @@ grep -qF 'rtnl_lock();' "$ECM_DB" ||
   die "worker does not wait for the RTNL-protected rule update to finish"
 grep -qF 'rtnl_unlock();' "$ECM_DB" ||
   die "worker does not release RTNL before walking the ECM database"
+grep -qF 'Rule ADD/DEL callbacks run inside the RTNL-protected rule update.' "$ECM_DB" ||
+  die "RTNL barrier rationale is missing"
 grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
 grep -qF 'ecm_db_connection_defunct_ip_version(4)' "$ECM_DB" ||
