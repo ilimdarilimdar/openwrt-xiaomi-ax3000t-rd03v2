@@ -88,10 +88,13 @@ The PREPARE_ONLY artifact from 2026-11-15 was inspected: the selected NSS recurs
   was triggered for that lifecycle change and is PENDING behind #77 because
   the workflow serializes runs for this branch. Its PREPARE_ONLY preflight and
   full build have not run yet.
-- The PREPARE_ONLY artifact from #73 (ID `14159280711`) has no selected NSS
-  recursive-dependency diagnostic after tree patch 0014. Three remaining
-  Kconfig diagnostics concern Qt5 GUI, fwknopd/LuCI fwknopd and
-  squeezelite-custom; those package choices are unset in the final `.config`.
+- The PREPARE_ONLY artifact from #77 (ID `14159587339`) was inspected.
+  It has no selected NSS recursive-dependency diagnostic after tree patch
+  0014. Three remaining Kconfig diagnostics concern Qt5 GUI,
+  fwknopd/LuCI fwknopd and squeezelite-custom; those package choices are
+  unset in the final `.config`. The same artifact's `diffconfig.txt` confirms
+  the IPQ50xx AX3000T v2 target, the 256M ath11k NSS memory profile,
+  NSS/ECM modules, mwan3, nft-backed iptables/ip6tables and ipset.
 
 Do not treat #77 as proof that the latest lifecycle revision compiles: it uses
 `ac4ee43`, not `3614994`. The revised patch must pass #78 PREPARE_ONLY,
