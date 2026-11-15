@@ -87,6 +87,62 @@ and [the v1.14 release](https://github.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/r
    repository; they are not installed in the base image. VPN traffic is CPU
    path on this platform, while ordinary non-VPN NAT can still use NSS.
 
+## Firewall backend: mwan3 2.12.5 with firewall4
+
+The pinned `packages` feed's mwan3 2.12.5 package depends on `iptables`,
+`ipset`, `iptables-mod-conntrack-extra`, `iptables-mod-ipopt`, and
+`ip6tables` when IPv6 is enabled. Its scripts program mangle chains through
+`iptables -t mangle -w`, `ip6tables -t mangle -w`,
+`iptables-restore -T mangle -w -n`, their IPv6 equivalents and `ipset
+restore`. It also creates `ip rule` entries for per-WAN routing tables.
+
+The pinned OpenWrt iptables package defines `iptables-nft` and
+`ip6tables-nft` as the default providers for the `iptables` and
+`ip6tables` virtual packages. Both use `xtables-nft`; that package depends
+on `kmod-nft-compat`. This means mwan3's xtables commands are translated to
+nf_tables rules, rather than using the legacy xtables backend, and can coexist
+with firewall4's native nftables rules. The image config now selects these
+providers and the required ipset/extensions explicitly; the image verifier
+checks their presence.
+
+This is a package/API compatibility result, **not** runtime proof. Before
+calling the firewall integration validated, the target router must pass all
+of the following with firewall4 running and both WAN interfaces online:
+
+1. `iptables --version` and `ip6tables --version` both report
+   `nf_tables`.
+2. Starting mwan3 creates `mwan3_hook` in IPv4 and IPv6 mangle tables,
+   without errors in `logread`.
+3. `ipset list -name` shows the mwan3 IPv4/IPv6 sets; the nft ruleset shows
+   both the firewall4 table and the xtables-managed mangle tables.
+4. `mwan3 status` reports the expected logical interfaces as online, and
+   `ip -4 rule` / `ip -6 rule` show mwan3's fwmark lookup rules.
+5. Repeated interface ifdown/ifup, mwan3 restart and cable-pull failover
+   leave the firewall4 ruleset intact and recreate the mwan3 chains and sets.
+
+Useful capture commands:
+
+```sh
+iptables --version
+ip6tables --version
+iptables -t mangle -S
+ip6tables -t mangle -S
+ipset list -name
+nft list ruleset
+mwan3 status
+ip -4 rule show
+ip -6 rule show
+ip -4 route show table all
+ip -6 route show table all
+logread | grep -Ei 'mwan3|iptables|ip6tables|nft'
+```
+
+The generated kernel config must also retain `CONFIG_FIB_RULES=y`,
+`CONFIG_IP_MULTIPLE_TABLES=y`, `CONFIG_IPV6=y` and
+`CONFIG_IPV6_MULTIPLE_TABLES=y`. OpenWrt's Kconfig sets the IPv6 multiple
+routing-table option when IPv6 is enabled; `verify-v2.sh` checks the final
+kernel config rather than assuming the defconfig request survived.
+
 ## Required v2 validation
 
 Record image tag, kernel, feed pins, NSS mode, actual WAN logical names,

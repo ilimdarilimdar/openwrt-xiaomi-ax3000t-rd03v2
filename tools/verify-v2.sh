@@ -56,6 +56,9 @@ chk "NSS feed is its pin (plus feed-overlay files, if any)" "$(yes_ python3 "$V2
 
 echo "=== configuration"
 chk "one device in .config" "$(grep -c '^CONFIG_TARGET_DEVICE_.*=y' "$TREE/.config")" 1
+for c in CONFIG_IPV6=y CONFIG_PACKAGE_iptables-nft=y CONFIG_PACKAGE_ip6tables-nft=y CONFIG_PACKAGE_xtables-nft=y CONFIG_PACKAGE_ipset=y CONFIG_PACKAGE_iptables-mod-conntrack-extra=y CONFIG_PACKAGE_iptables-mod-ipopt=y; do
+	chk "$c" "$(grep -cxF "$c" "$TREE/.config")" 1
+done
 for c in CONFIG_ATH11K_MEM_PROFILE_256M=y CONFIG_NSS_MEM_PROFILE_LOW=y CONFIG_ATH11K_NSS_SUPPORT=y CONFIG_ATH11K_NSS_MEM_PROFILE_256M=y \
 	CONFIG_NSS_FIRMWARE_VERSION_12_5=y; do
 	chk "$c" "$(grep -cxF "$c" "$TREE/.config")" 1
@@ -70,7 +73,7 @@ if [ -f "$KC" ]; then
 	chk "kernel: no serial sysrq" "$(grep -c '^CONFIG_MAGIC_SYSRQ_SERIAL=y' "$KC")" 0
 	chk "kernel: default sysrq mask" "$(grep -c '^CONFIG_MAGIC_SYSRQ_DEFAULT_ENABLE=0x1b6' "$KC")" 0
 	chk "kernel: no /dev/mem" "$(grep -c '^CONFIG_DEVMEM=y' "$KC")" 0
-	for c in CONFIG_I2C_QUP=y CONFIG_I2C_CHARDEV=y CONFIG_QCOM_SMP2P=y CONFIG_QCOM_Q6V5_WCSS_SEC=y; do
+	for c in CONFIG_I2C_QUP=y CONFIG_I2C_CHARDEV=y CONFIG_QCOM_SMP2P=y CONFIG_QCOM_Q6V5_WCSS_SEC=y CONFIG_FIB_RULES=y CONFIG_IP_MULTIPLE_TABLES=y CONFIG_IPV6=y CONFIG_IPV6_MULTIPLE_TABLES=y; do
 		chk "kernel: $c" "$(grep -cxF "$c" "$KC")" 1
 	done
 else
