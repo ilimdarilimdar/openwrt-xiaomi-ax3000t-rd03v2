@@ -74,11 +74,11 @@ grep -qF 'cancel_work_sync(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "notifier workqueue teardown is missing after patch"
 grep -qF 'schedule_work(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "atomic callback does not defer work"
-grep -qF 'rtnl_lock();' "$ECM_DB" ||
+grep -qF 'rtnl_net_lock(&init_net);' "$ECM_DB" ||
   die "worker does not wait for the RTNL-protected rule update to finish"
-grep -qF 'rtnl_unlock();' "$ECM_DB" ||
+grep -qF 'rtnl_net_unlock(&init_net);' "$ECM_DB" ||
   die "worker does not release RTNL before walking the ECM database"
-grep -qF 'Rule ADD/DEL callbacks run inside the RTNL-protected rule update.' "$ECM_DB" ||
+grep -qF 'Rule ADD/DEL callbacks run inside init_net\'s per-net RTNL update.' "$ECM_DB" ||
   die "RTNL barrier rationale is missing"
 
 python3 - "$ECM_DB" <<'PY'
@@ -93,10 +93,10 @@ if start < 0 or end < 0:
 worker = source[start:end]
 
 ordered = [
-    "rtnl_lock();",
+    "rtnl_net_lock(&init_net);",
     "ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4",
     "ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6",
-    "rtnl_unlock();",
+    "rtnl_net_unlock(&init_net);",
     "if (ipv4_pending)",
     "ecm_front_end_ipv4_stop_temp(1)",
     "ecm_db_connection_defunct_ip_version(4)",

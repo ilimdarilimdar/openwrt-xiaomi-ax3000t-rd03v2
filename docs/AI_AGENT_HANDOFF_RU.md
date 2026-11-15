@@ -55,6 +55,18 @@
 
 ---
 
+### ECM worker lock alignment — 2026-11-15
+
+В patch 9002 worker использует `rtnl_net_lock(&init_net)` /
+`rtnl_net_unlock(&init_net)`, совпадая с per-net RTNL primitive в Linux 6.18
+FIB rule operations. Не использовать только общий `rtnl_lock()`: при
+`CONFIG_DEBUG_NET_SMALL_RTNL` он может не сериализовать worker с изменением
+rules в `init_net`. Static preflight теперь должен проверять именно net-scoped
+lock и его release до ECM DB walk. Это source-level guard, не замена compile и
+hardware stress tests.
+
+---
+
 ### Дополнительная контрольная точка — mwan3 conntrack/failover audit (2026-11-15)
 
 Проверен точный pinned source mwan3 2.12.5 из packages commit
