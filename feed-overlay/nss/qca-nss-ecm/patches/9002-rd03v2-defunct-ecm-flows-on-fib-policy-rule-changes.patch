@@ -33,7 +33,7 @@ index c97f625..0000000 100644
 +#include <linux/rtnetlink.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-
+ 
 @@ -469,9 +473,103 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
@@ -137,7 +137,7 @@ index c97f625..0000000 100644
  /*
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
-
+ 
 @@ -763,4 +861,18 @@
  	}
  #endif
@@ -156,7 +156,7 @@ index c97f625..0000000 100644
 +	}
 +
  	return ret;
-
+ 
 @@ -785,9 +897,20 @@
  void ecm_db_exit(void)
  {
