@@ -42,6 +42,62 @@ The v2 project's own VALIDATION.md says the current ECM has no FIB-rule
 notifier and lists issue #36 as not fully settled on the v2 test bench. That
 is the reason for a separate v2 port rather than blindly applying the v1 patch.
 
+## Reproducible source and patch preflight
+
+The v2 ECM archive URL and digest are pinned by the qca-nss-ecm package
+Makefile. Use these commands in the actual OpenWrt build workspace (or a
+separate Linux host) to test the v1 reference patch against the exact v2 source
+without changing the active feed overlay:
+
+```sh
+set -eu
+WORK=/tmp/rd03v2-ecm-v2-preflight
+mkdir -p "$WORK/source" "$WORK/reference"
+
+ARCHIVE=qca-nss-ecm-14.0.2026.09.06.7894b769eeb64f1c44fde547a107a8b866997590.tar.zst
+URL=https://github.com/kuncy7/nss-packages/releases/download/nss-source-tarballs/$ARCHIVE
+SHA256=a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886
+
+curl -fL "$URL" -o "$WORK/reference/$ARCHIVE"
+printf '%s  %s\n' "$SHA256" "$WORK/reference/$ARCHIVE" | sha256sum -c -
+
+PATCH_URL=https://raw.githubusercontent.com/ADCDS/openwrt-xiaomi-ax3000t-rd03v2/fix/ecm-policy-rule-defunct/nss/feed-patches/qca-nss-ecm/0030-ecm-db-defunct-on-policy-rule-changes.patch
+curl -fL "$PATCH_URL" -o "$WORK/reference/0030-v1-reference.patch"
+
+tar --zstd -xf "$WORK/reference/$ARCHIVE" -C "$WORK/source"
+ECM_DB=$(find "$WORK/source" -type f -path '*/ecm_db/ecm_db.c' -print -quit)
+test -n "$ECM_DB"
+ECM_ROOT=${ECM_DB%/ecm_db/ecm_db.c}
+
+(
+  cd "$ECM_ROOT"
+  patch -p1 --dry-run < "$WORK/reference/0030-v1-reference.patch"
+)
+```
+
+Interpretation:
+
+- A successful dry-run means the v1 patch context still matches the v2 source;
+  it does **not** prove that the resulting module compiles or works.
+- A failed dry-run is a stop condition. Inspect the actual v2 function bodies
+  and port the notifier against their current signatures and teardown order.
+  Do not hand-edit hunk offsets until the code context has been compared.
+- The reference patch must not be copied into
+  `feed-overlay/nss/qca-nss-ecm/patches/` yet. The active overlay currently
+  contains only the existing RD03v2 patch 9001; a candidate 9002 belongs there
+  only after review and successful compilation.
+- After an approved patch is staged, compile the feed package in the prepared
+  OpenWrt tree with:
+
+```sh
+make package/feeds/nss/qca-nss-ecm/compile V=s
+```
+
+Then inspect the produced `ecm.ko` for the runtime registration message
+`ECM: policy routing rule changes defunct accelerated connections`, run
+`tools/verify-v2.sh`, and test the module on a controlled bench before
+building a sysupgrade image.
+
 ## Porting checklist
 
 - Extract and hash-verify the exact source archive from the pinned qca-nss-ecm
