@@ -2,12 +2,23 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-16, live-проверка refs, Actions runs #124–#129, job steps/logs, ключевых source/config/test файлов и документации.
+**Последняя сверка:** 2026-11-16, повторная live-ревизия branch ref/compare, Actions #124–#129 и job logs, pinned feed Makefiles, config, ECM 9001/9002, watchdog, verifier, build workflow и документации.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 **Реестр:** [docs/OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 **Branch HEAD в начале live-перепроверки:** `3cfa87d72b81cde60d2ec597458e63d2067071e3` (2026-11-16). Compare от code/test baseline на этой точке показывал 34 коммита вперёд, 0 назад; изменены только README/документы. Последующие коммиты этой сессии обновляют только реестр и handoff.
 **Текущий code/test HEAD:** `49d3579437389e2ffc111b94a08839ef7bd29ae7` (guard: требовать `CONFIG_AUTOREMOVE=y` при fallback проверки ECM sources после очистки build dir). Source/config/test/workflow после него не менялись.
 **Состояние CI:** #124 собрал `qca-nss-ecm` и создал sysupgrade/initramfs images; финальный `verify-v2` завершился с 3 FAIL: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE. #125/#126 остановились на whitespace check до PREPARE_ONLY; #127: Static и PREPARE_ONLY **PASS**, full-build прерван runner shutdown (exit 143); #128/#129 отменены до создания jobs. Для code/test HEAD `49d3579` нет отдельного workflow run/status. Watchdog runtime suite и исправление AUTOREMOVE verifier всё ещё **NOT CI-VALIDATED**. Hardware Dual-WAN/NSS — **NOT TESTED**.
+**Повторная ревизия:** на старте live audit Branch HEAD был `ec0d2ae5f0ac065ab6779c3be61431df3731dc68`; code/test baseline остался `49d3579437389e2ffc111b94a08839ef7bd29ae7`. Compare: 38 ahead / 0 behind, изменены только README и docs; source/config/tests/workflow не менялись. Ветка не защищена, commit status checks пусты.
+**Новые блокеры из ревизии:** workflow не поддерживает `workflow_dispatch`, а full-build работает только для push с `[full-build]`; ручной запуск невозможен. Patch 9002 при ошибке `register_fib_notifier()` пишет warning и продолжает ECM init; preflight test guard намеренно запрещает использовать `ret` для результата регистрации. Fail-safe политика отсутствует — см. CI-04 и ECM-05 в реестре.
+**Подтверждённые pinned feed options:** mwan3 2.12.5; qca-nss-ecm включает `ECM_CLASSIFIER_MARK_ENABLE=y` на qualcommax. Runtime fwmark/NSS datapath всё ещё **NOT TESTED**.
+
+
+## Следующее действие без повторного аудита
+
+1. Прочитать [реестр незакрытых задач](OPEN_ITEMS_REGISTER_RU.md), особенно CI-04, CI-01–CI-03 и ECM-05.
+2. Сначала решить/реализовать контролируемый manual dispatch для workflow. Не создавать пустой commit ради CI.
+3. Получить завершённый full-build + `verify-v2` на точном code/test SHA `49d3579` (либо на новом явно записанном source/test SHA).
+4. До аппаратных испытаний согласовать fail-safe поведение, если FIB notifier не регистрируется. При этом основной домашний роутер остаётся на stock MiWiFi, все испытания — только на втором RD03v2 после recovery gate HW-01.
 
 ## Текущая контрольная точка
 
