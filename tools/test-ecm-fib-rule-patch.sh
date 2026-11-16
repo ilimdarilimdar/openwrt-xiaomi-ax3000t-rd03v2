@@ -452,9 +452,23 @@ grep -qF 'ECM: FIB notifier registration failed' "$ECM_DB" ||
 grep -qF 'fib_ret = register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$ECM_DB" ||
   die "FIB notifier registration result is not captured separately from route-notifier status"
 grep -qF 'ecm_db_exit();' "$ECM_DB" ||
-  die "FIB notifier registration failure does not tear down the initialized ECM database"
+  die "FIB or route notifier registration failure does not tear down the initialized ECM database"
 grep -qF 'return fib_ret;' "$ECM_DB" ||
   die "FIB notifier registration failure does not abort ECM module initialization"
+grep -qF 'route_ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb)' "$ECM_DB" ||
+  die "IPv4 route notifier result is not captured separately"
+grep -qF 'route_ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb)' "$ECM_DB" ||
+  die "IPv6 route notifier result is not captured separately"
+grep -qF 'ecm_db_ipv4_route_registered = true;' "$ECM_DB" ||
+  die "IPv4 route notifier registration state is not recorded"
+grep -qF 'ecm_db_ipv6_route_registered = true;' "$ECM_DB" ||
+  die "IPv6 route notifier registration state is not recorded"
+if grep -qF 'ret = ip_rt_register_notifier(' "$ECM_DB" || grep -qF 'ret = rt6_register_notifier(' "$ECM_DB"; then
+  die "route notifier registration may overwrite the other family's failure status"
+fi
+if grep -qF 'if (ecm_db_ipv4_route_enable) {' "$ECM_DB" || grep -qF 'if (ecm_db_ipv6_route_enable) {' "$ECM_DB"; then
+  die "route notifier teardown is still keyed to enable flags instead of actual registration state"
+fi
 if grep -qF 'ret = register_fib_notifier(' "$ECM_DB"; then
   die "notifier registration return must not overwrite ecm_db_init route status"
 fi
@@ -509,7 +523,7 @@ import re
 import sys
 
 registration = "register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)"
-guard_pattern = re.compile(r"if\s*\(ret\)\s*\{\s*return\s+ret;\s*\}", re.S)
+guard_pattern = re.compile(r"if\s*\(ret\)\s*\{\s*ecm_db_exit\(\);\s*return\s+ret;\s*\}", re.S)
 
 def check_source(db_path, init_path, header_path):
     db = Path(db_path).read_text()
@@ -537,7 +551,22 @@ def check_source(db_path, init_path, header_path):
         if m.start() > max(route_positions)
     ]
     if not guards:
-        sys.exit(f"FAIL: FIB registration lacks route-notifier init guard in {db_path}")
+        sys.exit(f"FAIL: route/FIB registration lacks DB teardown guard in {db_path}")
+
+    # The two route notifier results must be tracked separately. The first
+    # error survives a later success or a second failure.
+    if "int route_ret = 0;" not in db_init:
+        sys.exit(f"FAIL: route notifier calls do not have a separate result variable in {db_path}")
+    if "route_ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb)" not in db_init:
+        sys.exit(f"FAIL: IPv4 notifier result is not captured in {db_path}")
+    if "route_ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb)" not in db_init:
+        sys.exit(f"FAIL: IPv6 notifier result is not captured in {db_path}")
+    if "ret = ip_rt_register_notifier(" in db_init or "ret = rt6_register_notifier(" in db_init:
+        sys.exit(f"FAIL: one route notifier can overwrite the shared error state in {db_path}")
+    if "ret = route_ret;" not in db_init or "if (!ret) {\\n\\t\\t\\t\\tret = route_ret;" not in db_init:
+        sys.exit(f"FAIL: route notifier failure aggregation does not preserve the first error in {db_path}")
+    if "ecm_db_ipv4_route_registered = true;" not in db_init or "ecm_db_ipv6_route_registered = true;" not in db_init:
+        sys.exit(f"FAIL: successful route notifier registrations are not tracked per family in {db_path}")
 
     # A failed FIB notifier registration must abort module initialization,
     # tear down the fully initialized DB and preserve the route-notifier ret.
@@ -586,6 +615,14 @@ def check_source(db_path, init_path, header_path):
     if db_exit_start < 0 or db_exit_end < 0:
         sys.exit(f"FAIL: ecm_db_exit() missing in {db_path}")
     db_exit = db[db_exit_start:db_exit_end]
+    route_v4 = db_exit.find("if (ecm_db_ipv4_route_registered) {")
+    route_v6 = db_exit.find("if (ecm_db_ipv6_route_registered) {")
+    if route_v4 < 0 or route_v6 < 0:
+        sys.exit(f"FAIL: DB exit does not gate route unregister by actual registration state in {db_path}")
+    if "if (ecm_db_ipv4_route_enable) {" in db_exit or "if (ecm_db_ipv6_route_enable) {" in db_exit:
+        sys.exit(f"FAIL: DB exit still unregisters route notifiers based only on enable flags in {db_path}")
+    if db_exit.find("ecm_db_ipv4_route_registered = false;") < route_v4 or db_exit.find("ecm_db_ipv6_route_registered = false;") < route_v6:
+        sys.exit(f"FAIL: DB exit does not clear successful per-family unregister state in {db_path}")
     stop_call = db_exit.find("ecm_db_fib_rule_notifier_stop();")
     terminate = db_exit.find("ecm_db_terminate_pending = true;")
     if stop_call < 0 or terminate < 0 or stop_call > terminate:
