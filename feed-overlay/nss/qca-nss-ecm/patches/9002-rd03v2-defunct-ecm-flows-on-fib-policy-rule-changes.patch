@@ -34,7 +34,8 @@ promise preservation of conntrack/NAT sessions across a public-WAN change.
 
 ---
 
-ecm_db/ecm_db.c | +151 -8
+
+ecm_db/ecm_db.c | +230 -8
 ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
@@ -43,21 +44,10 @@ frontends/include/ecm_front_end_ipv4.h | +1 -1
 frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
-9 files changed, 186 insertions(+), 44 deletions(-)
+9 files changed, 265 insertions(+), 44 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
-
-ecm_db/ecm_db.c | +165 -8
-ecm_db/ecm_db.h | +1 -0
-ecm_init.c | +4 -0
-frontends/ecm_front_end_ipv4.c | +0 -17
-frontends/ecm_front_end_ipv6.c | +0 -17
-frontends/include/ecm_front_end_ipv4.h | +1 -1
-frontends/include/ecm_front_end_ipv6.h | +1 -1
-frontends/cmn/ecm_ipv4.c | +14 -0
-frontends/cmn/ecm_ipv6.c | +14 -0
-9 files changed, 200 insertions(+), 44 deletions(-)
 @@ -22,5 +22,11 @@
  #include <asm/uaccess.h>	/* for put_user */
  #include <net/ipv6.h>
@@ -82,7 +72,7 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 +static bool ecm_db_ipv6_route_registered;
  #endif
  
-@@ -469,5 +477,95 @@
+@@ -469,9 +477,178 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -178,8 +168,7 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 +		}
 +#endif
 +	}
-NaN
-0+static DECLARE_WORK(ecm_db_fib_rule_work, ecm_db_fib_rule_work_fn);
++static DECLARE_WORK(ecm_db_fib_rule_work, ecm_db_fib_rule_work_fn);
 +
 +/*
 + * ecm_db_fib_rule_event()
@@ -262,13 +251,13 @@ NaN
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -675,4 +773,5 @@
+@@ -675,4 +852,5 @@
  int ecm_db_init(struct dentry *dentry)
  {
  	int ret = 0;
 +	int route_ret = 0;
  
-@@ -747,20 +846,59 @@
+@@ -747,20 +925,59 @@
  	/*
  	 * register for route table modification events
  	 */
@@ -334,12 +323,12 @@ NaN
 +
  	return ret;
  
-@@ -785,3 +923,4 @@
+@@ -785,3 +1002,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
  	DEBUG_INFO("ECM DB Module exit\n");
-@@ -795,19 +934,23 @@
+@@ -795,19 +1013,23 @@
  	/*
  	 * unregister for route table update events only if registered.
  	 */
