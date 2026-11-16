@@ -189,8 +189,9 @@ Evidence:
 
 ### Current source revision and validation state — 2026-11-16
 
-Source patch code commit: 16193bfb29eecca103a370270458a779403ac619. Latest test-harness commit:
-6062e9086f2fa05c1f4c3aff4a925068b47f399a. Current patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+Source implementation commit: 16193bfb29eecca103a370270458a779403ac619. Latest patch-envelope repair:
+f9f33b314ef11ad42037ad81de18e05f6e0e11f3. Latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Current patch blob:
+3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 
 The candidate closes the affected IPv4/IPv6 frontend gate directly from the
 atomic notifier callback on the first event, using a gated-state bit to avoid
@@ -204,6 +205,10 @@ residual gated/pending state.
 The test harness has source guards for callback gate-before-pending order,
 initial-replay readiness, drain-loop and RTNL-serialized gate release. These
 guards are committed but have not been executed against the exact QSDK archive.
+A self-audit found and repaired malformed patch metadata plus a stray NaN/0
+line before DECLARE_WORK in f9f33b314ef11ad42037ad81de18e05f6e0e11f3. The strict envelope/hunk check now
+passes (9 file sections, 22 hunks); this is not a substitute for applying the
+patch to the exact QSDK archive.
 
 **Validation status:** exact pinned QSDK apply, complete 32-patch feed series,
 current C compilation, full verify-v2, fault injection, lockdep/KASAN and
