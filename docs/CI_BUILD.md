@@ -124,13 +124,15 @@ Hardware validation remains **NOT TESTED**. A successful source preflight, build
 
 ## Current branch status — 2026-11-16
 
-- Working branch HEAD: `07a4063eb59555ce883970546b5c97f047d65435`.
-- Functional ECM patch commit: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest source-level test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
-- Current compare `02ee20e` → HEAD: 19 commits ahead, 0 behind. Only documentation and the explanatory preface of patch 9002 changed; C-hunks, preflight test, workflow and firmware config did not.
-- The transactional notifier rollback in `fb88ba4` has not received a new exact-source apply, full 32-patch series, ECM compile or final `verify-v2`.
-- Last run is #129 (cancelled before jobs); #128 cancelled before jobs; #127 passed Static/PREPARE_ONLY but its full-build ended with runner shutdown (exit 143). #124 remains the last image-generating full build and ended with final `verify-v2` FAIL on an earlier ECM revision.
-- The workflow includes boolean-gated `workflow_dispatch`; manual `false` and `true` dispatches have not been executed. No Actions run or successful status is associated with current HEAD. The latest UI check recorded Actions paused for this fork.
-- Runtime/hardware Dual-WAN/NSS and release acceptance remain **NOT TESTED**. CI images use a temporary signing key and `example.invalid`; do not flash them.
+- Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+- Candidate 9002 closes per-family frontend gates in the atomic callback on the first event, defers queueing during initial FIB replay, drains pending bits in a worker loop, serializes final empty-check/gate release under per-net RTNL and cleans residual gate refs during teardown.
+- Test harness has source guards for callback gate-before-pending order, readiness barrier, drain-loop, final gate release and teardown cleanup. These checks are committed but have not yet been executed on the exact pinned archive.
+- Exact QSDK apply, full 32-patch ECM queue, current C compilation, current full verify-v2, fault injection and lockdep/KASAN are **NOT TESTED**. RTNL → frontend spinlock ordering requires lockdep confirmation.
+- Last run is #129 (cancelled before jobs); #128 cancelled before jobs; #127 passed Static/PREPARE_ONLY but full build ended with runner shutdown (exit 143). #124 remains the last image-generating full build and final verify-v2 failed on an earlier ECM revision.
+- Workflow has boolean-gated workflow_dispatch; actual full_build=false/true dispatches have not run. No Actions run/status exists for this candidate. Last UI checkpoint reported Actions paused for this fork.
+- Runtime/hardware Dual-WAN/NSS and release acceptance remain **NOT TESTED**. CI images use a temporary signing key and example.invalid; do not flash them.
+
 
 ## Historical validation snapshot — run #124 (2026-11-16)
 
