@@ -11,6 +11,8 @@ created both image types, but final `verify-v2` failed on three verifier checks.
 The follow-up fixes are committed but have not yet passed a new CI run. No image
 from this branch has passed hardware tests.
 
+The authoritative task list and closure criteria are in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
+
 ## What this change does
 
 - Adds upstream `mwan3` and `luci-app-mwan3` using the pinned feeds.
