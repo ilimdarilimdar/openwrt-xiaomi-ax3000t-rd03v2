@@ -137,7 +137,23 @@ PY
 # ecm_notifier_register_connection_notify(); enabling IPsec requires a fresh
 # callback/lock-order audit before this preflight may pass.
 CONFIG_FILE="$TREE/.config"
-IPSEC_CONFIG_RE='^(CONFIG_PACKAGE_kmod-ipsec|CONFIG_PACKAGE_kmod-ipt-ipsec|CONFIG_NSS_DRV_IPSEC_ENABLE)=(y|m)
+IPSEC_CONFIG_RE='^(CONFIG_PACKAGE_kmod-ipsec|CONFIG_PACKAGE_kmod-ipt-ipsec|CONFIG_NSS_DRV_IPSEC_ENABLE)=(y|m)$'
+[[ -s "$CONFIG_FILE" ]] || die "prepared final Kconfig not found: $CONFIG_FILE"
+
+# Self-test the guard expression so a future edit cannot silently stop matching
+# one of the Kconfig symbols or reject an explicit disabled setting.
+for symbol in CONFIG_PACKAGE_kmod-ipsec CONFIG_PACKAGE_kmod-ipt-ipsec CONFIG_NSS_DRV_IPSEC_ENABLE; do
+  printf '%s=m\n' "$symbol" | grep -Eq "$IPSEC_CONFIG_RE" ||
+    die "IPsec/XFRM config guard does not catch $symbol=m"
+done
+if printf '# CONFIG_PACKAGE_kmod-ipsec is not set\n' | grep -Eq "$IPSEC_CONFIG_RE"; then
+  die "IPsec/XFRM config guard incorrectly matches a disabled symbol"
+fi
+
+if grep -Eq "$IPSEC_CONFIG_RE" "$CONFIG_FILE"; then
+  die "IPsec/XFRM selected: re-audit ECM external notifier callbacks and lock ordering before enabling it"
+fi
+
 # Validate patch envelope and every unified-diff hunk before downloading/applying source.
 python3 - "$PATCH_FILE" <<'PY'
 from pathlib import Path
