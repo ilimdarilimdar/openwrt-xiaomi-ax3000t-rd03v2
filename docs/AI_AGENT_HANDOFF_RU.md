@@ -7,19 +7,19 @@
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 **Source implementation commit:** 16193bfb29eecca103a370270458a779403ac619.
 **Latest patch-envelope repair commit:** f9f33b314ef11ad42037ad81de18e05f6e0e11f3.
-**Latest test-harness commit:** 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+**Latest test-harness commit:** c6c2f2147bd3a6bdffb40dd2b3f3695bd79bd1cf.
 **Current patch blob:** 3dbe8c97bdab7ee7452fc49b4ae77580788ef659.
-**Test blob:** 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+**Latest test blob:** 7aadf86ed161fbd1475e5cc2f5d47bdcf290a5e1.
 **Previous source/test baseline:** 02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791 (new candidate is later and unvalidated).
 **Реестр задач:** [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
 ## Текущий подтверждённый статус
 
-- New source implementation: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest regression-test candidate: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. The repair removes duplicate diff metadata and stray NaN/0 text; it does not alter the intended C logic. Workflow and firmware config were not changed.
+- New source implementation: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest regression-test revision: c6c2f2147bd3a6bdffb40dd2b3f3695bd79bd1cf. The test adds a narrow direct RTNL/family-spinlock same-translation-unit guard; firmware source and configuration were not changed.
 - Gate-first callback: the first IPv4/IPv6 event atomically sets a family-gated bit and closes its temporary frontend gate before setting pending state/queueing work. Repeated events coalesce without incrementing the temporary counter again.
 - Initial register_fib_notifier replay is handled with a readiness barrier: callback records/gates events but does not queue until registration returns; successful init arms ready and queues one worker.
 - Worker drains pending family bits in a loop. It releases gates only after an empty-pending check under per-net RTNL. Teardown disarms, unregisters, cancels/drains work and cleans residual pending/gated references.
-- This remains an **UNVALIDATED SOURCE CANDIDATE**. Exact pinned QSDK archive apply, full sorted 32-patch queue, C compile, fault injection, lockdep/KASAN and runtime stress were not executed. RTNL → frontend spinlock order requires lockdep confirmation.
+- Exact pinned QSDK 14.0 source SHA `7894b769eeb64f1c44fde547a107a8b866997590` was reviewed at raw-file level for RTNL/family-lock order. No direct RTNL acquisition was found in the inspected translation units that acquire `ecm_ipv4_lock`/`ecm_ipv6_lock`; `ecm_interface.c` has a separate WLAN-hook registration `rtnl_lock()` site without direct family-lock acquisition. Several raw paths could not be fetched during retries, and this is not a complete indirect call-graph proof. The harness now guards this direct same-file case. This remains an **UNVALIDATED SOURCE CANDIDATE**: exact pinned archive apply, full sorted 32-patch queue, C compile, fault injection, lockdep/KASAN and runtime stress were not executed. Lockdep remains required.
 - Last Actions run #129 is cancelled before jobs. #127 passed Static/PREPARE_ONLY but full build stopped with runner exit 143. #124 is the last full image-generating build and applies to an older ECM patch; verify-v2 failed. No run/status exists for the new candidate.
 - Manual workflow_dispatch exists but actual false/true dispatches have not run; GitHub Actions was last reported paused for this fork.
 - Runtime notifier, module load/unload, firewall4/mwan3, conntrack marks, NSS WAN-flow offload, latency/loss/throughput, Warface and soak are **NOT TESTED**.
@@ -30,7 +30,7 @@
 1. Восстановить GitHub Actions на форке и выполнить manual dispatch full_build=false для source/test candidate.
 2. Проверить exact QSDK archive apply, полную 32-patch series и Static/PREPARE_ONLY; затем выполнить full_build=true с C compilation, image generation и полным verify-v2.
 3. Выполнить fault injection initial replay/retry, IPv4/IPv6 route notifier registration, FIB notifier registration и worker events during defunct pass.
-4. Запустить lockdep/KASAN/concurrency/load-unload checks, особенно RTNL → ECM frontend spinlock.
+4. Запустить lockdep/KASAN/concurrency/load-unload checks, особенно обратные/косвенные зависимости вокруг RTNL → ECM frontend spinlock; статический same-file guard не заменяет lockdep.
 5. Только после CI/fault/lockdep PASS перейти к hardware тестированию на втором RD03v2 с recovery-процедурой.
 6. Не прошивать CI images и не трогать основной домашний роутер.
 
