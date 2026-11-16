@@ -5,16 +5,17 @@
 **Последняя ревизия:** 2026-11-16.
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Source patch code commit:** 16193bfb29eecca103a370270458a779403ac619.
+**Source implementation commit:** 16193bfb29eecca103a370270458a779403ac619.
+**Latest patch-envelope repair commit:** f9f33b314ef11ad42037ad81de18e05f6e0e11f3.
 **Latest test-harness commit:** 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
-**Patch blob:** 7807d27f592dca0585267285a7adb487e47b6b2c.
+**Current patch blob:** 3dbe8c97bdab7ee7452fc49b4ae77580788ef659.
 **Test blob:** 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 **Previous source/test baseline:** 02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791 (new candidate is later and unvalidated).
 **Реестр задач:** [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
 ## Текущий подтверждённый статус
 
-- New source candidate: 16193bfb29eecca103a370270458a779403ac619. Latest regression-test candidate: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. These commits update patch 9002 and tools/test-ecm-fib-rule-patch.sh; workflow and firmware config were not changed.
+- New source implementation: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest regression-test candidate: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. The repair removes duplicate diff metadata and stray NaN/0 text; it does not alter the intended C logic. Workflow and firmware config were not changed.
 - Gate-first callback: the first IPv4/IPv6 event atomically sets a family-gated bit and closes its temporary frontend gate before setting pending state/queueing work. Repeated events coalesce without incrementing the temporary counter again.
 - Initial register_fib_notifier replay is handled with a readiness barrier: callback records/gates events but does not queue until registration returns; successful init arms ready and queues one worker.
 - Worker drains pending family bits in a loop. It releases gates only after an empty-pending check under per-net RTNL. Teardown disarms, unregisters, cancels/drains work and cleans residual pending/gated references.
