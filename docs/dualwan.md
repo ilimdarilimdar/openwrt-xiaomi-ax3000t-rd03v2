@@ -309,17 +309,9 @@ The active candidate is
 It is a separate RD03v2/QSDK 14.0 adaptation applied after the pinned ECM feed
 patch queue and patch 9001.
 
-The current functional source revision is `fb88ba491df72d6d37e974a44f739d296c87ee0d`; the latest
-source-level regression test revision is `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. CI #123/#124
-apply and compile evidence belongs to an earlier revision. The current
-transactional rollback changes have not been re-applied to the exact archive,
-compiled, or fault-injected after that update. The preflight script's presence
-and source-level assertions are not a substitute for executing it.
+The gate-first ECM source candidate was introduced in `16193bfb29eecca103a370270458a779403ac619`; its patch-envelope repair is `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`, and the latest test-harness change is `6062e9086f2fa05c1f4c3aff4a925068b47f399a`. Current patch blob: `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`. A self-audit corrected malformed diff metadata and a stray NaN/0 line; strict envelope/hunk checks now pass (9 sections, 22 hunks). CI #123/#124 apply and compile evidence belongs to an earlier revision. The current candidate has not been applied to the exact archive, compiled, or fault-injected. The preflight script's presence and source-level assertions are not a substitute for executing it.
 
-The last code/source snapshot before the documentation cleanup was `07a4063eb59555ce883970546b5c97f047d65435`. The subsequent commits in this review change documentation only. No workflow run or successful commit
-status is associated with the current source/test revision. Hardware module lifecycle, FIB churn, mwan3
-failover, conntrack behavior, NSS/ECM counters, throughput, CPU, latency,
-packet loss and recovery on the second RD03v2 are **NOT TESTED**.
+No workflow run or successful commit status is associated with the current source/test candidate; Actions API still shows #129 as the latest run. Hardware module lifecycle, FIB churn, mwan3 failover, conntrack behavior, NSS/ECM counters, throughput, CPU, latency, packet loss and recovery on the second RD03v2 are **NOT TESTED**.
 
 ### Important behavior limits
 
