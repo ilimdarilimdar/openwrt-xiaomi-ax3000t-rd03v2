@@ -21,6 +21,16 @@
 - GitHub branch API показывает `protected=false`; обязательные status checks для рабочей ветки не настроены. Это не дефект прошивки, но политику защиты веток следует отдельно решить.
 
 
+## Повторная live-ревизия — 2026-11-16
+
+- Branch HEAD на начало этой ревизии: `ec0d2ae5f0ac065ab6779c3be61431df3731dc68`; code/test baseline остаётся `49d3579437389e2ffc111b94a08839ef7bd29ae7`.
+- GitHub Compare code/test baseline → branch HEAD: 38 commits ahead, 0 behind; все восемь изменённых файлов — README и документы. Source, config, tests, patches, build scripts и workflow не менялись.
+- Повторная выборка Actions: последний run #129, cancelled до jobs; #128 также cancelled до jobs; #127 Static + PREPARE_ONLY PASS, full-build cancelled из-за runner shutdown (exit 143); #124 последний завершённый full-build и final verify-v2 FAIL. Для code/test HEAD и branch HEAD commit status checks отсутствуют.
+- Повторная проверка pinned feed Makefiles подтвердила `mwan3 2.12.5` и `ECM_CLASSIFIER_MARK_ENABLE=y` в qca-nss-ecm для `qualcommax`. Это подтверждает выбранную compile option, но не прохождение fwmark/CONNMARK в живой NSS datapath.
+- Новый source-level риск: если `register_fib_notifier()` завершается ошибкой, patch 9002 только пишет KERN_WARNING и продолжает ECM init. Текущий preflight специально запрещает присваивать результат регистрации в `ret`, чтобы не портить прежний route-notifier status; fail-safe поведение ECM при отсутствии FIB notifier не определено и не тестируется.
+- Workflow всё ещё не имеет `workflow_dispatch`; full-build выполняется только на push с `[full-build]`. Branch protection disabled. Ручной запуск CI без изменения workflow сейчас невозможен.
+
+
 ## 1. Краткий итог аудита
 
 Проект находится в состоянии **экспериментальной source/build baseline**, а не готовой прошивки Dual-WAN/NSS для установки.
@@ -61,12 +71,23 @@
 **Приоритет:** P0 — блокирует любые заявления о завершённой сборке и переход к прошивке.
 
 Действия:
-1. Обеспечить Actions-triggering push или ручной запуск из GitHub Actions на точной актуальной code/test revision. Обычные документационные коммиты не подходят: workflow игнорирует `docs/**`.
+1. Сейчас `workflow_dispatch` в workflow отсутствует, поэтому ручной запуск невозможен. Сначала выполнить CI-04 (добавить безопасный manual dispatch) либо сделать осмысленный source/test/workflow commit с `[full-build]` на точной целевой ревизии. Не создавать пустые или документационные коммиты ради запуска: workflow игнорирует `docs/**`.
 2. Проверить все jobs: Static, PREPARE_ONLY, ECM preflight, полный `qca-nss-ecm` build, image generation и final `verify-v2`.
 3. Сохранить build-log artifact и PREPARE_ONLY artifact; записать SHA, run ID, runner outcome и все PASS/FAIL.
 4. Если runner снова остановится с 143, выяснить причину завершения отдельно от ошибок компиляции; не классифицировать это как source failure.
 
 **Критерий закрытия:** успешный полный workflow на текущем code/test SHA, ноль FAIL в `verify-v2`, доступные и разобранные логи/артефакты. PREPARE_ONLY PASS или одна лишь компиляция не закрывают этот пункт.
+
+### CI-04 — Добавить безопасный ручной запуск полной валидации
+
+**Приоритет:** P1; снимает необходимость в искусственном source-коммите, когда нужно проверить неизменившийся code/test SHA.
+
+Workflow сейчас имеет только `push` и `pull_request`; событие `workflow_dispatch` отсутствует. Full-build дополнительно ограничен условием `github.event_name == 'push'` и маркером `[full-build]` в commit message. Поэтому текущий кодовый SHA нельзя вручную отправить на полный build из Actions UI.
+
+**Действия:** добавить `workflow_dispatch` с явным boolean input вроде `full_build`; при false выполнять Static + PREPARE_ONLY, при true — также full-build + `verify-v2`. Ограничить dispatch рабочей веткой/допустимыми refs, сохранить concurrency, временный CI signing key и `example.invalid`; не публиковать образы и не использовать постоянный private key.
+
+**Критерий закрытия:** ручной dispatch на выбранном SHA проверенно запускает Static/PREPARE_ONLY; `full_build=true` запускает full build и final verifier, `false` гарантированно не запускает его. Проверено на тестовом dispatch, без пустого commit.
+
 
 ### CI-02 — Подтвердить исправленный watchdog
 
@@ -143,6 +164,16 @@ Linux 6.18 `register_fib_notifier()` сначала выполняет initial F
 Pinned qca-nss-ecm Makefile включает `ECM_CLASSIFIER_MARK_ENABLE=y` для qualcommax. PREPARE_ONLY подтверждает target/package selection, но это не доказывает корректную работу fwmark/CONNMARK с mwan3 или фактический NSS offload.
 
 **Критерий закрытия:** conntrack mark, policy rule, физический WAN egress и ECM/NSS counters совпадают для flows через WAN1 и WAN2; отдельно проверены flows, которые не должны ускоряться.
+
+### ECM-05 — Определить fail-safe поведение при ошибке FIB notifier registration
+
+**Приоритет:** P1; решение обязательно до аппаратного Dual-WAN acceptance.
+
+В patch 9002 вызов `register_fib_notifier()` не проверяется как обязательный gate: при ошибке код пишет `KERN_WARNING` и продолжает инициализацию ECM. Это оставляет NSS acceleration включённым без гарантированного defunct при policy-rule-only изменениях. В `tools/test-ecm-fib-rule-patch.sh` есть guard, который запрещает присваивать результат регистрации в прежний `ret`; он защищает статус route-notifier init, но одновременно фиксирует текущую non-fatal семантику и не проверяет безопасный fallback.
+
+**Действия:** принять архитектурное решение: либо корректно отменять/откатывать ECM init при невозможности зарегистрировать FIB notifier, либо явно отключать несовместимый ECM/NSS acceleration path и запрещать Dual-WAN policy mode. Нельзя просто игнорировать ошибку или считать warning нормальным PASS. Переработать source guards так, чтобы отдельно проверять сохранение статуса IPv4/IPv6 route-notifier init и fail-safe обработку именно FIB registration failure. Добавить воспроизводимое fault-injection тестирование ошибки регистрации и проверки unwind.
+
+**Критерий закрытия:** искусственно вызванная ошибка регистрации не оставляет активный ECM/NSS datapath, который может закрепить flow за прежним WAN; cleanup проходит без leak/oops/deadlock; решение и evidence зафиксированы. До этого runtime FIB notifier registration — NOT TESTED, безопасный fallback — NOT DEFINED.
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
@@ -269,7 +300,7 @@ mwan3 распределяет независимые flows/соединения
 
 **Приоритет:** P2.
 
-Ранее были обнаружены stale claims в `DEVELOPMENT_MANUAL_RU.md` и `ecm-policy-routing-port.md`: они говорили, что patch 9002 отсутствует/не применялся, хотя он уже в overlay, прошёл preflight и скомпилировался в CI #124. Эти места обновляются в рамках ревизии. Дальше поддерживать этот register и handoff синхронными.
+Ранее были обнаружены stale claims в `DEVELOPMENT_MANUAL_RU.md` и `ecm-policy-routing-port.md`: они говорили, что patch 9002 отсутствует/не применялся, хотя он уже в overlay, прошёл preflight и скомпилировался в CI #124. Эти места обновлены. Поддерживать register и handoff синхронными. Дополнительно перепроверять README: release/install ссылки ведут на upstream ADCDS releases, а не на экспериментальный Dual-WAN branch; это различие должно оставаться явным, чтобы не создавать впечатление, что ветка прошла acceptance.
 
 ### MAINT-04 — Решить вопрос branch protection и обязательных CI checks
 
@@ -283,7 +314,7 @@ mwan3 распределяет независимые flows/соединения
 
 ## 8. Рекомендуемый порядок работ
 
-1. **CI-01 → CI-02 → CI-03:** завершённый CI и final `verify-v2` на актуальном code/test SHA.
+1. **CI-04 → CI-01 → CI-02 → CI-03:** получить управляемый manual trigger, затем завершённый CI и final `verify-v2` на актуальном code/test SHA.
 2. **HW-01:** только после этого подготовить второй RD03v2 и recovery.
 3. **ECM-02 → ECM-03 → ECM-04:** подтвердить реальное ECM/NSS FIB behavior и mark datapath.
 4. **DW-01 → DW-02:** сначала firewall/mwan3 и failover без balancing.
