@@ -101,17 +101,17 @@ pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
 
 Точное состояние сверять по Git diff. Ветка **не** содержит готовую аппаратно проверенную конфигурацию второго WAN и не содержит портированный v2 ECM FIB notifier.
 
-### 2.3. Подтверждённые результаты CI на 15.11.2026
+### 2.3. Подтверждённые результаты CI на 16.11.2026
 
-- #105 (`d51baa7`): Static, PREPARE_ONLY and ECM source preflight **PASS**.
-- #106 (`006e14a`): Static and PREPARE_ONLY **PASS**; raw patch 9002 apply and complete pinned ECM feed-series check **PASS**.
-- #106 preflight downloaded the hash-verified QSDK archive, validated 9 file sections / 19 hunks, then applied patch 9002 after all 31 pinned ECM feed patches including 9001. Lifecycle/order, packet-hook stop locking, atomic pending-bit snapshot and Netfilter hook quiescence assertions passed.
-- #107 (`eba9d02`, test-only): Static **PASS**, PREPARE_ONLY **PASS**, atomic FIB callback guard **PASS**; full build and `verify-v2.sh` remain **IN PROGRESS**.
-- #108 (`a0e72ce`, test-only): **PENDING** behind #107. It tightens the static callback check; no firmware C source changed.
-- The pinned kernel is Linux **6.18.55**. Its generic config fragment enables `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` and `CONFIG_IP_MULTIPLE_TABLES`; the project config enables `CONFIG_IPV6_MULTIPLE_TABLES`. `verify-v2.sh` checks the final built kernel config.
-- The latest PREPARE_ONLY result selects `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC and nft-backed iptables packages.
-- Three recursive-dependency diagnostics remain for optional Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom symbols. None of these packages is selected in the generated final `.config`. The selected NSS Kconfig cycle is absent after patch 0014.
-- Full ECM compilation, notifier marker in built `ecm.ko`, final image verification, module load and hardware Dual-WAN/NSS testing are not yet confirmed. Hardware status remains **NOT TESTED**.
+- CI #124: Static **PASS**, PREPARE_ONLY **PASS**, raw QSDK source apply, полная очередь 32 ECM feed patches, lifecycle и atomic-callback guards **PASS**.
+- Полная сборка #124 действительно завершилась созданием образов: qca-nss-ecm скомпилирован, kmod-qca-nss-ecm включён в rootfs, marker FIB notifier обнаружен в ecm.ko; созданы sysupgrade и initramfs-factory images.
+- Финальный verify-v2 #124 — **FAIL**, не IN PROGRESS: watchdog harness дал 20 PASS / 26 FAIL из-за BusyBox applet dispatch мимо PATH-stubs; ECM source fingerprints 9001/9002 не нашли исходники после CONFIG_AUTOREMOVE.
+- Исправления watchdog: commits `f372d519` и `0d2aeadb`; исправление ECM AUTOREMOVE fallback: `e7846a1`; дополнительный guard CONFIG_AUTOREMOVE: `49d3579`. Все они требуют нового CI и пока **NOT CI-VALIDATED**.
+- Runs #127–#129 отменены; нового run для exact HEAD `49d3579` и commit status на последней live-проверке нет.
+- П pinned kernel: Linux **6.18.55**. Generic config fragment включает `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` и `CONFIG_IP_MULTIPLE_TABLES`; проектная конфигурация включает `CONFIG_IPV6_MULTIPLE_TABLES`.
+- PREPARE_ONLY выбирает `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC и nft-backed iptables packages.
+- Три unrelated Kconfig diagnostics остаются для Qt5 GUI, fwknopd/LuCI fwknopd и squeezelite-custom; пакеты не выбраны. Цикл Kconfig выбранного NSS отсутствует после patch 0014.
+- Runtime load/unload ECM, FIB churn, mwan3 failover, conntrack, NSS counters/throughput и все аппаратные Dual-WAN/NSS тесты остаются **NOT TESTED**.
 
 ### 2.4. Текущие pinned source revisions
 
