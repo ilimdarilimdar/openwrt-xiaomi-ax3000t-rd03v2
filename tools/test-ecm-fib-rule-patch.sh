@@ -394,6 +394,8 @@ grep -qF 'rtnl_net_unlock(&init_net);' "$ECM_DB" ||
   die "worker does not release RTNL before walking the ECM database"
 grep -qF '#include <linux/netdevice.h>' "$ECM_DB" ||
   die "ECM DB does not include the synchronize_net() declaration"
+grep -qF '#include <linux/compiler.h>' "$ECM_DB" ||
+  die "ECM DB does not include READ_ONCE/WRITE_ONCE definitions"
 grep -qF 'synchronize_net();' "$ECM_DB" ||
   die "FIB worker does not drain pre-existing network readers"
 grep -qF "Initial register_fib_notifier() replay runs under RCU without" "$ECM_DB" ||
@@ -778,6 +780,10 @@ def check_atomic_callback(path):
             f"FAIL: atomic FIB callback contains unexpected calls in {path}: {actual}; "
             "only atomic gate/set operations and deferred queueing are allowed"
         )
+    if body.find("test_and_set_bit(ECM_DB_FIB_RULE_GATED_IPV4") > body.find("ecm_front_end_ipv4_stop_temp(1)") or body.find("ecm_front_end_ipv4_stop_temp(1)") > body.find("set_bit(ECM_DB_FIB_RULE_PENDING_IPV4"):
+        sys.exit(f"FAIL: IPv4 gate must close before its pending bit is queued in {path}")
+    if body.find("test_and_set_bit(ECM_DB_FIB_RULE_GATED_IPV6") > body.find("ecm_front_end_ipv6_stop_temp(1)") or body.find("ecm_front_end_ipv6_stop_temp(1)") > body.find("set_bit(ECM_DB_FIB_RULE_PENDING_IPV6"):
+        sys.exit(f"FAIL: IPv6 gate must close before its pending bit is queued in {path}")
     if body.find("READ_ONCE(ecm_db_fib_rule_ready)") > body.find("schedule_work("):
         sys.exit(f"FAIL: FIB work is queued before checking initial-replay readiness in {path}")
 
