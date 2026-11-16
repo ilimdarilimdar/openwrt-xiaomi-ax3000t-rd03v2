@@ -12,10 +12,10 @@
 
 ## Branch/CI final live check — 2026-11-16
 
-- Current branch HEAD: `20e8125af1ffe4cceef272249fa141bdfeaad13d`.
-- Compare latest test revision `02ee20e` → branch HEAD: 10 commits ahead, 0 behind. Changed paths after the test revision are documentation plus the explanatory preface of patch 9002; the C hunk bodies, test script, workflow and firmware config are unchanged.
+- Current branch HEAD: `37ff7aa30fd167acd0a4d7317eb5fb6f435a7579`.
+- Compare latest test revision `02ee20e` → branch HEAD: 13 commits ahead, 0 behind. Changed paths after the test revision are documentation plus the explanatory preface of patch 9002; the C hunk bodies, test script, workflow and firmware config are unchanged.
 - Patch-file preface-only documentation sync: `f72db08`. Functional C-source patch commit remains `fb88ba4`; latest source-test regression commit remains `02ee20e`.
-- Current HEAD `20e8125`: combined commit statuses are empty and workflow-run lookup returns no runs. The live Actions page explicitly says Actions are paused on this fork because of usage scale.
+- Current HEAD `37ff7aa`: combined commit statuses are empty and workflow-run lookup returns no runs. The live Actions page explicitly says Actions are paused on this fork because of usage scale.
 - Current patch blob: `794bb980bf753515e9b61c48c6c393acfeeff874`; current test-script blob: `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6`.
 
 ## Live checkpoint после транзакционного ECM notifier rollback — 2026-11-16
