@@ -447,12 +447,14 @@ grep -qF 'ecm_front_end_ipv6_stop_temp(1)' "$ECM_DB" ||
   die "v2 IPv6 temporary stop helper is not used"
 grep -qF 'ecm_front_end_ipv6_stop_temp(0)' "$ECM_DB" ||
   die "v2 IPv6 temporary start helper is not used"
-grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$ECM_DB" ||
-  die "runtime registration diagnostic is missing"
+grep -qF 'ECM: FIB notifier registration failed' "$ECM_DB" ||
+  die "FIB notifier failure diagnostic is missing"
 grep -qF 'fib_ret = register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$ECM_DB" ||
   die "FIB notifier registration result is not captured separately from route-notifier status"
-grep -qF 'ecm_db_fib_rule_notifier_fail_closed(fib_ret);' "$ECM_DB" ||
-  die "FIB notifier registration failure does not invoke the fail-closed ECM fallback"
+grep -qF 'ecm_db_exit();' "$ECM_DB" ||
+  die "FIB notifier registration failure does not tear down the initialized ECM database"
+grep -qF 'return fib_ret;' "$ECM_DB" ||
+  die "FIB notifier registration failure does not abort ECM module initialization"
 if grep -qF 'ret = register_fib_notifier(' "$ECM_DB"; then
   die "notifier registration return must not overwrite ecm_db_init route status"
 fi
@@ -537,50 +539,35 @@ def check_source(db_path, init_path, header_path):
     if not guards:
         sys.exit(f"FAIL: FIB registration lacks route-notifier init guard in {db_path}")
 
-    # Preserve the IPv4/IPv6 route-notifier status while making a failed
-    # FIB-rule registration fail closed for ECM acceleration.
+    # A failed FIB notifier registration must abort module initialization,
+    # tear down the fully initialized DB and preserve the route-notifier ret.
     if "fib_ret = " + registration not in db_init:
         sys.exit(f"FAIL: FIB notifier result is not stored separately in {db_path}")
-    if "ret = " + registration in db_init or "return fib_ret;" in db_init:
-        sys.exit(f"FAIL: FIB registration must not overwrite/replace route-notifier status in {db_path}")
+    if "ret = " + registration in db_init:
+        sys.exit(f"FAIL: FIB registration overwrites the IPv4/IPv6 route-notifier result in {db_path}")
     if "return ret;" not in db_init[reg_pos:]:
-        sys.exit(f"FAIL: ecm_db_init() no longer preserves the route-notifier return status in {db_path}")
-    if "if (fib_ret) {" not in db_init or "ecm_db_fib_rule_notifier_fail_closed(fib_ret);" not in db_init:
-        sys.exit(f"FAIL: FIB registration error has no fail-closed branch in {db_path}")
+        sys.exit(f"FAIL: successful FIB registration path does not preserve route-notifier return in {db_path}")
+    failure_start = db_init.find("if (fib_ret) {", reg_pos)
+    failure_exit = db_init.find("ecm_db_exit();", failure_start)
+    failure_return = db_init.find("return fib_ret;", failure_start)
+    if min(failure_start, failure_exit, failure_return) < 0 or not (failure_start < failure_exit < failure_return):
+        sys.exit(f"FAIL: FIB registration failure must tear down ECM DB before returning the error in {db_path}")
+    if "ecm_db_fib_rule_notifier_fail_closed" in db:
+        sys.exit(f"FAIL: obsolete frontend-gate fallback remains in {db_path}")
 
-    fail_start = db.find("static void ecm_db_fib_rule_notifier_fail_closed(int error)")
-    fail_end = db.find(chr(10) + "}" + chr(10), fail_start)
-    if fail_start < 0 or fail_end < 0:
-        sys.exit(f"FAIL: FIB notifier fail-closed helper missing in {db_path}")
-    fail_fn = db[fail_start:fail_end]
-    fail_sequence = [
-        "ecm_front_end_ipv4_stop_temp(1);",
-        "cancel_work_sync(&ecm_db_fib_rule_work);",
-        "clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);",
-        "synchronize_net();",
-        "ecm_db_connection_defunct_ip_version(4);",
-        "KERN_ERR",
-    ]
-    positions = [fail_fn.find(token) for token in fail_sequence]
-    if any(position < 0 for position in positions):
-        sys.exit(f"FAIL: fail-closed helper misses required IPv4/drain behavior in {db_path}")
-    if positions != sorted(positions):
-        sys.exit(f"FAIL: fail-closed helper does not gate, drain and defunct in order in {db_path}")
-
-    ipv6_sequence = [
-        "ecm_front_end_ipv6_stop_temp(1);",
-        "clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);",
-        "ecm_db_connection_defunct_ip_version(6);",
-    ]
-    ipv6_positions = [fail_fn.find(token) for token in ipv6_sequence]
-    if any(position < 0 for position in ipv6_positions):
-        sys.exit(f"FAIL: fail-closed helper misses IPv6 stop/pending/defunct handling in {db_path}")
-    if ipv6_positions != sorted(ipv6_positions):
-        sys.exit(f"FAIL: fail-closed helper does not preserve IPv6 gate/drain/defunct order in {db_path}")
-    if "ecm_front_end_ipv4_stop_temp(0)" in fail_fn or "ecm_front_end_ipv6_stop_temp(0)" in fail_fn:
-        sys.exit(f"FAIL: fail-closed helper reopens an ECM frontend in {db_path}")
-    if "ecm_db_fib_rule_notifier_fail_closed(fib_ret);" not in db_init:
-        sys.exit(f"FAIL: registration error does not invoke fail-closed helper in {db_path}")
+    # The ECM DB is initialized before packet frontends and conntrack hooks.
+    # Therefore a notifier registration failure at this point can abort the
+    # module without leaving existing flows from this ECM instance offloaded.
+    init_start = init.find("static int __init ecm_init(void)")
+    init_end = init.find("module_init(ecm_init)", init_start)
+    if init_start < 0 or init_end < 0:
+        sys.exit(f"FAIL: ecm_init() body not found in {init_path}")
+    init_fn = init[init_start:init_end]
+    db_init_pos = init_fn.find("ret = ecm_db_init(ecm_dentry);")
+    ipv4_init_pos = init_fn.find("ecm_front_end_ipv4_init(ecm_dentry);")
+    ct_init_pos = init_fn.find("ecm_conntrack_notifier_init(ecm_dentry);")
+    if min(db_init_pos, ipv4_init_pos, ct_init_pos) < 0 or not (db_init_pos < ipv4_init_pos < ct_init_pos):
+        sys.exit(f"FAIL: ECM DB must initialize before packet frontends and conntrack notifier in {init_path}")
 
     stop_start = db.find("void ecm_db_fib_rule_notifier_stop(void)")
     stop_end = db.find("EXPORT_SYMBOL(ecm_db_fib_rule_notifier_stop);", stop_start)
