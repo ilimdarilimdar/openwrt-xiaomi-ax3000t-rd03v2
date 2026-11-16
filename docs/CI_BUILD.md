@@ -80,8 +80,8 @@ _Last live GitHub Actions check: 2026-11-15._
 
 - Workflow [#105](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729221924), source `d51baa7`: Static and PREPARE_ONLY **PASS**; the corrected raw ECM patch apply and full pinned feed-series preflight passed.
 - Workflow [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036), functional source `006e14a`: Static **PASS**, PREPARE_ONLY **PASS**, ECM preflight **PASS**. The log confirms 9 diff file sections, 19 valid hunks, exact QSDK archive checksum, and patch 9002 applying after all 31 pinned ECM feed patches including 9001. Stop-counter lock alignment, six packet-hook reads, RTNL pending-bit snapshot, stop-gate plus `synchronize_net()` ordering, notifier init/unwind/exit and worker-drain checks all passed.
-- Workflow [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069), test-only commit `eba9d02`: Static **PASS**, PREPARE_ONLY **PASS**, atomic callback regression guard **PASS**. The full signed-image build and `verify-v2.sh` job are **IN PROGRESS** at the latest live check.
-- Workflow [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928), test-only commit `a0e72ce`: **PENDING** behind #107. It tightens the callback assertion to require only `set_bit()` operations and `schedule_work()`; it does not introduce a new firmware-source revision.
+- Workflow [#107](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729849069), test-only commit `eba9d02`: Static/PREPARE_ONLY and atomic callback regression guard **PASS**. At that historical checkpoint, the full build was still running; later runs superseded it.
+- Workflow [#108](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729952928), test-only commit `a0e72ce`: historical queued callback-guard revision; it is not the current code/test HEAD.
 - Earlier runs #100–#104 failed or were cancelled while correcting patch context and unified-diff hunk counts. They are superseded by the successful #105/#106 raw source and full-series preflight; do not report those early failures as the current patch status.
 
 ### Source-level and configuration findings
@@ -125,10 +125,7 @@ HEAD `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`:
   unset in final `.config`. The selected NSS cycle is absent after patch 0014.
 - The userspace `conntrack` CLI is not selected; selective mark-aware cleanup
   is not implemented.
-- **Full build / verify-v2: IN PROGRESS** in
-  [run #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141).
-  The actual `qca-nss-ecm` C compilation, built `ecm.ko` marker, image
-  generation and final `verify-v2` result remain **NOT CONFIRMED**.
+- **Run #124 full build: COMPLETED; final verify-v2: FAIL.** qca-nss-ecm compiled; both images were created; FIB notifier marker found in ecm.ko; rootfs count 223 packages. Three verifier failures were recorded (watchdog suite 20 passed / 26 failed; ECM 9001/9002 source fingerprints false-negative after AUTOREMOVE). See artifact `14184373198` and the post-build audit below.
 - CI uses a temporary P-256 key and `example.invalid`, and uploads
   logs/configuration only. CI artifacts are not user-installable releases.
 - Dual-WAN/NSS hardware validation remains **NOT TESTED**; the primary home
