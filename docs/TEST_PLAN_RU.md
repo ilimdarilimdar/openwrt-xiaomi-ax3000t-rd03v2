@@ -22,19 +22,20 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Снимок состояния на 15.11.2026 по GitHub Actions и рабочей ветке
-`work/rd03v2-dualwan-mwan3-baseline`:
+Снимок состояния на 16.11.2026 по GitHub Actions и рабочей ветке
+`work/rd03v2-dualwan-mwan3-baseline`. Code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`.
 
 | Этап | Результат |
 |---|---|
-| Static workflow #106, functional patch commit `006e14a` | **PASS** |
-| PREPARE_ONLY #106 | **PASS** |
-| ECM raw source apply to hash-verified pinned QSDK 14.0 | **PASS** |
-| ECM patch 9002 after all 31 pinned feed patches, including 9001 | **PASS** |
-| FIB notifier lifecycle/order and worker-drain guards | **PASS** |
-| Atomic callback regression guard, workflow #107 | **PASS** in PREPARE_ONLY |
-| Full image build + `verify-v2`, workflow #107 | **IN PROGRESS** |
-| Workflow #108, stricter callback guard | **QUEUED** behind #107 |
+| CI #124 Static checks | **PASS** |
+| CI #124 PREPARE_ONLY + QSDK raw apply + full 32-patch ECM queue + lifecycle/atomic guards | **PASS** |
+| CI #124 qca-nss-ecm C compilation and module packaging | **PASS** |
+| CI #124 sysupgrade + initramfs-factory image generation | **PASS** |
+| FIB notifier marker inside image `ecm.ko`; 223 rootfs packages | **PASS** |
+| CI #124 final `verify-v2` | **FAIL**: watchdog suite (26 failed) + two ECM source fingerprint false negatives after AUTOREMOVE |
+| Watchdog absolute-stub dispatch fix (`f372d519`, `0d2aeadb`) | **NOT CI-VALIDATED** |
+| ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** |
+| New full CI run on exact HEAD `49d3579` | **NOT STARTED / no run found** |
 | Runtime module load on RD03v2 | **NOT TESTED** |
 | Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
 
