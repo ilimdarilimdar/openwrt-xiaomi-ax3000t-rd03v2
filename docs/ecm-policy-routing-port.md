@@ -161,9 +161,9 @@ v1 reference in a critical API detail:
   marks the DB terminating, unregisters only successfully registered route
   notifiers, and frees the database.
 - Linux 6.18's `fib_notifier.h` exposes `struct fib_notifier_info.family`,
-  `FIB_EVENT_RULE_ADD/DEL` and `register_fib_notifier()`. The callback only
-  sets a per-family pending bit and schedules work; it does not walk the ECM
-  database or take its locks.
+  `FIB_EVENT_RULE_ADD/DEL` and `register_fib_notifier()`. The callback closes the affected family frontend gate with a non-sleeping
+  helper, records the pending bit and queues work only after the initial dump
+  readiness barrier; it does not walk the ECM database.
 
 The active implementation is:
 `feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`.
@@ -257,11 +257,11 @@ apply, C compilation, fault/stress injection, lockdep/KASAN and runtime remain
 The source port itself is present and has passed the source/build gates listed
 above. The remaining tasks are validation, not porting the patch from scratch:
 
-- finish a full CI run on current code/test HEAD and pass `verify-v2.sh`;
+- finish a full CI run on the gate-first source/test candidate and pass `verify-v2.sh`;
 - review and, where possible, remove GNU patch fuzz reported for 9002 in #124;
 - confirm the notifier actually registers on a booted RD03v2 and unregisters
   cleanly on module teardown;
-- test initial FIB dump/replay, rule churn during registration, the pending-bit requeue/gate-open window, both families,
+- test initial FIB dump/replay/retry, event injection during active worker defunct passes, callback-owned gate retention, final empty-pending release under RTNL and both families,
   pending-bit coalescing and worker drain under load;
 - run lockdep/concurrency/teardown tests and save dmesg/workqueue/counter logs;
 - compare rule-restore order, IPv4 routed/NAT, IPv6 routed/NAT66 where supported,
