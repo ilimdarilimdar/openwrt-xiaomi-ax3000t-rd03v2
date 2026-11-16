@@ -30,7 +30,7 @@
 1. Восстановить GitHub Actions на форке и выполнить manual dispatch full_build=false для source/test candidate.
 2. Проверить exact QSDK archive apply, полную 32-patch series и Static/PREPARE_ONLY; затем выполнить full_build=true с C compilation, image generation и полным verify-v2.
 3. Выполнить fault injection initial replay/retry, IPv4/IPv6 route notifier registration, FIB notifier registration и worker events during defunct pass.
-4. Запустить lockdep/KASAN/concurrency/load-unload checks, особенно обратные/косвенные зависимости вокруг RTNL → ECM frontend spinlock; статический same-file guard не заменяет lockdep.
+4. Запустить lockdep/KASAN/concurrency/load-unload checks, особенно обратные/косвенные зависимости вокруг RTNL → ECM frontend spinlock; статический guard для прямого RTNL acquisition внутри family-lock critical section не заменяет lockdep.
 5. Только после CI/fault/lockdep PASS перейти к hardware тестированию на втором RD03v2 с recovery-процедурой.
 6. Не прошивать CI images и не трогать основной домашний роутер.
 
