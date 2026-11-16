@@ -51,6 +51,16 @@
 - Workflow всё ещё не имеет `workflow_dispatch`; full-build выполняется только на push с `[full-build]`. Branch protection disabled. Ручной запуск CI без изменения workflow сейчас невозможен.
 
 
+## Live checkpoint после сверки HEAD и ECM patch — 2026-11-16, 09:00 UTC+3
+
+- Текущий branch HEAD на момент проверки: `20e8125af1ffe4cceef272249fa141bdfeaad13d` (`docs: clarify manual versus push full-build triggers`).
+- Compare от test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791` до branch HEAD: 10 commits ahead, 0 behind. Изменения затрагивают документацию и patch 9002.
+- Сверка содержимого устранила видимое расхождение: `tools/test-ecm-fib-rule-patch.sh` на HEAD побайтно совпадает с файлом на ref `02ee20e` (blob `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6`). У patch 9002 обновлён только поясняющий текст заголовка; исполняемые unified-diff hunks совпадают с версией на `02ee20e`. Текущий blob patch: `794bb980bf753515e9b61c48c6c393acfeeff874`.
+- Workflow `.github/workflows/rd03v2-validation.yml` содержит `workflow_dispatch` с boolean `full_build`: false запускает Static + PREPARE_ONLY, true дополнительно включает full-build + `verify-v2`; dispatch ограничен рабочей веткой. Временный P-256 key, `example.invalid` и запрет публикации CI images сохранены.
+- Для HEAD `20e8125` GitHub вернул пустые commit statuses и пустой список PR-associated workflow runs. Это не подтверждает успешную валидацию. По текущему checkpoint Actions runs на форке остаются приостановленными до повторного включения maintainer'ом.
+- После test revision `02ee20e` не найдено изменений исполняемого тестового скрипта или C-кода patch 9002. Нового compile, полного verify, C fault injection и hardware test нет. Следующий gate остаётся неизменным: maintainer повторно включает Actions; затем dispatch false, потом true; только по завершённому full workflow с нулём FAIL можно закрыть CI-01/CI-02/CI-03.
+- Основной домашний RD03v2 остаётся на stock MiWiFi. Ни CI images, ни неподтверждённые образы не прошивать.
+
 ## 1. Краткий итог аудита
 
 Проект находится в состоянии **экспериментальной source/build baseline**, а не готовой прошивки Dual-WAN/NSS для установки.
