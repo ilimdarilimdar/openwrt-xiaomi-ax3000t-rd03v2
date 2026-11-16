@@ -138,7 +138,9 @@ PY
 # callback/lock-order audit before this preflight may pass.
 CONFIG_FILE="$TREE/.config"
 [[ -s "$CONFIG_FILE" ]] || die "prepared final Kconfig not found: $CONFIG_FILE"
-if grep -Eq '^(CONFIG_PACKAGE_kmod-ipsec|CONFIG_PACKAGE_kmod-ipt-ipsec|CONFIG_NSS_DRV_IPSEC_ENABLE)=(y|m)
+if grep -Eq '^(CONFIG_PACKAGE_kmod-ipsec|CONFIG_PACKAGE_kmod-ipt-ipsec|CONFIG_NSS_DRV_IPSEC_ENABLE)=(y|m)' "$CONFIG_FILE"; then
+  die "IPsec/XFRM selected: re-audit ECM external notifier callbacks and lock ordering before enabling it"
+fi
 # Validate patch envelope and every unified-diff hunk before downloading/applying source.
 python3 - "$PATCH_FILE" <<'PY'
 from pathlib import Path
