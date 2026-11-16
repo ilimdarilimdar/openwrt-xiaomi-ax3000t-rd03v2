@@ -141,14 +141,23 @@ v1 reference in a critical API detail:
   sections, so it must run from process context, not from the atomic FIB
   callback.
 - `ecm_db_init()` initializes the connection database, listener and timer
-  before registering the existing IPv4/IPv6 route notifiers. The new FIB
-  notifier is registered after those route notifiers. A registration failure
-  is deliberately non-fatal and emits a warning; the return value is not
-  allowed to overwrite the existing `ret` from route-notifier initialization.
-- `ecm_db_exit()` sets its termination flag and unregisters route notifiers
-  before freeing the database. The candidate unregisters the FIB notifier and
-  calls `cancel_work_sync()` before setting the termination flag, so no
-  callback can queue work against a database being torn down.
+  before registering the existing IPv4/IPv6 route notifiers. Their return
+  values are kept in a separate `route_ret`; the first error is retained in
+  `ret`, and success flags are set independently for each family. A later
+  IPv6 success cannot mask an earlier IPv4 failure, or vice versa.
+- If either route notifier fails, `ecm_db_init()` calls `ecm_db_exit()` and
+  returns the original error before attempting FIB notifier registration.
+  `ecm_db_exit()` unregisters only route notifiers whose registration flags
+  are set, so a partial registration is rolled back without unregistering a
+  family that never registered.
+- The FIB notifier is registered only after both enabled route notifiers
+  succeed. If its registration fails, `ecm_db_init()` calls `ecm_db_exit()`
+  and returns `fib_ret`. The pinned QSDK `ecm_init()` calls
+  `ecm_db_init()` before IPv4/IPv6 packet frontends and conntrack notifier
+  initialization, so the ECM module aborts before installing those hooks.
+- `ecm_db_exit()` first unregisters/drains the FIB notifier worker, then
+  marks the DB terminating, unregisters only successfully registered route
+  notifiers, and frees the database.
 - Linux 6.18's `fib_notifier.h` exposes `struct fib_notifier_info.family`,
   `FIB_EVENT_RULE_ADD/DEL` and `register_fib_notifier()`. The callback only
   sets a per-family pending bit and schedules work; it does not walk the ECM
@@ -170,8 +179,9 @@ Evidence:
   source-fingerprint checks after `CONFIG_AUTOREMOVE=y`; those were verifier/
   harness issues, not an ECM C compilation failure.
 - The watchdog/AUTOREMOVE fixes were committed later, but #127's full build
-  was interrupted by runner shutdown (exit 143), #128/#129 were cancelled,
-  and code/test HEAD `49d3579` has no separate Actions run/status.
+  was interrupted by runner shutdown (exit 143), #128/#129 were cancelled.
+  Later notifier rollback source/test commits are newer than #129 and have no
+  CI run because GitHub Actions is currently paused on this fork.
 
 The current preflight script is `tools/test-ecm-fib-rule-patch.sh`. It reads
 the source version/commit/archive URL/SHA from the pinned feed Makefile,
