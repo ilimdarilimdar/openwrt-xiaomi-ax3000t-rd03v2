@@ -30,8 +30,8 @@ The authoritative task list and closure criteria are in [OPEN_ITEMS_REGISTER_RU.
 ## Latest validation snapshot — 2026-11-16
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Current code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`.
-  Documentation-only commits after it update the handoff and CI record.
+- Current source/test revision: `c586d83e02537d17b1595f5026944e088d7e6f6e`.
+  Patch 9002 now fails closed on FIB notifier registration failure; source guards and manual workflow dispatch are added, but they are not yet CI-validated.
 - Functional ECM patch 9002 revision: `c875a7f71c28209118f5668ae823d78e4e1433d5`.
 - [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141):
   Static **PASS**; PREPARE_ONLY **PASS**; raw QSDK application, all 32 ordered ECM
