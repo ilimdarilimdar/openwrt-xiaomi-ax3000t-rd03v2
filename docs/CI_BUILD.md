@@ -51,7 +51,7 @@ The preparation stage does not require the private signing key. The project buil
 
 ## Full build
 
-The full build job runs only on a push whose commit message contains `[full-build]`.
+For a push event, the full build job runs only when the commit message contains `[full-build]`. A manual `workflow_dispatch` runs the full build only when its `full_build` boolean input is explicitly `true` and PREPARE_ONLY succeeds.
 
 A full-build run does not use the owner's release key. It generates a disposable P-256 EC keypair on the ephemeral GitHub runner, substitutes the public key only in that runner's checkout, and uses it to sign the temporary package index. The private key is not committed, printed, or uploaded. It disappears when the runner is destroyed.
 
