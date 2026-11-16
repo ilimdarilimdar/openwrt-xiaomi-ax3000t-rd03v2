@@ -541,38 +541,20 @@ README проекта описывает in-place `sysupgrade` с сохране
 
 ## 11. Приоритетный план ближайших работ
 
-### P0 — зафиксировать воспроизводимость
-- Проверить clean working tree и SHA ветки.
-- Выполнить `PREPARE_ONLY=1`.
-- Разобрать все ошибки defconfig/feed/patch.
-- Зафиксировать итоговые `.config`, feed pins и логи.
-- Выполнить полную сборку и `verify-v2.sh`.
+Подробный список задач, зависимостей и критериев закрытия ведётся централизованно в
+[реестре незакрытых задач](OPEN_ITEMS_REGISTER_RU.md). Не поддерживать параллельные
+копии длинного плана в этом мануале.
 
-### P1 — базовая сеть
-- Получить фактическую DSA топологию RD03v2.
-- Измерить WAN1 отдельно и WAN2 отдельно.
-- Проверить firewall4 + mwan3 без экспериментального ECM patch.
-- Начать с failover, не с балансировки.
+Текущая очередь:
 
-### P2 — ECM
-- Patch 9002 подготовлен и прошёл raw source apply + full pinned ECM feed-series preflight.
-- Завершить full build, подтвердить компиляцию `kmod-qca-nss-ecm`, notifier marker в `ecm.ko` и `verify-v2.sh`.
-- Затем проверить module lifecycle, FIB rule churn и mwan3 failover на втором RD03v2.
+1. **P0 — CI:** получить completed full CI на актуальном code/test SHA, подтвердить watchdog suite, AUTOREMOVE verifier и final `verify-v2.sh`. #127 Static/PREPARE_ONLY PASS не заменяет полный build.
+2. **P0 — безопасность стенда:** до любых записей во flash подтвердить второй RD03v2, backup, проводной доступ и проверенный recovery path. Основной роутер остаётся на stock MiWiFi.
+3. **P1 — ECM/NSS:** runtime notifier register/unregister, module lifecycle, initial FIB replay, FIB churn, lockdep/teardown stress и counters.
+4. **P1 — Dual-WAN:** firewall4/mwan3 runtime, WAN1/WAN2 по отдельности, tracker `disconnected` отдельно от netifd `ifdown`, failover в обе стороны, conntrack marks и IPv4/IPv6.
+5. **P1 — измерения:** single-flow и multi-flow throughput, NSS on/off, CPU/RAM, RTT/jitter/loss и чувствительный к latency трафик.
+6. **P2 — release:** постоянная подпись, реальный package repository, image hashes/manifests, recovery-tested install/rollback и release notes.
 
-### P3 — оптимизация
-- Измерить NSS throughput, CPU, RAM и latency.
-- Сравнить single-WAN и multi-WAN.
-- Сравнить NSS on/off только в контролируемых условиях.
-- Проверить Wi-Fi под параллельной проводной нагрузкой.
-- Добавить VPN и телеметрию после базовой стабилизации.
-
-### P4 — релиз
-- Полная матрица приёмки.
-- Проверенный recovery.
-- Подписанные артефакты и SHA-256.
-- Публикация release notes с честным разделом NOT TESTED.
-- Не публиковать экспериментальную сборку как production-ready.
-
+Не закрывать задачу без указанного в реестре доказательства.
 ## 12. Сбор диагностического отчёта
 
 Для каждого тестового прогона создать отдельную папку, например:
