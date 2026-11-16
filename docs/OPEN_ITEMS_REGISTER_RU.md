@@ -5,24 +5,23 @@
 **Дата ревизии:** 2026-11-16
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
-**Code/test baseline:** ECM source patch `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791` (per-family route notifier state, first-error preservation, rollback guards and exact `ret` identifier checks)
+**Current source/test candidate:** ECM patch code commit 16193bfb29eecca103a370270458a779403ac619; test-harness commit 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Patch blob 7807d27f592dca0585267285a7adb487e47b6b2c; test blob 9dc9a29bb93459cc42f0c16155475bf88950ce44. Gate-first callback and drain-loop implementation is committed but has not passed exact QSDK archive apply or C compilation.
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
 
 ## Текущая контрольная точка — 2026-11-16
 
-- **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-- **Исходный code/test branch snapshot перед серией аннотационных коммитов:** `07a4063eb59555ce883970546b5c97f047d65435`. Последующие коммиты этой ревизии изменяют только документацию.
-- **Функциональный ECM patch commit:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`.
-- **Последняя тестовая ревизия:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
-- **Текущие blob IDs:** patch 9002 `794bb980bf753515e9b61c48c6c393acfeeff874`; `tools/test-ecm-fib-rule-patch.sh` `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6`.
-- GitHub Compare от `02ee20e` до исходного snapshot `07a4063`: **19 commits ahead / 0 behind**. Содержательные изменения после тестовой ревизии — документация и поясняющий текст заголовка patch 9002. Исполняемые C-hunks patch, тестовый скрипт, workflow и firmware config не менялись.
-- Workflow содержит безопасный `workflow_dispatch`: `full_build=false` запускает Static + PREPARE_ONLY; `true` добавляет full-build и `verify-v2`. Ограничение по рабочей ветке и временный CI signing key / `example.invalid` / отсутствие публикации образов сохранены. Реальные dispatch false/true ещё не выполнены.
-- Последний GitHub Actions run — **#129**, завершён с conclusion `cancelled` до создания jobs. #128 также отменён; #127 прошёл Static и PREPARE_ONLY, но full-build был прерван остановкой runner (exit 143). Последний полный build — #124: ECM скомпилирован и оба типа образов созданы, но финальный `verify-v2` завершился FAIL.
-- Для текущего HEAD нет успешного CI run и commit status. Последняя зафиксированная UI-проверка Actions указывала на паузу workflow на fork; в API после #129 новых runs не видно.
-- CI #123/#124 проверяли предыдущую реализацию patch 9002. Их PASS по apply/source guards и компиляции нельзя переносить на текущую транзакционную версию `fb88ba4`.
-- **NOT TESTED:** exact QSDK archive apply после rollback, полная 32-patch series после rollback, C compilation текущего patch, fault injection, module load/unload, runtime FIB churn, firewall4/mwan3 failover, conntrack marks, NSS datapath, WAN throughput/RTT/loss, Warface/game traffic, soak и recovery.
-- Основной домашний роутер остаётся на stock MiWiFi. CI-образы не являются установочными и прошивать их нельзя.
+- Рабочая ветка: work/rd03v2-dualwan-mwan3-baseline.
+- Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+- Candidate 9002 закрывает per-family gate непосредственно в atomic callback на первом ADD/DEL событии, использует readiness barrier для initial FIB replay, drain-loop worker, RTNL-serialized final gate release и teardown cleanup.
+- Callback закрывает gate до публикации pending bit. Повторные события coalesce и не увеличивают temporary-stop counter повторно. Во время initial register_fib_notifier replay callback не queue-ит worker; после успешного return caller выставляет ready и ставит один worker.
+- Worker обрабатывает pending IPv4/IPv6 bits циклом и открывает gates только после пустого pending snapshot под per-net RTNL. Teardown disarm-ит queueing, unregister-ит notifier, drain/cancel-ит work и очищает остаточные gated/pending state.
+- Это source candidate, а не подтверждённое исправление: exact QSDK archive apply, полная отсортированная 32-patch queue, C compilation, fault injection, lockdep/KASAN и runtime stress после изменения не выполнялись. Порядок RTNL → ECM frontend spinlock ещё должен быть подтверждён lockdep.
+- Последний GitHub Actions run — #129, отменён до jobs. #127 прошёл Static/PREPARE_ONLY, но full-build прерван runner shutdown (exit 143). #124 — последняя сборка с образами; она собрала старую версию ECM, а final verify-v2 завершился FAIL.
+- Для нового patch/test candidate нет Actions run или успешного commit status. Workflow имеет manual workflow_dispatch, но full_build=false/true не запускались; последняя UI-проверка сообщала о паузе Actions на этом fork.
+- NOT TESTED: exact archive apply, 32-patch feed series после нового изменения, текущая C compilation, initial replay/retry, injected IPv4/IPv6/FIB registration failures, worker churn stress, module load/unload, firewall4/mwan3 failover, conntrack marks, NSS datapath, throughput/RTT/loss, game traffic, soak и recovery.
+- Основной домашний роутер остаётся на stock MiWiFi. CI-образы используют временный P-256 key и example.invalid; это не installable release и их нельзя прошивать.
 
 ## Оценка зрелости проекта — 2026-11-16
 
@@ -40,7 +39,7 @@
 | Подписанный релиз, repository и recovery-процедура | 5% | 10% | 0,5 п.п. |
 | **Итого** | **100%** |  | **44,3% (округлено до 44%)** |
 
-Унаследованная платформа уже имеет отдельные результаты upstream build/hardware validation. Эти результаты не засчитываются как проверка новых Dual-WAN/ECM изменений. Текущая версия patch 9002 с транзакционным rollback новее исходников, собранных в CI #124, и пока не прошла повторный apply/compile/verify. Поэтому 45% означает завершённость инженерной работы, а не готовность безопасно прошивать устройство.
+Унаследованная платформа уже имеет отдельные результаты upstream build/hardware validation. Эти результаты не засчитываются как проверка новых Dual-WAN/ECM изменений. Текущая gate-first/drain-loop версия patch 9002 новее исходников, собранных в CI #124, и пока не прошла повторный apply/compile/verify. Поэтому 44% означает завершённость инженерной работы, а не готовность безопасно прошивать устройство.
 
 
 ## 1. Краткий итог аудита
@@ -189,24 +188,33 @@ Pinned QSDK 14.0 инициализирует ECM DB до IPv4/IPv6 packet front
 
 **Что ещё требуется:** на точном QSDK archive проверить применение patch 9002 после полной сортированной ECM patch series; проверить raw `patch -f -p1` и offsets; собрать `qca-nss-ecm`; добавить/выполнить fault injection отдельно для IPv4 route notifier, IPv6 route notifier и FIB notifier; подтвердить first-error propagation, rollback только успешных notifier, drain worker, освобождение DB без leak/oops/deadlock и нормальную повторную загрузку модуля.
 
-**Текущий статус:** source implementation и source-level assertions закоммичены; структурная проверка unified diff (9 sections, 22 hunks, без пересечений) пройдена в рамках ревизии. Exact archive apply/full-series preflight, C compilation, runtime fault injection и module load/unload — **NOT TESTED**. ECM-05 остаётся открытым до CI и fault-injection evidence.
+**Текущий статус:** transactional registration rollback дополнен gate-first callback/drain-loop в patch code commit 16193bfb29eecca103a370270458a779403ac619; source guards обновлены в test commit 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Unified-diff structure checks passed during authoring, но exact archive apply/full-series preflight, C compilation, runtime fault injection и module load/unload — **NOT TESTED**. ECM-05 остаётся открытым до CI и fault-injection evidence.
 
-### ECM-06 — Закрыть окно между повторно поставленными FIB worker passes
+### ECM-06 — Gate-first FIB callback и drain всех pending worker passes
 
-**Приоритет:** P1; source-level concurrency review до аппаратного acceptance.
+**Приоритет:** P1; source candidate реализован, validation gate открыт.
 
-**Наблюдение по текущей реализации patch 9002:** один запуск `ecm_db_fib_rule_work_fn()` берёт RTNL, снимает pending IPv4/IPv6 bits, освобождает RTNL, закрывает frontend stop gate, вызывает `synchronize_net()`, выполняет `ecm_db_connection_defunct_ip_version()` и затем открывает gate. Если новое FIB rule событие приходит после snapshot во время defunct-прохода, callback снова выставляет pending bit и ставит ту же work item в очередь. Linux workqueue не запускает один work item параллельно самому себе; повторное выполнение начинается после текущего запуска. Поэтому текущий проход может открыть frontend gate до того, как начнётся повторный проход.
+**Исходный риск:** один worker pass мог снять pending snapshot, выполнить defunct и открыть frontend gate, пока новое FIB rule событие уже поставило тот же work item повторно. Следующий pass начинался только после завершения текущего. Отдельно существовала задержка между callback и началом worker, когда новые flows могли попасть в ECM до закрытия gate.
 
-Это **потенциальное race window**, а не доказанный аппаратный сбой: нужно определить, может ли в этом интервале появиться или ускориться поток, закреплённый по уже изменённому policy rule, и воспроизвести это детерминированно. Текущий source guard проверяет последовательность одного worker pass, но не моделирует событие, поступившее во время defunct.
+**Candidate implementation в patch code commit 16193bfb29eecca103a370270458a779403ac619:**
+1. Первый callback для IPv4/IPv6 атомарно устанавливает per-family gated-state bit и синхронно закрывает соответствующий frontend temporary-stop gate. Повторные события не увеличивают временный stop counter повторно.
+2. Во время initial FIB dump/replay callback записывает pending/gated state, но не запускает worker, пока register_fib_notifier() не вернётся. После успешной регистрации WRITE_ONCE(ready, true) и один schedule_work() запускают обработку replay-событий.
+3. Worker обрабатывает pending IPv4/IPv6 bits циклом. Gate остаётся закрытым между проходами. Открытие выполняется только после пустого pending snapshot под per-net RTNL, сериализованного с live FIB rule ADD/DEL callbacks.
+4. Teardown disarm-ит queueing, снимает notifier, ждёт/cancel-ит work и под RTNL снимает остаточные pending/gated bits и temporary-stop refs.
 
-**Проверка и возможное исправление:**
-1. Добавить детерминированные точки инъекции FIB ADD/DEL после snapshot, после закрытия gate, во время DB defunct и непосредственно перед открытием gate.
-2. Зафиксировать, что повторно поставленный worker действительно запускается только после возврата текущего pass; сопоставить порядок callback, gate counter и фактический egress новых flows.
-3. Рассмотреть drain-loop, который сохраняет stop gate между проходами и открывает его только после подтверждения отсутствия pending событий. Финальную проверку pending state и открытие gate необходимо сериализовать с live FIB rule updates под per-net RTNL; отдельно учесть initial FIB replay, callback которого вызывается без RTNL.
-4. Перед внесением изменения разобрать lock ordering RTNL ↔ ECM frontend locks. Не добавлять RTNL вокруг gate transition без проверки всех callsites и возможных обратных lock dependencies.
-5. Повторить raw QSDK apply, полную patch series, compile, source guards и fault/stress tests.
+**Что нужно доказать:**
+- exact QSDK archive apply и применение всей отсортированной 32-patch ECM feed series;
+- корректность callback context: gate helper должен оставаться строго atomic-safe;
+- отсутствие lock inversion при порядке RTNL → frontend spinlock (lockdep);
+- корректность initial replay/retry и событий между регистрацией notifier и readiness barrier;
+- детерминированные события после snapshot, во время synchronize_net(), во время DB defunct и перед final gate release;
+- отказ IPv4/IPv6 route notifier и FIB notifier, unload во время pending work, repeated load/unload;
+- C compilation и отсутствие oops/warnings/leaks/deadlock на аппаратном стенде.
 
-**Критерий закрытия:** детерминированные тесты закрывают все перечисленные окна; после каждого rule change ни один новый flow не остаётся ускоренным на предыдущем WAN; нет deadlock/oops/lockdep warning; worker unload/drain проходит без потери событий.
+**Критерий закрытия:** exact apply + full feed series + C compile PASS; source/fault tests PASS; lockdep/KASAN без ошибок; ни один family gate не открывается при pending events; module teardown не оставляет worker/gate reference.
+
+**Текущий статус:** patch/test source candidate committed; CI, compile, fault injection и hardware runtime — **NOT TESTED**. ECM-06 остаётся открытым.
+
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
