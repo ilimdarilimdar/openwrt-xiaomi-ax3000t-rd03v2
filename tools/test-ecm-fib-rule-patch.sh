@@ -246,10 +246,10 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-family_lock = re.compile(r"\\bspin_lock(?:_bh)?\\s*\\(\\s*&ecm_ipv[46]_lock\\s*\\)")
+family_lock = re.compile(r"\bspin_lock(?:_bh)?\s*\(\s*&ecm_ipv[46]_lock\s*\)")
 rtnl_lock = re.compile(
-    r"\\b(?:rtnl_(?:net_)?(?:lock|trylock)|rtnl_lock_(?:interruptible|killable)|"
-    r"rtnl_net_lock_killable)\\s*\\("
+    r"\b(?:rtnl_(?:net_)?(?:lock|trylock)|rtnl_lock_(?:interruptible|killable)|"
+    r"rtnl_net_lock_killable)\s*\("
 )
 violations = []
 for source_path in sorted(root.rglob("*.c")):
