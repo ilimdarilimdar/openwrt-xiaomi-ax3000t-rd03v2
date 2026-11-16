@@ -1,39 +1,34 @@
 # Передача проекта следующему ИИ-агенту: Xiaomi AX3000T RD03v2
 
-> **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
+> Единая точка входа для продолжения разработки. Перед изменением кода сначала сверить branch HEAD, diff и CI. Исторические PASS не переносить на более новые исходники.
 
-**Последняя сверка:** 2026-11-16, повторная live-ревизия branch ref/compare, Actions #124–#129 и job logs, pinned feed Makefiles, config, ECM 9001/9002, watchdog, verifier, build workflow и документации.
+**Последняя ревизия:** 2026-11-16.
+**Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Реестр:** [docs/OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
-**Last full compare snapshot before final document synchronization:** `37ff7aa30fd167acd0a4d7317eb5fb6f435a7579`.
-**Last compare:** test revision `02ee20e` → compare snapshot `37ff7aa`: 13 commits ahead, 0 behind; изменения после тестовой ревизии — docs и только пояснительная шапка patch 9002. C hunk bodies, test script, workflow и firmware config не менялись.
-**GitHub status на том snapshot:** commit statuses и workflow runs отсутствовали. GitHub Actions page по-прежнему сообщает о pause на fork; новые document-only commits не добавляют CI evidence.
-**ECM source patch:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`; **latest test revision:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Patch 9002 содержит транзакционную регистрацию IPv4/IPv6 route notifier и FIB notifier с rollback DB при ошибке.
-**Существенные коммиты текущей сессии:** source patch route/FIB rollback `946e721`, hunk merge `70cc6e2`, C-string correction `fb88ba4`, patch-preface clarification `f72db08`; test guards for route rollback/overlapping hunks/exact `ret` names `e9ae187`, `f82539e`, `b350891`, `343660d`, `02ee20e`; workflow dispatch `e0280a7` и static-gate correction `49e4ed1`.
-**Кодовая логика:** route errors возвращают первую ошибку, не затираемую последующим notifier; успешная регистрация каждого семейства помечается отдельно. На любом route error `ecm_db_init()` вызывает `ecm_db_exit()` и возвращает ret до FIB registration. Ошибка FIB registration вызывает тот же DB rollback и возвращает fib_ret. Pinned QSDK инициализирует DB до packet frontends и conntrack hooks, поэтому ECM module init завершается с ошибкой до включения этих hooks.
-**Тесты:** source guards проверяют route error aggregation, per-family registration/unregister, cleanup перед return, FIB failure cleanup, порядок init, lifecycle worker drain, атомарный callback и неперекрывающиеся hunk offsets. Структурная проверка patch: 9 file sections, 22 hunks, line counts/offsets согласованы, старые hunk ranges не перекрываются. Сам preflight, применение к hash-verified archive, полная 32-patch series и C compilation после этих изменений не запускались.
-**Compare:** latest test revision `02ee20e` → current branch HEAD `20e8125`: 10 commits ahead, 0 behind; после test baseline изменены документация и только пояснительная шапка patch 9002, C hunk bodies/test/workflow/config неизменны.
-**CI/Actions:** последняя видимая запись — #129 (`e398b3f`), отменён до jobs. Current HEAD имеет пустые commit statuses и ноль workflow runs. Live Actions page сообщает, что workflows на этом fork приостановлены из-за scale usage. После source revision `fb88ba4` нового run нет. GitHub Actions нужно повторно включить maintainer’у; только после этого выполнять manual dispatch.
-**Workflow:** `workflow_dispatch` с boolean `full_build`: false — Static + PREPARE_ONLY; true — плюс full build + `verify-v2`. Dispatch ограничен рабочей веткой. Push с `[full-build]` сохранён. Реальные dispatch false/true не проверены из-за паузы Actions.
-**Аппаратный статус:** FIB/route notifier fault injection, module load/unload, ECM/NSS datapath, Dual-WAN failover и метрики throughput/latency/loss — **NOT TESTED**. Основной домашний роутер остаётся на stock MiWiFi; CI images с временным ключом и `example.invalid` не прошивать.
-**Подтверждённые pinned feed options:** mwan3 2.12.5; qca-nss-ecm включает `ECM_CLASSIFIER_MARK_ENABLE=y` на qualcommax. Runtime fwmark/NSS datapath всё ещё **NOT TESTED**.
+**Текущий branch HEAD:** `07a4063eb59555ce883970546b5c97f047d65435`.
+**Функциональный ECM patch commit:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`.
+**Последняя тестовая ревизия:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
+**Blob patch 9002:** `794bb980bf753515e9b61c48c6c393acfeeff874`.
+**Blob ECM preflight test:** `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6`.
+**Реестр задач:** [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
+## Текущий подтверждённый статус
 
-## Live follow-up — 2026-11-16, 09:00 UTC+3
+- После `02ee20e` ветка продвинулась на 19 коммитов, 0 behind. Compare показывает только изменения документации и пояснительного текста заголовка patch 9002. C-hunks, preflight script, workflow и firmware config не изменялись.
+- Patch 9002 содержит per-family регистрацию IPv4/IPv6 route notifier, сохранение первой ошибки, флаги фактической регистрации и DB rollback при ошибке route/FIB notifier. Source-level regression guards проверяют порядок очистки и lifecycle.
+- Важное ограничение: текущий rollback patch `fb88ba4` и тестовые guards `02ee20e` **не прошли повторный exact archive preflight, полную 32-patch series, C compilation или fault injection после изменения**. Старые CI PASS относятся к предыдущей версии patch.
+- Последний GitHub Actions run — #129, cancelled до jobs. #127 прошёл Static и PREPARE_ONLY, но full-build остановлен runner shutdown с exit 143. #124 — последний полный build; он собрал предыдущую версию ECM и образы, но final `verify-v2` завершился FAIL.
+- Текущий HEAD не имеет commit status и успешного CI run. Workflow с `workflow_dispatch` и boolean `full_build` реализован, но реальные dispatch false/true ещё не выполнялись. После #129 новых Actions runs API не показывает; последняя UI-проверка указывала на паузу Actions для fork.
+- Runtime notifier, module load/unload, firewall4/mwan3, conntrack marks, NSS offload для WAN flows, latency/loss/throughput, Warface и soak — **NOT TESTED**.
+- CI использует временный P-256 ключ и `example.invalid`, не публикует установочные образы. Основной домашний роутер остаётся на stock MiWiFi.
 
-- Текущий branch HEAD: `20e8125af1ffe4cceef272249fa141bdfeaad13d`.
-- Compare от test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`: 10 commits ahead, 0 behind. C/test review reconciled: test script blob `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6` unchanged; patch 9002 blob `794bb980bf753515e9b61c48c6c393acfeeff874` differs only in explanatory header prose, not code hunks.
-- Workflow has boolean-gated `workflow_dispatch` on the work branch. false = Static + PREPARE_ONLY; true = full build + `verify-v2`. Temporary key, placeholder package URL and no-publish safeguard remain.
-- HEAD commit statuses and PR-associated workflow runs are empty. No new build or final verifier result exists after the recorded CI runs. Actions are reported as paused at repository level and require maintainer re-enable.
-- Next: maintainer re-enables Actions in the repository Actions page; run dispatch false then true; inspect logs/artifacts and require zero `verify-v2` failures. Only then move to runtime tests on the second RD03v2. Keep the primary router on stock MiWiFi.
+## Следующие действия
 
-## Следующее действие без повторного аудита
-
-1. Повторно включить GitHub Actions в настройках репозитория, поскольку live Actions page сообщает о приостановке workflow runs на fork.
-2. Запустить `workflow_dispatch` на рабочей ветке с `full_build=false`: проверить Static + PREPARE_ONLY и отсутствие full-build job.
-3. Запустить `full_build=true`: проверить применение patch 9002 через реальный `patch -f -p1` после полной pinned ECM series, сборку `qca-nss-ecm`, image generation и final `verify-v2`.
-4. Выполнить fault injection для отказа IPv4 route notifier, IPv6 route notifier и FIB notifier. Проверить первую ошибку, per-family rollback, worker drain, DB cleanup и отсутствие leak/oops/deadlock.
-5. После успешной сборки проверить module load/unload и только затем проходить recovery gate HW-01 и аппаратные тесты на втором RD03v2. Основной домашний роутер остаётся на stock MiWiFi.
+1. После восстановления Actions выполнить manual dispatch `full_build=false` на рабочей ветке и проверить Static + PREPARE_ONLY.
+2. Затем выполнить `full_build=true` и проверить exact QSDK apply, полную ECM series, компиляцию `qca-nss-ecm`, оба образа и полный `verify-v2`.
+3. Отдельно выполнить fault injection ошибок IPv4 notifier, IPv6 notifier и FIB notifier.
+4. Только после успешного CI перейти к module load/unload и аппаратным тестам на втором RD03v2 с recovery-процедурой.
+5. Не прошивать CI images и не трогать основной домашний роутер.
 
 ## Текущая контрольная точка
 
@@ -240,7 +235,7 @@ RD03v2 — не MediaTek RD03/RD23. Образы, device tree, инструкц�
 
 Патч 0014 прошёл проверку на актуальном PREPARE_ONLY artifact 14181217573: ранее выбранный NSS Kconfig cycle отсутствует в итоговой конфигурации. Остались три unrelated recursive-dependency diagnostics (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom); все три пакета не выбраны. Повторно проверять этот результат после изменения feeds, пакетов или patch 0014.
 
-## 5. Состояние CI при последней подтверждённой проверке — 2026-11-16
+## 5. Историческая запись CI #124 и последующих запусков — 2026-11-16
 
 Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
 Исторический code/test HEAD до транзакционного rollback: `49d3579437389e2ffc111b94a08839ef7bd29ae7`. Текущие source/test SHA указаны в верхнем checkpoint; он имеет приоритет.
