@@ -5,9 +5,9 @@
 **Последняя сверка:** 2026-11-16, повторная live-ревизия branch ref/compare, Actions #124–#129 и job logs, pinned feed Makefiles, config, ECM 9001/9002, watchdog, verifier, build workflow и документации.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 **Реестр:** [docs/OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
-**Current branch HEAD:** `37ff7aa30fd167acd0a4d7317eb5fb6f435a7579`.
-**Current compare:** test revision `02ee20e` → branch HEAD `37ff7aa`: 13 commits ahead, 0 behind; изменения после тестовой ревизии — docs и только пояснительная шапка patch 9002. C hunk bodies, test script, workflow и firmware config не менялись.
-**Current GitHub status:** для HEAD `37ff7aa` нет commit statuses и workflow runs. GitHub Actions page по-прежнему сообщает о pause на fork.
+**Last full compare snapshot before final document synchronization:** `37ff7aa30fd167acd0a4d7317eb5fb6f435a7579`.
+**Last compare:** test revision `02ee20e` → compare snapshot `37ff7aa`: 13 commits ahead, 0 behind; изменения после тестовой ревизии — docs и только пояснительная шапка patch 9002. C hunk bodies, test script, workflow и firmware config не менялись.
+**GitHub status на том snapshot:** commit statuses и workflow runs отсутствовали. GitHub Actions page по-прежнему сообщает о pause на fork; новые document-only commits не добавляют CI evidence.
 **ECM source patch:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`; **latest test revision:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Patch 9002 содержит транзакционную регистрацию IPv4/IPv6 route notifier и FIB notifier с rollback DB при ошибке.
 **Существенные коммиты текущей сессии:** source patch route/FIB rollback `946e721`, hunk merge `70cc6e2`, C-string correction `fb88ba4`, patch-preface clarification `f72db08`; test guards for route rollback/overlapping hunks/exact `ret` names `e9ae187`, `f82539e`, `b350891`, `343660d`, `02ee20e`; workflow dispatch `e0280a7` и static-gate correction `49e4ed1`.
 **Кодовая логика:** route errors возвращают первую ошибку, не затираемую последующим notifier; успешная регистрация каждого семейства помечается отдельно. На любом route error `ecm_db_init()` вызывает `ecm_db_exit()` и возвращает ret до FIB registration. Ошибка FIB registration вызывает тот же DB rollback и возвращает fib_ret. Pinned QSDK инициализирует DB до packet frontends и conntrack hooks, поэтому ECM module init завершается с ошибкой до включения этих hooks.
