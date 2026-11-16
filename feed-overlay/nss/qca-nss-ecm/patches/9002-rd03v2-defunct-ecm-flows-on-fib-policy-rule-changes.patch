@@ -21,7 +21,7 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
-ecm_db/ecm_db.c | +173 -0
+ecm_db/ecm_db.c | +197 -8
 ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
@@ -30,7 +30,7 @@ frontends/include/ecm_front_end_ipv4.h | +1 -1
 frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
-9 files changed, 208 insertions(+), 36 deletions(-)
+9 files changed, 232 insertions(+), 44 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
@@ -45,7 +45,19 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +#include <linux/netdevice.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-@@ -469,9 +474,149 @@
+@@ -78,9 +83,11 @@
+ static int ecm_db_ipv4_route_enable = 1;
++static bool ecm_db_ipv4_route_registered;
+ 
+ /*
+  * Enable/Disable IPV6 routing table events
+  */
+ #ifdef ECM_IPV6_ENABLE
+ static int ecm_db_ipv6_route_enable = 1;
++static bool ecm_db_ipv6_route_registered;
+ #endif
+ 
+@@ -469,9 +476,149 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -195,13 +207,53 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +908,31 @@
+@@ -675,4 +822,5 @@
+ int ecm_db_init(struct dentry *dentry)
+ {
+ 	int ret = 0;
++	int route_ret = 0;
+ 
+@@ -747,18 +895,26 @@
+ 	/*
+ 	 * register for route table modification events
+ 	 */
+ 	if (ecm_db_ipv4_route_enable) {
+-		ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb);
+-		if (ret) {
+-			DEBUG_ERROR("Could not register for the IPV4 routing events error:%d\\n", ret);
++		route_ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb);
++		if (route_ret) {
++			DEBUG_ERROR("Could not register for the IPV4 routing events error:%d\\n", route_ret);
++			ret = route_ret;
++		} else {
++			ecm_db_ipv4_route_registered = true;
+ 		}
+ 	}
+ 
+ #ifdef ECM_IPV6_ENABLE
+ 	if (ecm_db_ipv6_route_enable) {
+-		ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb);
+-		if (ret) {
+-			DEBUG_ERROR("Could not register for the IPV6 routing events error:%d\\n", ret);
++		route_ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb);
++		if (route_ret) {
++			DEBUG_ERROR("Could not register for the IPV6 routing events error:%d\\n", route_ret);
++			if (!ret) {
++				ret = route_ret;
++			}
++		} else {
++			ecm_db_ipv6_route_registered = true;
+ 		}
+ 	}
+ #endif
+@@ -763,4 +919,32 @@
  	}
  #endif
 +
-+	/* ecm_init() skips ecm_db_exit() when this init returns an error. */
-+	/* Do not register a notifier on that partial-initialization path. */
++	/* ecm_init() skips ecm_db_exit() at err_db; unwind the DB here. */
++	/* Do not register a FIB notifier if either route notifier failed. */
 +	if (ret) {
++		ecm_db_exit();
 +		return ret;
 +	}
 +
@@ -227,11 +279,37 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +
  	return ret;
  
-@@ -785,3 +957,4 @@
+@@ -785,3 +969,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
  	DEBUG_INFO("ECM DB Module exit\n");
+@@ -795,19 +980,23 @@
+ 	/*
+ 	 * unregister for route table update events only if registered.
+ 	 */
+-	if (ecm_db_ipv4_route_enable) {
++	if (ecm_db_ipv4_route_registered) {
+ 		ret = ip_rt_unregister_notifier(&ecm_db_iproute_table_update_nb);
+ 		if (ret) {
+ 			DEBUG_ERROR("Could not unregister for the IPV4 routing events error:%d\\n", ret);
++		} else {
++			ecm_db_ipv4_route_registered = false;
+ 		}
+ 	}
+ 
+ #ifdef ECM_IPV6_ENABLE
+-	if (ecm_db_ipv6_route_enable) {
++	if (ecm_db_ipv6_route_registered) {
+ 		ret = rt6_unregister_notifier(&ecm_db_ip6route_table_update_nb);
+ 		if (ret) {
+ 			DEBUG_ERROR("Could not unregister for the IPV6 routing events error:%d\\n", ret);
++		} else {
++			ecm_db_ipv6_route_registered = false;
+ 		}
+ 	}
+ #endif
+ 	ecm_db_connection_defunct_all();
 diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
 --- a/ecm_db/ecm_db.h
 +++ b/ecm_db/ecm_db.h
