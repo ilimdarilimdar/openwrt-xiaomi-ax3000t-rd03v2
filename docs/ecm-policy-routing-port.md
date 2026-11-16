@@ -221,32 +221,39 @@ Runtime notifier behavior, module lifecycle and hardware Dual-WAN/NSS
 acceptance remain **NOT TESTED**. Do not describe this patch as compiled at
 its current revision, production-ready or NSS-safe.
 
-## Worker requeue window — additional concurrency finding (2026-11-16)
+## Worker requeue window — resolution candidate (2026-11-16)
 
-The current worker handles one snapshot of the pending-family bits per invocation:
-it clears the bits under `rtnl_net_lock(&init_net)`, releases RTNL, gates the
-affected frontend, waits with `synchronize_net()`, defuncts that family, and
-opens the gate. A new FIB rule event can arrive after the snapshot while the
-defunct operation is in progress. The atomic callback then sets a fresh pending
-bit and queues the same work item again.
+The previous one-pass worker could release the temporary stop gate after
+processing one pending-bit snapshot even if a second FIB event had requeued
+the same work item while the defunct pass was running. The candidate patch
+revision addresses both the inter-pass gap and the callback-to-worker gap:
 
-Linux workqueue guarantees non-reentrant execution of the same work item, while
-allowing it to be requeued; the queued invocation runs after the current one.
-The current worker therefore may decrement the stop gate before the next
-invocation begins. This creates a **potential gate-open interval between two
-passes**. It is not yet demonstrated that a stale accelerated flow escapes in
-that interval, so this is recorded as an unresolved concurrency risk rather
-than a confirmed functional defect.
+1. The atomic notifier callback acquires the affected family's frontend stop
+   gate synchronously on the first event by using a dedicated gated-state bit.
+   Further events coalesce into the pending-family bit without incrementing
+   the temporary stop counter again.
+2. During initial `register_fib_notifier()` replay, the callback records and
+   gates events but does not queue work until registration has completed.
+   `ecm_db_fib_rule_ready` is armed with `WRITE_ONCE`, then one worker is
+   queued to process the replayed events. This avoids running the worker in
+   parallel with the initial RCU dump.
+3. The worker drains pending IPv4/IPv6 bits in a loop. It keeps callback-owned
+   gates closed across every pass and releases them only after an empty-pending
+   check under per-net RTNL. Live FIB rule ADD/DEL callbacks run under that same
+   RTNL, so they cannot be interleaved between the final check and gate release.
+4. Teardown disables new queueing, unregisters the notifier, drains/cancels
+   the worker, and then clears any residual pending/gated state under RTNL.
 
-The relevant exact Linux 6.18.55 sources are:
-- [FIB notifier register/unregister](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c#L81-L125): initial dump/replay, registration retry and atomic-chain unregister.
-- [Atomic notifier unregister](https://github.com/gregkh/linux/blob/v6.18.55/kernel/notifier.c#L178-L198): successful removal waits for an RCU grace period; absent notifier returns `-ENOENT`.
-- [Workqueue requeue semantics](https://github.com/gregkh/linux/blob/v6.18.55/Documentation/core-api/workqueue.rst#L760-L781): a work item is not executed reentrantly, and requeueing it is allowed.
-- [Workqueue implementation](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L3255-L3294) clears the pending bit before calling the worker function; [queue_work_on()](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L2413-L2425) can therefore enqueue the same work item from another context while the first invocation is executing. The second invocation remains non-reentrant and runs after the first.
+The exact Linux 6.18.55 sources supporting the context are:
+- [Initial FIB dump and registration sequence](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c#L40-L100): initial dump executes under RCU; notifier registration compares the sequence and retries.
+- [Live FIB rule notifications](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_rules.c#L388-L424): `call_fib_rule_notifiers()` asserts per-net RTNL; `fib_rules_dump()` is explicitly called under RCU.
+- [Workqueue pending/requeue behavior](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L2413-L2425) and [worker pending-bit clear](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L3255-L3263).
 
-Required deterministic injection points: after pending-bit snapshot, after frontend gate close, during the DB defunct pass, and immediately before gate open. A possible drain-loop must keep frontend gates closed across repeated passes and serialize the final empty-pending check/gate-open transition with live RTNL-protected rule changes. Initial FIB replay occurs without RTNL and must be handled separately. Review RTNL/frontend-lock ordering before implementing that change.
-
-Do not mark ECM worker concurrency complete until this window is either disproven with a test or closed with code plus regression evidence.
+**Status:** candidate source and static regression guards have been updated in the
+repository, but exact QSDK patch application, full feed-series application,
+C compilation, KASAN/lockdep, fault injection and runtime stress are still
+**NOT TESTED**. The lock order RTNL → ECM frontend spinlock must be confirmed
+by the pinned-source build and lockdep run. Do not mark ECM-06 closed yet.
 
 ## Remaining v2 validation checklist
 
