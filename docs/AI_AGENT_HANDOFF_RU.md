@@ -20,6 +20,7 @@
 - Последний GitHub Actions run — #129, cancelled до jobs. #127 прошёл Static и PREPARE_ONLY, но full-build остановлен runner shutdown с exit 143. #124 — последний полный build; он собрал предыдущую версию ECM и образы, но final `verify-v2` завершился FAIL.
 - Текущий HEAD не имеет commit status и успешного CI run. Workflow с `workflow_dispatch` и boolean `full_build` реализован, но реальные dispatch false/true ещё не выполнялись. После #129 новых Actions runs API не показывает; последняя UI-проверка указывала на паузу Actions для fork.
 - Runtime notifier, module load/unload, firewall4/mwan3, conntrack marks, NSS offload для WAN flows, latency/loss/throughput, Warface и soak — **NOT TESTED**.
+- Дополнительный source-review риск: worker 9002 обрабатывает один pending snapshot за проход; повторно поставленный FIB worker может начать второй проход после того, как первый уже открыл frontend gate. Не доказано, что stale flow успевает появиться, но deterministic injection и проверка gate-open window обязательны (ECM-06).
 - CI использует временный P-256 ключ и `example.invalid`, не публикует установочные образы. Основной домашний роутер остаётся на stock MiWiFi.
 
 ## Следующие действия
@@ -27,8 +28,9 @@
 1. После восстановления Actions выполнить manual dispatch `full_build=false` на рабочей ветке и проверить Static + PREPARE_ONLY.
 2. Затем выполнить `full_build=true` и проверить exact QSDK apply, полную ECM series, компиляцию `qca-nss-ecm`, оба образа и полный `verify-v2`.
 3. Отдельно выполнить fault injection ошибок IPv4 notifier, IPv6 notifier и FIB notifier.
-4. Только после успешного CI перейти к module load/unload и аппаратным тестам на втором RD03v2 с recovery-процедурой.
-5. Не прошивать CI images и не трогать основной домашний роутер.
+4. Проверить ECM-06: event injection во время defunct pass и закрытие pending-bit requeue/gate-open window, с отдельным lock-order review.
+5. Только после успешного CI перейти к module load/unload и аппаратным тестам на втором RD03v2 с recovery-процедурой.
+6. Не прошивать CI images и не трогать основной домашний роутер.
 
 ## Текущая контрольная точка
 
