@@ -148,9 +148,17 @@ Evidence from run [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000
 - The ECM fingerprint failure is explained by CONFIG_AUTOREMOVE=y: OpenWrt left the package build-directory name but removed ecm_db/ecm_db.c. Commit e7846a1 changed the verifier to inspect patched source only when it exists, otherwise compare the exact patch copies in the prepared feed. Commit e398b3f requested another full build to exercise that path.
 - The prepared config artifact confirms CONFIG_AUTOREMOVE=y. Commit 49d3579 adds an explicit verifier check for that setting before accepting the feed-copy fallback.
 
-Current branch HEAD is 49d3579437389e2ffc111b94a08839ef7bd29ae7. The attempted runs #127–#129 were cancelled; #126 was a whitespace-only static failure caused by a trailing blank line in the handoff and was corrected by commit e31ca88. A live Actions lookup by HEAD 49d3579 currently returns no associated workflow run and no commit status, so the new verifier guard and watchdog stub fixes remain NOT CI-VALIDATED.
+The live working-branch ref was `bd804659f1e6ac202ca0720434dafe101c4a84f0` at the start of this audit; that commit changed documentation only. The current code/test HEAD remains `49d3579437389e2ffc111b94a08839ef7bd29ae7`. A live Actions lookup by SHA `49d3579` returns no associated workflow run and no commit status.
 
-Next required action: trigger a fresh CI run through an Actions-enabled push or workflow dispatch, then verify that static checks, PREPARE_ONLY, the watchdog suite and final verify-v2 all pass on the exact new HEAD. Rebuild is still needed because #124 predates the final fixes. Inspect the build artifact and all test summaries. Do not flash CI artifacts: they use a disposable signing key and example.invalid package repository.
+Runs after #124, inspected from their job records and logs:
+
+- **#125** (`f372d519`) and **#126** (`0d2aeadb`): Static checks failed only at `git diff --check` because `docs/AI_AGENT_HANDOFF_RU.md` had an extra blank line at EOF. Prepare-only and full-build jobs were skipped; the watchdog scenarios did not run. Commit `e31ca88` removed that trailing blank line.
+- **#127** (`faa82e24`): Static checks **PASS** and PREPARE_ONLY **PASS**, including the exact pinned-source ECM preflight. The full-build job started, generated the disposable CI signing key and entered `./build.sh`; it was interrupted by runner shutdown with exit code 143. This is not a compile PASS or a verifier result. The preparation artifact is `14185375390`.
+- **#128** (`e7846a1`) and **#129** (`e398b3f`): cancelled before any jobs were created.
+
+Therefore, the watchdog absolute-stub code has passed static checks and the parent revision's PREPARE_ONLY, but the watchdog runtime scenario suite has not passed in CI. The AUTOREMOVE verifier fallback and explicit `CONFIG_AUTOREMOVE=y` guard (`e7846a1`, `49d3579`) still have no completed full-build verification. The current code/test HEAD `49d3579` remains **NOT CI-VALIDATED** for these fixes.
+
+Next required action: obtain a completed full CI run on the exact current code/test HEAD, then verify the watchdog suite, `qca-nss-ecm` compilation, image contents and final `verify-v2`. The available GitHub connector in this session has no action to dispatch a new workflow run; do not treat a documentation-only commit as a CI trigger. Do not create empty commits merely to generate activity. Do not flash CI artifacts: they use a disposable signing key and `example.invalid` package repository.
 
 Dual-WAN/NSS hardware validation remains NOT TESTED; keep the primary router on stock MiWiFi.
 
