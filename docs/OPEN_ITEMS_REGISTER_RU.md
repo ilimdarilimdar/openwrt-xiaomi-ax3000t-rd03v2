@@ -12,7 +12,7 @@
 
 ## Актуальная live-перепроверка ветки и CI — 2026-11-16
 
-- Текущий Branch HEAD: `3cfa87d72b81cde60d2ec597458e63d2067071e3`.
+- Branch HEAD в начале live-перепроверки: `3cfa87d72b81cde60d2ec597458e63d2067071e3`; последующие коммиты этой сессии изменяли только реестр и handoff.
 - Code/test baseline: `49d3579437389e2ffc111b94a08839ef7bd29ae7`; он не изменился.
 - GitHub Compare `49d3579...3cfa87d`: `ahead_by=34`, `behind_by=0`. Все 8 изменённых файлов — `README.md` и документация: handoff, CI guide, development manual, этот реестр, test plan, Dual-WAN и ECM port. Изменений source/config/test/workflow нет.
 - Последний workflow run — #129 (`e398b3f`), cancelled до создания jobs. #128 также cancelled до jobs. В #127 Static и PREPARE_ONLY прошли; full-build был прерван shutdown runner: в job log явно записаны exit 143 и сигнал остановки runner. #124 остаётся последним завершённым full-build: image generation прошла, финальный `verify-v2` завершился с 3 FAIL.
