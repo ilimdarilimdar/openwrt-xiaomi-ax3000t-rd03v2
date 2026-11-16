@@ -108,7 +108,7 @@ pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
 - Финальный verify-v2 #124 — **FAIL**, не IN PROGRESS: watchdog harness дал 20 PASS / 26 FAIL из-за BusyBox applet dispatch мимо PATH-stubs; ECM source fingerprints 9001/9002 не нашли исходники после CONFIG_AUTOREMOVE.
 - Исправления watchdog: commits `f372d519` и `0d2aeadb`; исправление ECM AUTOREMOVE fallback: `e7846a1`; дополнительный guard CONFIG_AUTOREMOVE: `49d3579`. Все они требуют нового CI и пока **NOT CI-VALIDATED**.
 - Runs #127–#129 отменены; нового run для exact HEAD `49d3579` и commit status на последней live-проверке нет.
-- П pinned kernel: Linux **6.18.55**. Generic config fragment включает `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` и `CONFIG_IP_MULTIPLE_TABLES`; проектная конфигурация включает `CONFIG_IPV6_MULTIPLE_TABLES`.
+- Pinned kernel: Linux **6.18.55**. Generic config fragment включает `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` и `CONFIG_IP_MULTIPLE_TABLES`; проектная конфигурация включает `CONFIG_IPV6_MULTIPLE_TABLES`.
 - PREPARE_ONLY выбирает `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC и nft-backed iptables packages.
 - Три unrelated Kconfig diagnostics остаются для Qt5 GUI, fwknopd/LuCI fwknopd и squeezelite-custom; пакеты не выбраны. Цикл Kconfig выбранного NSS отсутствует после patch 0014.
 - Runtime load/unload ECM, FIB churn, mwan3 failover, conntrack, NSS counters/throughput и все аппаратные Dual-WAN/NSS тесты остаются **NOT TESTED**.
@@ -181,14 +181,16 @@ mwan3 выполняет policy routing, распределение **отдел
 
 ### 4.2. Текущий v2 статус
 
-В рабочей ветке уже подготовлен экспериментальный ECM patch 9002, который переносит FIB-rule invalidation в текущий v2/QSDK 14.0 ECM lifecycle. На 15.11.2026 raw apply к SHA-256-проверенному QSDK source и применение после всей pinned feed patch series прошли в CI #106. Статические проверки callback, worker, lock pairing и teardown проходят в #106/#107.
+В рабочей ветке подготовлен экспериментальный ECM patch 9002, который переносит FIB-rule invalidation в текущий v2/QSDK 14.0 ECM lifecycle. CI #124 подтвердил raw apply к SHA-256-проверенному QSDK source, применение после полной pinned feed queue, lifecycle/atomic callback guards, C-компиляцию qca-nss-ecm и наличие notifier marker в собранном ecm.ko.
 
-Это подтверждает **source/preflight PASS**, но не compile PASS. Полная сборка #107 ещё выполняется. Остаются обязательные gates:
+Финальный `verify-v2.sh` в #124 завершился **FAIL** по трём проверкам: watchdog test harness и source fingerprints 9001/9002 после CONFIG_AUTOREMOVE cleanup. Причины исправлялись отдельно: абсолютная маршрутизация watchdog hardware commands к test stubs (`f372d519`, `0d2aeadb`) и проверка отсутствия ECM source с обязательным CONFIG_AUTOREMOVE guard (`e7846a1`, `49d3579`). Эти последующие исправления ещё не прошли новый CI.
 
-1. Полная компиляция `kmod-qca-nss-ecm` на текущей функциональной ревизии.
-2. Наличие ожидаемого notifier marker в собранном `ecm.ko`.
-3. Успешный `verify-v2.sh` на итоговом rootfs/image.
-4. Runtime module load/unload и контроль FIB rule churn на отдельном втором RD03v2.
+При применении patch 9002 в compile log были GNU patch fuzz 1–2 на нескольких hunks, включая ecm_exit insertion. PREPARE_ONLY reproduced the full patch queue and lifecycle guard passed; guard requires notifier stop exactly before conntrack notifier shutdown. Do not call the application fuzz-free. Остаточные обязательные gates:
+
+1. Новый CI на code/test HEAD `49d3579`: Static, PREPARE_ONLY, watchdog suite и final `verify-v2.sh` должны пройти.
+2. Повторная сборка на точном SHA, включая qca-nss-ecm и marker в собранном `ecm.ko`.
+3. Проверка target/profile, rootfs manifest, kernel/module versions и image hashes.
+4. Runtime module load/unload, FIB rule churn и teardown stress на отдельном втором RD03v2.
 5. Аппаратные проверки mwan3 failover, новых/существующих conntrack flows, NSS counters, CPU, latency и packet loss.
 
 Patch 9002 использует atomic notifier callback только для установки pending bits и постановки work; worker берёт per-net RTNL для согласованного снимка событий, затем отпускает его до `synchronize_net()` и обхода ECM DB. При teardown сначала unregister notifier (atomic notifier unregister дожидается RCU readers), затем `cancel_work_sync()`. Это проверено на исходниках Linux 6.18 и статическими guard-assertions, но точная компиляция и runtime остаются отдельными gates.
