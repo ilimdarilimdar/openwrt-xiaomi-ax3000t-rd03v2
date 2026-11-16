@@ -32,10 +32,14 @@
 | CI #124 qca-nss-ecm C compilation and module packaging | **PASS** |
 | CI #124 sysupgrade + initramfs-factory image generation | **PASS** |
 | FIB notifier marker inside image `ecm.ko`; 223 rootfs packages | **PASS** |
-| CI #124 final `verify-v2` | **FAIL**: watchdog suite (26 failed) + two ECM source fingerprint false negatives after AUTOREMOVE |
-| Watchdog absolute-stub dispatch fix (`f372d519`, `0d2aeadb`) | **NOT CI-VALIDATED** |
-| ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** |
-| New full CI run on exact HEAD `49d3579` | **NOT STARTED / no run found** |
+| CI #124 final `verify-v2` | **FAIL**: watchdog suite (20 PASS / 26 FAIL) + two ECM source fingerprint false negatives after AUTOREMOVE |
+| CI #125–#126 | **FAIL before PREPARE_ONLY**: `git diff --check` found an extra blank line at EOF in the handoff; fixed by `e31ca88` |
+| CI #127 Static checks + PREPARE_ONLY on `faa82e24` | **PASS**: source preflight and ordered ECM patch queue passed |
+| CI #127 full-build | **CANCELLED / interrupted**: runner shutdown, exit code 143 during `./build.sh`; no compile or final verifier result |
+| CI #128–#129 | **CANCELLED before jobs were created** |
+| Watchdog absolute-stub dispatch (`f372d519`, `0d2aeadb`) | Static checks **PASS** in #127; watchdog runtime suite **NOT CI-VALIDATED** |
+| ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** on current code/test HEAD |
+| New completed full CI on exact HEAD `49d3579` | **NO RUN / no status found** |
 | Runtime module load on RD03v2 | **NOT TESTED** |
 | Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
 
