@@ -500,9 +500,9 @@ grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SE
 check_stop_temp_refcount "$SERIES_ROOT"
 echo "PASS: complete patch queue ($series_count patches, including 9001 and 9002) applies with OpenWrt patch-kernel.sh semantics"
 
-# ecm_db_init() must not register the new FIB notifier if its existing
-# IPv4/IPv6 route-notifier registration failed. ecm_init() does not call
-# ecm_db_exit() from its err_db label when ecm_db_init() returns an error.
+# ecm_db_init() must not register the FIB notifier if an existing route-notifier
+# registration failed. If the FIB registration itself fails, it must call
+# ecm_db_exit() internally because ecm_init() skips that cleanup at err_db.
 python3 - "$ECM_DB" "$ECM_INIT" "$ECM_DB_HEADER" "$SERIES_ECM_DB" "$SERIES_ECM_INIT" "$SERIES_ECM_DB_HEADER" <<'PY'
 from pathlib import Path
 import re
