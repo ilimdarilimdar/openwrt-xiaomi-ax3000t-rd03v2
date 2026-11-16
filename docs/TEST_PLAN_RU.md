@@ -39,6 +39,10 @@
 | Runtime module load on RD03v2 | **NOT TESTED** |
 | Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
 
+### Исторические результаты preflight #106–#108
+
+Старые workflow #106–#108 ниже приведены для истории source-preflight и callback guards. Они не заменяют актуальный baseline в таблице выше и не означают, что исправления после CI #124 уже перепроверены.
+
 ### Подтверждение ECM source preflight
 
 Workflow [#106](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43729319036)
