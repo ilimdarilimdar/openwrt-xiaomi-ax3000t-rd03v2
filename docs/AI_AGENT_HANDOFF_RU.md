@@ -5,7 +5,8 @@
 **Последняя сверка:** 2026-11-16, live-проверка refs, Actions runs #124–#129, job steps/logs, ключевых source/config/test файлов и документации.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 **Реестр:** [docs/OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
-**Текущий code/test HEAD:** `49d3579437389e2ffc111b94a08839ef7bd29ae7` (guard: требовать `CONFIG_AUTOREMOVE=y` при fallback проверки ECM sources после очистки build dir). Более поздние коммиты до этой записи меняли только документацию.
+**Текущий Branch HEAD:** `3cfa87d72b81cde60d2ec597458e63d2067071e3` (live-verified 2026-11-16). Compare от code/test baseline показывает 34 коммита вперёд, 0 назад; изменены только README/документы.
+**Текущий code/test HEAD:** `49d3579437389e2ffc111b94a08839ef7bd29ae7` (guard: требовать `CONFIG_AUTOREMOVE=y` при fallback проверки ECM sources после очистки build dir). Source/config/test/workflow после него не менялись.
 **Состояние CI:** #124 собрал `qca-nss-ecm` и создал sysupgrade/initramfs images; финальный `verify-v2` завершился с 3 FAIL: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE. #125/#126 остановились на whitespace check до PREPARE_ONLY; #127: Static и PREPARE_ONLY **PASS**, full-build прерван runner shutdown (exit 143); #128/#129 отменены до создания jobs. Для code/test HEAD `49d3579` нет отдельного workflow run/status. Watchdog runtime suite и исправление AUTOREMOVE verifier всё ещё **NOT CI-VALIDATED**. Hardware Dual-WAN/NSS — **NOT TESTED**.
 
 ## Текущая контрольная точка
