@@ -213,7 +213,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
  	int ret = 0;
 +	int route_ret = 0;
  
-@@ -747,18 +895,26 @@
+@@ -747,20 +895,56 @@
  	/*
  	 * register for route table modification events
  	 */
@@ -244,9 +244,6 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +		} else {
 +			ecm_db_ipv6_route_registered = true;
  		}
- 	}
- #endif
-@@ -763,4 +919,32 @@
  	}
  #endif
 +
