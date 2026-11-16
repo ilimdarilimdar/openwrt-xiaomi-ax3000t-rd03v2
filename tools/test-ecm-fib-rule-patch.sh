@@ -281,20 +281,57 @@ rtnl_operation = re.compile(
     r"rtnl_(?:net_)?lock_(?:interruptible|killable)|"
     r"ASSERT_RTNL(?:_NET)?)\s*\("
 )
+
+def strip_non_code(source):
+    # Remove string and character literals before comments, otherwise comment
+    # markers inside literals could erase code or expose false RTNL matches.
+    code = re.sub(r'"(?:\\.|[^"\\])*"', '""', source)
+    code = re.sub(r"'(?:\\.|[^'\\])*'", "''", code)
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
+    return re.sub(r"//[^\n]*", "", code)
+
+def self_test_guard_parser():
+    safe_probe = (
+        "void safe(void) {\n"
+        " spin_lock_bh(&ecm_ipv4_lock);\n"
+        " const char *text = \"rtnl_lock() /* //\";\n"
+        " char slash = '/';\n"
+        " // rtnl_lock()\n"
+        " /* ASSERT_RTNL(); */\n"
+        " spin_unlock_bh(&ecm_ipv4_lock);\n"
+        "}\n"
+    )
+    safe_code = strip_non_code(safe_probe)
+    if not family_lock.search(safe_code) or rtnl_operation.search(safe_code):
+        raise SystemExit("FAIL: RTNL guard parser mishandles comments or string/character literals")
+
+    alternate_probe = (
+        "void alternate(void) {\n"
+        " spin_lock_bh(&ecm_ipv4_lock);\n"
+        " if (condition) spin_unlock_bh(&ecm_ipv4_lock);\n"
+        " else { rtnl_lock(); spin_unlock_bh(&ecm_ipv4_lock); }\n"
+        "}\n"
+    )
+    alternate_code = strip_non_code(alternate_probe)
+    if not family_lock.search(alternate_code) or not rtnl_operation.search(alternate_code):
+        raise SystemExit("FAIL: RTNL guard parser misses an alternate unlock branch")
+
+    other_function_probe = (
+        "void first(void) { spin_lock(&ecm_ipv6_lock); spin_unlock(&ecm_ipv6_lock); }\n"
+        "void second(void) { ASSERT_RTNL(); }\n"
+    )
+    other_code = strip_non_code(other_function_probe)
+    if not family_lock.search(other_code) or not rtnl_operation.search(other_code):
+        raise SystemExit("FAIL: RTNL guard parser misses an assertion elsewhere in the same translation unit")
+
+self_test_guard_parser()
 violations = []
 
 for source_path in sorted(root.rglob("*.c")):
     if not source_path.is_file():
         continue
 
-    source = source_path.read_text(errors="replace")
-    # Remove literals before comments so // inside a string is not mistaken
-    # for a line comment.
-    code = re.sub(r'"(?:\\.|[^"\\])*"', '""', source)
-    code = re.sub(r"'/.*?'", "''", code)
-    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
-    code = re.sub(r"//[^\n]*", "", code)
-
+    code = strip_non_code(source_path.read_text(errors="replace"))
     if not family_lock.search(code):
         continue
 
@@ -309,6 +346,7 @@ if violations:
         "that acquires an ECM IPv4/IPv6 family lock: " + ", ".join(violations)
     )
 
+print("PASS: RTNL guard parser self-tests (comments, literals, alternate branch, other function)")
 print(
     "PASS: no direct RTNL acquisition/assertion appears in any translation unit "
     "that acquires an ECM IPv4/IPv6 family lock"
