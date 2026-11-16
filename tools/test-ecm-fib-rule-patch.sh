@@ -331,6 +331,10 @@ grep -qF 'cancel_work_sync(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "notifier workqueue teardown is missing after patch"
 grep -qF 'schedule_work(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "atomic callback does not defer work"
+grep -qF 'ECM_DB_FIB_RULE_GATED_IPV4' "$ECM_DB" ||
+  die "IPv4 callback-owned frontend gate state is missing"
+grep -qF 'ECM_DB_FIB_RULE_GATED_IPV6' "$ECM_DB" ||
+  die "IPv6 callback-owned frontend gate state is missing"
 grep -qF 'if (READ_ONCE(ecm_db_fib_rule_ready))' "$ECM_DB" ||
   die "FIB callback can queue work before initial replay is complete"
 grep -qF 'WRITE_ONCE(ecm_db_fib_rule_ready, true)' "$ECM_DB" ||
@@ -408,40 +412,34 @@ worker = source[start:end]
 
 if "for (;;)" not in worker:
     sys.exit("FAIL: FIB worker does not drain pending events in a loop")
-if worker.count("ecm_front_end_ipv4_stop_temp(1)") != 1:
-    sys.exit("FAIL: IPv4 stop gate must be acquired once per worker invocation")
+if "test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV4" not in worker:
+    sys.exit("FAIL: IPv4 frontend gate is not released through the gated-state bit")
 if worker.count("ecm_front_end_ipv4_stop_temp(0)") != 1:
-    sys.exit("FAIL: IPv4 stop gate must be released only after pending work is empty")
-if "ipv4_pending && !ipv4_stop_held" not in worker:
-    sys.exit("FAIL: IPv4 stop gate is not retained across drain passes")
+    sys.exit("FAIL: IPv4 stop gate must be released exactly once after pending work is empty")
 if "rtnl_net_lock(&init_net);" not in worker or "test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4" not in worker:
     sys.exit("FAIL: worker pending snapshot is not protected by per-net RTNL")
-if "if (!any_pending)" not in worker:
-    sys.exit("FAIL: worker lacks an empty-pending exit condition")
 empty_start = worker.find("if (!any_pending)")
 empty_end = worker.find("return;", empty_start)
 if empty_start < 0 or empty_end < 0:
     sys.exit("FAIL: worker empty-pending exit block is malformed")
 empty = worker[empty_start:empty_end]
-for token in ("ecm_front_end_ipv4_stop_temp(0)", "rtnl_net_unlock(&init_net)"):
+for token in ("test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV4", "ecm_front_end_ipv4_stop_temp(0)", "rtnl_net_unlock(&init_net)"):
     if token not in empty:
         sys.exit(f"FAIL: IPv4 gate release is not serialized under RTNL: {token}")
-if worker.find("ecm_db_connection_defunct_ip_version(4)") < worker.find("ecm_front_end_ipv4_stop_temp(1)"):
-    sys.exit("FAIL: IPv4 DB defunct pass runs before the stop gate closes")
-if worker.find("synchronize_net();") < worker.find("ecm_front_end_ipv4_stop_temp(1)"):
-    sys.exit("FAIL: synchronize_net() runs before the IPv4 stop gate closes")
+if "synchronize_net();" not in worker or "ecm_db_connection_defunct_ip_version(4)" not in worker:
+    sys.exit("FAIL: IPv4 defunct pass is incomplete")
 if worker.find("synchronize_net();") > worker.find("ecm_db_connection_defunct_ip_version(4)"):
-    sys.exit("FAIL: IPv4 DB defunct pass starts before synchronize_net() completes")
-if "ipv6_pending && !ipv6_stop_held" not in worker:
-    sys.exit("FAIL: IPv6 stop gate is not retained across drain passes")
-if worker.count("ecm_front_end_ipv6_stop_temp(1)") != 1 or worker.count("ecm_front_end_ipv6_stop_temp(0)") != 1:
-    sys.exit("FAIL: IPv6 stop gate must be acquired once and released after the drain")
+    sys.exit("FAIL: IPv4 DB defunct pass starts before synchronize_net()")
+if "test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV6" not in empty:
+    sys.exit("FAIL: IPv6 frontend gate is not released in the empty-pending branch")
 if "ecm_front_end_ipv6_stop_temp(0)" not in empty:
-    sys.exit("FAIL: IPv6 gate release is not serialized under RTNL in the empty-pending branch")
+    sys.exit("FAIL: IPv6 gate release is not serialized under RTNL")
+if "#ifdef ECM_IPV6_ENABLE" not in worker:
+    sys.exit("FAIL: IPv6 worker path is not conditional on ECM_IPV6_ENABLE")
 
 print("PASS: FIB worker drains coalesced events without reopening frontend gates between passes")
 print("PASS: final empty-pending check and gate release are serialized with live RTNL rule updates")
-print("PASS: stop gates close before synchronize_net() and DB defunct; release occurs after the final pass")
+print("PASS: stop gates close in the atomic callback and release only after the final pass")
 PY
 grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
@@ -649,6 +647,13 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: stop hook must disarm, unregister, then drain work in {db_path}")
     if "void ecm_db_fib_rule_notifier_stop(void);" not in header:
         sys.exit(f"FAIL: stop-hook prototype missing in {header_path}")
+    for cleanup in (
+        "clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)",
+        "test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV4, &ecm_db_fib_rule_gated)",
+        "ecm_front_end_ipv4_stop_temp(0)",
+    ):
+        if cleanup not in stop_fn:
+            sys.exit(f"FAIL: notifier stop does not clear/release a pending gate in {db_path}: {cleanup}")
 
     db_exit_start = db.find("void ecm_db_exit(void)")
     db_exit_end = db.find("EXPORT_SYMBOL(ecm_db_exit);", db_exit_start)
@@ -747,8 +752,13 @@ def check_atomic_callback(path):
         "event != FIB_EVENT_RULE_ADD",
         "event != FIB_EVENT_RULE_DEL",
         "switch (info->family)",
+        "test_and_set_bit(ECM_DB_FIB_RULE_GATED_IPV4, &ecm_db_fib_rule_gated)",
+        "ecm_front_end_ipv4_stop_temp(1)",
         "set_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)",
+        "test_and_set_bit(ECM_DB_FIB_RULE_GATED_IPV6, &ecm_db_fib_rule_gated)",
+        "ecm_front_end_ipv6_stop_temp(1)",
         "set_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending)",
+        "READ_ONCE(ecm_db_fib_rule_ready)",
         "schedule_work(&ecm_db_fib_rule_work)",
         "return NOTIFY_DONE;",
     ]
@@ -758,10 +768,15 @@ def check_atomic_callback(path):
 
     calls = re.findall(r"\b([A-Za-z_]\w*)\s*\(", body)
     actual = [name for name in calls if name not in {"if", "switch"}]
-    if actual != ["set_bit", "set_bit", "READ_ONCE", "schedule_work"]:
+    expected = [
+        "test_and_set_bit", "ecm_front_end_ipv4_stop_temp", "set_bit",
+        "test_and_set_bit", "ecm_front_end_ipv6_stop_temp", "set_bit",
+        "READ_ONCE", "schedule_work",
+    ]
+    if actual != expected:
         sys.exit(
             f"FAIL: atomic FIB callback contains unexpected calls in {path}: {actual}; "
-            "only set_bit(), READ_ONCE() and schedule_work() are allowed"
+            "only atomic gate/set operations and deferred queueing are allowed"
         )
     if body.find("READ_ONCE(ecm_db_fib_rule_ready)") > body.find("schedule_work("):
         sys.exit(f"FAIL: FIB work is queued before checking initial-replay readiness in {path}")
@@ -774,7 +789,7 @@ def check_atomic_callback(path):
 for source_path in sys.argv[1:]:
     check_atomic_callback(source_path)
 
-print("PASS: FIB notifier callback only sets atomic pending bits and queues work")
+print("PASS: FIB callback closes the frontend gate atomically, records pending family, then queues deferred work")
 PY
 
 echo "PASS: patch applies cleanly to the hash-verified pinned ECM source"
