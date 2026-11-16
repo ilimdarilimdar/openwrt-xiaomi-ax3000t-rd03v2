@@ -45,9 +45,13 @@ from this branch has passed hardware tests.
 - Follow-up commits fixed BusyBox applet dispatch in watchdog tests
   (`f372d519`, `0d2aeadb`), added an AUTOREMOVE-aware ECM source-presence
   check (`e7846a1`) and require `CONFIG_AUTOREMOVE=y` before accepting its
-  feed-copy fallback (`49d3579`). Those changes are **NOT CI-VALIDATED**:
-  runs #127–#129 were cancelled and no run/status is associated with HEAD
-  `49d3579` at the latest live check.
+  feed-copy fallback (`49d3579`). CI #127 passed Static checks and PREPARE_ONLY
+  on `faa82e24`, including source preflight, but its full-build was interrupted
+  by runner shutdown (exit 143) before a compile or `verify-v2` result. Runs
+  #128/#129 were cancelled before jobs; #125/#126 failed only the whitespace
+  check before later jobs and were corrected by `e31ca88`. The watchdog runtime
+  suite and AUTOREMOVE fallback on current code/test HEAD `49d3579` remain
+  **NOT CI-VALIDATED**; a live lookup found no workflow run/status for that SHA.
 - PREPARE_ONLY artifact `14181217573` confirms the RD03v2
   `qualcommax/ipq50xx` target and selection of mwan3, LuCI mwan3,
   `kmod-qca-nss-ecm`, NSS DWMAC helper and nft-compatible xtables packages.
