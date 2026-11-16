@@ -31,6 +31,10 @@ Manual dispatches from any other ref are rejected. Normal push behavior is uncha
 
 The source-level dispatch gate is checked by Static validation. A real Actions UI dispatch with both `false` and `true` is still required before CI-04 is closed.
 
+### Current GitHub Actions availability — 2026-11-16
+
+The repository's live Actions page currently reports that workflows are not being run on this fork due to GitHub Actions usage scale. The workflow file and its manual dispatch are committed, but no new run or result is produced while Actions remain paused. A repository maintainer must re-enable Actions before executing the `false` and `true` dispatch checks described above. Treat every source/test update after the last visible run (#129) as **NOT CI-VALIDATED** until a new run ID and its artifacts exist.
+
 ## Automatic PREPARE_ONLY job
 
 After static checks pass, GitHub Actions runs the normal project `build.sh` with `PREPARE_ONLY=1` on an Ubuntu runner. This stage:
