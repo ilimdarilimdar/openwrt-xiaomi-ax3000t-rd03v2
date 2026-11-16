@@ -21,7 +21,7 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
-ecm_db/ecm_db.c | +199 -0
+ecm_db/ecm_db.c | +173 -0
 ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
@@ -30,7 +30,7 @@ frontends/include/ecm_front_end_ipv4.h | +1 -1
 frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
-9 files changed, 234 insertions(+), 36 deletions(-)
+9 files changed, 208 insertions(+), 36 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
@@ -45,7 +45,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +#include <linux/netdevice.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-@@ -469,9 +474,177 @@
+@@ -469,9 +474,149 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -191,39 +191,11 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +}
 +EXPORT_SYMBOL(ecm_db_fib_rule_notifier_stop);
 +
-+/*
-+ * ecm_db_fib_rule_notifier_fail_closed()
-+ * Keep ECM frontends stopped if the FIB notifier cannot be registered.
-+ */
-+static void ecm_db_fib_rule_notifier_fail_closed(int error)
-+{
-+	/*
-+	 * Initial FIB replay may already have queued work before registration
-+	 * reports an error. Hold the stop gates before draining that work; a
-+	 * running worker can release only the stop reference that it acquired.
-+	 */
-+	ecm_front_end_ipv4_stop_temp(1);
-+#ifdef ECM_IPV6_ENABLE
-+	ecm_front_end_ipv6_stop_temp(1);
-+#endif
-+	cancel_work_sync(&ecm_db_fib_rule_work);
-+	clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
-+#ifdef ECM_IPV6_ENABLE
-+	clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
-+#endif
-+	synchronize_net();
-+	ecm_db_connection_defunct_ip_version(4);
-+#ifdef ECM_IPV6_ENABLE
-+	ecm_db_connection_defunct_ip_version(6);
-+#endif
-+	printk(KERN_ERR "ECM: FIB notifier registration failed (%d); ECM frontends remain disabled and traffic uses the Linux datapath\n", error);
-+}
-+
  /*
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +936,29 @@
+@@ -763,4 +908,31 @@
  	}
  #endif
 +
@@ -235,25 +207,27 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +
 +	/*
 +	 * Register for policy-rule modifications (used by mwan3 and other
-+	 * policy-routing managers). Keep the route-notifier result in ret;
-+	 * a FIB registration failure must not silently leave ECM acceleration
-+	 * active without a policy-rule invalidation callback.
++	 * policy-routing managers). Keep the route-notifier result in ret.
++	 * If FIB notifier registration fails, abort ECM module initialization:
++	 * ecm_db_init() runs before packet frontends and conntrack hooks start.
 +	 */
 +	{
 +		int fib_ret;
 +
 +		fib_ret = register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL);
 +		if (fib_ret) {
-+			ecm_db_fib_rule_notifier_fail_closed(fib_ret);
-+		} else {
-+			ecm_db_fib_rule_registered = true;
-+			printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\n");
++			printk(KERN_ERR "ECM: FIB notifier registration failed (%d); aborting ECM initialization\\n", fib_ret);
++			ecm_db_exit();
++			return fib_ret;
 +		}
++
++		ecm_db_fib_rule_registered = true;
++		printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\\n");
 +	}
 +
  	return ret;
  
-@@ -785,3 +983,4 @@
+@@ -785,3 +957,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
