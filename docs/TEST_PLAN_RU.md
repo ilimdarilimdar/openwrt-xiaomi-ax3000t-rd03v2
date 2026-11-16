@@ -25,7 +25,7 @@
 ## 2. Текущий подтверждённый baseline
 
 Снимок состояния на 16.11.2026 по GitHub Actions и рабочей ветке
-`work/rd03v2-dualwan-mwan3-baseline`. Code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`.
+`work/rd03v2-dualwan-mwan3-baseline`. Source/test revision: `c586d83e02537d17b1595f5026944e088d7e6f6e` (fail-closed ECM registration fallback, extended preflight guards and manual workflow dispatch).
 
 | Этап | Результат |
 |---|---|
@@ -41,7 +41,11 @@
 | CI #128–#129 | **CANCELLED before jobs were created** |
 | Watchdog absolute-stub dispatch (`f372d519`, `0d2aeadb`) | Static checks **PASS** in #127; watchdog runtime suite **NOT CI-VALIDATED** |
 | ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** on current code/test HEAD |
-| New completed full CI on exact HEAD `49d3579` | **NO RUN / no status found** |
+| New source/test revision `c586d83` | Patch, tests and workflow changed; preflight/build **NOT TESTED** after update |
+| GitHub Actions after #129 | **PAUSED**: Actions page says workflows are not currently being run on this fork due to Actions usage scale |
+| Manual `workflow_dispatch` false/true | Workflow implementation added; real UI dispatch **NOT TESTED** until Actions are re-enabled |
+| ECM FIB notifier fail-closed fallback | Source guard added; fault injection and runtime cleanup **NOT TESTED** |
+| Completed CI on exact source/test revision `c586d83` | **NO RUN visible** |
 | Runtime module load on RD03v2 | **NOT TESTED** |
 | Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
 
