@@ -183,6 +183,16 @@ Evidence:
   Later notifier rollback source/test commits are newer than #129 and have no
   CI run because GitHub Actions is currently paused on this fork.
 
+
+
+### Текущая ревизия после route/FIB rollback — 2026-11-16
+
+Functional source patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`. Latest source-level test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Patch preface was clarified later in `f72db08`; the C hunk bodies were not changed by that documentation-only patch update.
+
+The latest patch additionally tracks successful IPv4/IPv6 route notifier registration independently and preserves the first route-registration error. Route init failure invokes `ecm_db_exit()` before returning; FIB notifier registration happens only after route init succeeds, and its failure also rolls back the DB. The per-family route flags prevent unregistering a family that never registered.
+
+This revision has **not** yet been applied to the exact pinned QSDK archive after the complete 32-patch feed series and has **not** been compiled. GitHub Actions is paused on this fork; the current branch HEAD has no commit status or workflow run. The PASS evidence above belongs to the older CI #123/#124 source revision, not to `fb88ba4`/`02ee20e`.
+
 The current preflight script is `tools/test-ecm-fib-rule-patch.sh`. It reads
 the source version/commit/archive URL/SHA from the pinned feed Makefile,
 hash-verifies the QSDK archive, applies 9002 with the same `patch -f -p1`
