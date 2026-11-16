@@ -2,11 +2,10 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-16, после повторной проверки CI #124 и скачивания/анализа PREPARE_ONLY artifact 14181217573. Full signed-image build остаётся IN PROGRESS.
+**Последняя сверка:** 2026-11-16, после полного разбора build-log artifact 14184373198 из CI #124, проверки последующих commits и фиксов verifier.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Текущий code/test HEAD:** `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10` (test-only commit с full-build trigger).
-**Текущая ревизия ECM patch 9002:** commit `c875a7f71c28209118f5668ae823d78e4e1433d5`; hunk `ecm_exit()` расширен до восьми строк контекста, escape-последовательности совпадают с pinned QSDK source.
-**Последний подтверждённый результат:** CI #124 Static PASS, PREPARE_ONLY PASS, raw QSDK apply PASS, полная очередь 32 ECM-патчей и lifecycle/atomic-callback guards PASS. Artifact 14181217573 проверен: правильная цель и пакеты выбраны, три предупреждения Kconfig относятся к невыбранным пакетам. Full signed-image build and verify-v2 job всё ещё выполняется; compile и финальный verifier не подтверждены.
+**Текущий code/test HEAD:** `49d3579437389e2ffc111b94a08839ef7bd29ae7` (новый guard: требовать CONFIG_AUTOREMOVE=y при fallback проверки ECM sources после очистки build dir). Более поздние commits меняют только документацию.
+**Последний подтверждённый результат:** CI #124 собрал qca-nss-ecm и создал sysupgrade/initramfs images; marker FIB notifier найден в ecm.ko. Финальный verify-v2 завершился с 3 FAIL: 26 watchdog harness scenarios из-за BusyBox applet dispatch и два ложных ECM source-fingerprint FAIL из-за CONFIG_AUTOREMOVE. Исправления закоммичены, но новые CI #127–#129 отменены; HEAD 49d3579 пока без workflow run/status. Build/test fixes пока NOT CI-VALIDATED. Hardware Dual-WAN/NSS остаётся NOT TESTED.
 
 ## Текущая контрольная точка
 
