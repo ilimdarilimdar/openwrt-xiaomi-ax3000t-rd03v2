@@ -292,7 +292,7 @@ PREPARE_ONLY успешно собирает pinned sources/feeds и генер�
 - потери/паузы трафика;
 - сообщения notifier registration и ошибки unregister/workqueue.
 
-**Дополнительная concurrency-проверка ECM-06:** детерминированно подать FIB ADD/DEL после worker snapshot, во время `ecm_db_connection_defunct_ip_version()` и непосредственно перед открытием frontend gate. Подтвердить, что повторно поставленный worker не оставляет gate-open окно, в котором новый flow может остаться ускоренным по старому WAN. Отдельно проверить финальную синхронизацию pending bits с live RTNL updates и initial replay без RTNL.
+**Дополнительная concurrency-проверка ECM-06:** детерминированно подать FIB ADD/DEL после worker snapshot и во время `ecm_db_connection_defunct_ip_version()`. Подтвердить, что callback сразу закрывает gate соответствующего семейства, pending event обрабатывается следующим drain-loop pass, а gate не открывается до пустого pending snapshot под RTNL. Отдельно проверить initial replay/retry без RTNL, а также событие между успешным register_fib_notifier() и readiness arm.
 
 **Критерий PASS:** патч компилируется для точного kernel/feed pin, notifier регистрируется и корректно снимается, нет deadlock/oops/warnings, stale accelerated flows не оставляют трафик на ошибочном WAN, slow-path/re-acceleration измерены.
 
