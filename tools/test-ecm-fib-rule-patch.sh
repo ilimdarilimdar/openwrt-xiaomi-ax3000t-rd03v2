@@ -543,15 +543,11 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: FIB notifier result is not stored separately in {db_path}")
     if "ret = " + registration in db_init or "return fib_ret;" in db_init:
         sys.exit(f"FAIL: FIB registration must not overwrite/replace route-notifier status in {db_path}")
-    if not re.search(
-        r"if\\s*\\(\\s*fib_ret\\s*\\)\\s*\\{\\s*ecm_db_fib_rule_notifier_fail_closed\\(fib_ret\\);\\s*\\}",
-        db_init,
-        re.S,
-    ):
+    if "if (fib_ret) {" not in db_init or "ecm_db_fib_rule_notifier_fail_closed(fib_ret);" not in db_init:
         sys.exit(f"FAIL: FIB registration error has no fail-closed branch in {db_path}")
 
     fail_start = db.find("static void ecm_db_fib_rule_notifier_fail_closed(int error)")
-    fail_end = db.find("\\n}\\n", fail_start)
+    fail_end = db.find(chr(10) + "}" + chr(10), fail_start)
     if fail_start < 0 or fail_end < 0:
         sys.exit(f"FAIL: FIB notifier fail-closed helper missing in {db_path}")
     fail_fn = db[fail_start:fail_end]
