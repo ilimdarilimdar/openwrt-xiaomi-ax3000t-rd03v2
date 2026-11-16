@@ -172,6 +172,7 @@ for n, start in enumerate(diff_starts):
 
     i = first_hunk
     sum_delta = 0
+    last_old_end = 0
     while i < len(section):
         header = section[i]
         hm = hunk_re.fullmatch(header)
@@ -193,6 +194,11 @@ for n, start in enumerate(diff_starts):
                 f"FAIL: {relpath} hunk coordinates inconsistent: "
                 f"old {old_start},{old_expected} -> new {new_start},{new_expected}; "
                 f"expected new start {expected_new_start} after prior hunks"
+            )
+        if old_expected and old_start <= last_old_end:
+            sys.exit(
+                f"FAIL: overlapping old-side hunks in {relpath}: "
+                f"previous end {last_old_end}, next starts {old_start}"
             )
         old_seen = new_seen = 0
         i += 1
@@ -217,6 +223,8 @@ for n, start in enumerate(diff_starts):
         while i < len(section) and section[i] == r"\ No newline at end of file":
             i += 1
         sum_delta += new_expected - old_expected
+        if old_expected:
+            last_old_end = old_start + old_expected - 1
         checked_hunks += 1
 
 print(f"PASS: patch envelope has {len(diff_starts)} unique file sections")
@@ -563,8 +571,17 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: IPv6 notifier result is not captured in {db_path}")
     if "ret = ip_rt_register_notifier(" in db_init or "ret = rt6_register_notifier(" in db_init:
         sys.exit(f"FAIL: one route notifier can overwrite the shared error state in {db_path}")
-    if "ret = route_ret;" not in db_init or "if (!ret) {\\n\\t\\t\\t\\tret = route_ret;" not in db_init:
-        sys.exit(f"FAIL: route notifier failure aggregation does not preserve the first error in {db_path}")
+    v4_register = db_init.find("route_ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb)")
+    v4_error = db_init.find("ret = route_ret;", v4_register)
+    v6_register = db_init.find("route_ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb)")
+    v6_guard = db_init.find("if (!ret) {", v6_register)
+    v6_error = db_init.find("ret = route_ret;", v6_guard)
+    if min(v4_register, v4_error, v6_register, v6_guard, v6_error) < 0:
+        sys.exit(f"FAIL: per-family route notifier error aggregation is incomplete in {db_path}")
+    if not (v4_register < v4_error < v6_register < v6_guard < v6_error):
+        sys.exit(f"FAIL: IPv6 route registration can hide the earlier IPv4 notifier failure in {db_path}")
+    if db_init.count("ret = route_ret;") != 2:
+        sys.exit(f"FAIL: route notifier errors are not assigned exactly once per family in {db_path}")
     if "ecm_db_ipv4_route_registered = true;" not in db_init or "ecm_db_ipv6_route_registered = true;" not in db_init:
         sys.exit(f"FAIL: successful route notifier registrations are not tracked per family in {db_path}")
 
@@ -621,8 +638,12 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: DB exit does not gate route unregister by actual registration state in {db_path}")
     if "if (ecm_db_ipv4_route_enable) {" in db_exit or "if (ecm_db_ipv6_route_enable) {" in db_exit:
         sys.exit(f"FAIL: DB exit still unregisters route notifiers based only on enable flags in {db_path}")
-    if db_exit.find("ecm_db_ipv4_route_registered = false;") < route_v4 or db_exit.find("ecm_db_ipv6_route_registered = false;") < route_v6:
-        sys.exit(f"FAIL: DB exit does not clear successful per-family unregister state in {db_path}")
+    v4_unreg = db_exit.find("ip_rt_unregister_notifier(&ecm_db_iproute_table_update_nb)", route_v4)
+    v4_clear = db_exit.find("ecm_db_ipv4_route_registered = false;", v4_unreg)
+    v6_unreg = db_exit.find("rt6_unregister_notifier(&ecm_db_ip6route_table_update_nb)", route_v6)
+    v6_clear = db_exit.find("ecm_db_ipv6_route_registered = false;", v6_unreg)
+    if min(v4_unreg, v4_clear, v6_unreg, v6_clear) < 0 or not (route_v4 < v4_unreg < v4_clear and route_v6 < v6_unreg < v6_clear):
+        sys.exit(f"FAIL: DB exit does not unregister and clear each successful route notifier in {db_path}")
     stop_call = db_exit.find("ecm_db_fib_rule_notifier_stop();")
     terminate = db_exit.find("ecm_db_terminate_pending = true;")
     if stop_call < 0 or terminate < 0 or stop_call > terminate:
