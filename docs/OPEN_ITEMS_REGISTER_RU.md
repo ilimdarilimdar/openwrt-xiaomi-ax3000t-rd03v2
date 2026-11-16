@@ -2,22 +2,21 @@
 
 **Назначение:** единый список того, что осталось проверить, исправить, спроектировать или осознанно отложить. Этот файл — рабочий журнал, а не обещание готовности прошивки. Каждый пункт закрывается только по указанному критерию и с доказательством в CI, логе или протоколе стендового теста.
 
-**Дата ревизии:** 2026-11-16  
-**Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
-**Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
-**Code/test baseline:** ECM source patch `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791` (per-family route notifier state, first-error preservation, rollback guards and exact `ret` identifier checks)  
-**Branch HEAD в начале исходной ревизии:** `e81dbad389ad558e72aab6c23295c72299a6d7fe` (исторический снимок до документальных коммитов, добавивших этот реестр).  
+**Дата ревизии:** 2026-11-16
+**Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
+**Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
+**Code/test baseline:** ECM source patch `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791` (per-family route notifier state, first-error preservation, rollback guards and exact `ret` identifier checks)
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
 
 ## Текущая контрольная точка — 2026-11-16
 
 - **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-- **Branch HEAD:** `07a4063eb59555ce883970546b5c97f047d65435` (последний коммит на момент ревизии).
+- **Исходный code/test branch snapshot перед серией аннотационных коммитов:** `07a4063eb59555ce883970546b5c97f047d65435`. Последующие коммиты этой ревизии изменяют только документацию.
 - **Функциональный ECM patch commit:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`.
 - **Последняя тестовая ревизия:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
 - **Текущие blob IDs:** patch 9002 `794bb980bf753515e9b61c48c6c393acfeeff874`; `tools/test-ecm-fib-rule-patch.sh` `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6`.
-- GitHub Compare от `02ee20e` до HEAD: **19 commits ahead / 0 behind**. Содержательные изменения после тестовой ревизии — документация и поясняющий текст заголовка patch 9002. Исполняемые C-hunks patch, тестовый скрипт, workflow и firmware config не менялись.
+- GitHub Compare от `02ee20e` до исходного snapshot `07a4063`: **19 commits ahead / 0 behind**. Содержательные изменения после тестовой ревизии — документация и поясняющий текст заголовка patch 9002. Исполняемые C-hunks patch, тестовый скрипт, workflow и firmware config не менялись.
 - Workflow содержит безопасный `workflow_dispatch`: `full_build=false` запускает Static + PREPARE_ONLY; `true` добавляет full-build и `verify-v2`. Ограничение по рабочей ветке и временный CI signing key / `example.invalid` / отсутствие публикации образов сохранены. Реальные dispatch false/true ещё не выполнены.
 - Последний GitHub Actions run — **#129**, завершён с conclusion `cancelled` до создания jobs. #128 также отменён; #127 прошёл Static и PREPARE_ONLY, но full-build был прерван остановкой runner (exit 143). Последний полный build — #124: ECM скомпилирован и оба типа образов созданы, но финальный `verify-v2` завершился FAIL.
 - Для текущего HEAD нет успешного CI run и commit status. Последняя зафиксированная UI-проверка Actions указывала на паузу workflow на fork; в API после #129 новых runs не видно.
@@ -77,7 +76,7 @@
 | #128 | `e7846a1` | Cancelled до создания jobs |
 | #129 | `e398b3f` | Cancelled до создания jobs |
 
-Коммит `e31ca88` исправил trailing blank line. Code/test HEAD `49d3579` добавил обязательную проверку `CONFIG_AUTOREMOVE=y` перед принятием fallback по копиям патчей в feed. Этот SHA пока не имеет CI run/status.
+Исторический коммит `49d3579` добавил обязательную проверку `CONFIG_AUTOREMOVE=y` перед принятием fallback по копиям патчей в feed. Это изменение ещё не получило завершённой full-build проверки.
 
 ### CI-01 — Получить завершённый full CI на code/test HEAD
 
@@ -121,7 +120,7 @@ Workflow уже обновлён: добавлен `workflow_dispatch` с boolea
 
 **Приоритет:** P0.
 
-Старый verifier принимал наличие каталога build_dir за наличие patched ECM source, хотя `CONFIG_AUTOREMOVE=y` мог удалить файлы внутри. Исправление `e7846a1` проверяет реальный `ecm_db/ecm_db.c`; при его отсутствии сверяет exact patch bytes в подготовленном NSS feed. `49d3579` дополнительно требует в итоговом `.config` ровно `CONFIG_AUTOREMOVE=y`.
+Старый verifier принимал наличие каталога build_dir за наличие patched ECM source, хотя `CONFIG_AUTOREMOVE=y` мог удалить файлы внутри. Исправление `e7846a1` проверяет реальный `ecm_db/ecm_db.c`; при его отсутствии сверяет exact patch bytes в подготовленном NSS feed. Исторический коммит `49d3579` дополнительно требует в итоговом `.config` ровно `CONFIG_AUTOREMOVE=y`.
 
 **Критерий закрытия:** full build на актуальном code/test SHA проходит обе ветви verifier logic без false positive/false negative; итоговые image/module checks проходят.
 
