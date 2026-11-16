@@ -238,6 +238,11 @@ echo "PASS: patch structure is valid before source preflight"
 # Catch direct RTNL acquisition while an ECM IPv4/IPv6 family spinlock is held.
 # This is intentionally a narrow source guard, not a substitute for lockdep:
 # indirect helper calls still require call-graph review and runtime testing.
+# Conservatively reject direct RTNL acquisitions or RTNL precondition assertions
+# anywhere in a translation unit that acquires an ECM IPv4/IPv6 family lock.
+# This avoids missing alternate if/else unlock branches with a textual
+# lock-to-next-unlock scan. It is still not a whole-program call-graph proof:
+# indirect helpers must be reviewed and runtime lockdep remains mandatory.
 check_no_rtnl_inside_family_lock() {
   local ecm_root=$1
   python3 - "$ecm_root" <<'PY'
@@ -247,45 +252,48 @@ import sys
 
 root = Path(sys.argv[1])
 family_lock = re.compile(
-    r"\bspin_lock(?:_bh)?\s*\(\s*&(?P<lock>ecm_ipv[46]_lock)\s*\)\s*;"
+    r"\bspin_lock(?:_bh|_irq|_irqsave|_nested)?\s*\(\s*&ecm_ipv[46]_lock\b"
 )
-rtnl_lock = re.compile(
-    r"\b(?:rtnl_(?:net_)?(?:lock|trylock)|rtnl_lock_(?:interruptible|killable)|"
-    r"rtnl_net_lock_killable)\s*\("
+rtnl_operation = re.compile(
+    r"\b(?:rtnl_(?:net_)?(?:lock|trylock)|"
+    r"rtnl_(?:net_)?lock_(?:interruptible|killable)|"
+    r"ASSERT_RTNL(?:_NET)?)\s*\("
 )
 violations = []
-unpaired = []
+
 for source_path in sorted(root.rglob("*.c")):
     if not source_path.is_file():
         continue
-    source = source_path.read_text(errors="replace")
-    for match in family_lock.finditer(source):
-        lock_name = match.group("lock")
-        unlock_pattern = re.compile(
-            rf"\bspin_unlock(?:_bh)?\s*\(\s*&{re.escape(lock_name)}\s*\)\s*;"
-        )
-        unlock = unlock_pattern.search(source, match.end())
-        relative = source_path.relative_to(root).as_posix()
-        if not unlock:
-            unpaired.append(f"{relative}:{source.count(chr(10), 0, match.start()) + 1}")
-            continue
-        critical_section = source[match.end():unlock.start()]
-        if rtnl_lock.search(critical_section):
-            violations.append(
-                f"{relative}:{source.count(chr(10), 0, match.start()) + 1} ({lock_name})"
-            )
 
-if unpaired:
-    raise SystemExit(f"FAIL: family spinlock acquisition has no following unlock: {unpaired}")
+    source = source_path.read_text(errors="replace")
+    # Remove literals before comments so // inside a string is not mistaken
+    # for a line comment.
+    code = re.sub(r'"(?:\\.|[^"\\])*"', '""', source)
+    code = re.sub(r"'/.*?'", "''", code)
+    code = re.sub(r"/\*.*?\*/", "", code, flags=re.S)
+    code = re.sub(r"//[^\n]*", "", code)
+
+    if not family_lock.search(code):
+        continue
+
+    rtnl_match = rtnl_operation.search(code)
+    if rtnl_match:
+        line = code.count("\n", 0, rtnl_match.start()) + 1
+        violations.append(f"{source_path.relative_to(root).as_posix()}:{line}")
+
 if violations:
     raise SystemExit(
-        "FAIL: direct RTNL acquisition occurs while an ECM IPv4/IPv6 "
-        f"family spinlock is held: {violations}"
+        "FAIL: direct RTNL acquisition/assertion appears in a translation unit "
+        "that acquires an ECM IPv4/IPv6 family lock: " + ", ".join(violations)
     )
 
-print("PASS: no direct RTNL acquisition occurs inside ECM IPv4/IPv6 family spinlock critical sections")
+print(
+    "PASS: no direct RTNL acquisition/assertion appears in any translation unit "
+    "that acquires an ECM IPv4/IPv6 family lock"
+)
 PY
 }
+
 
 get_make_var() {
   local name=$1
