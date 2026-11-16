@@ -20,6 +20,17 @@ These checks do **not** compile OpenWrt, do not validate downloaded feeds, do no
 
 Documentation-only pushes and pull requests (changes limited to Markdown files and `docs/**`) are excluded by `paths-ignore` in the workflow. A mixed change that also touches source, configuration, scripts or workflow files still triggers validation. This avoids consuming the serialized firmware-validation slot for README/manual edits while keeping CI on changes that can affect the image.
 
+## Manual validation dispatch
+
+The Actions UI supports **Run workflow** on `work/rd03v2-dualwan-mwan3-baseline` with one boolean input, `full_build`:
+
+- `false` (default): run Static checks and PREPARE_ONLY only. The full-build job must remain skipped.
+- `true`: after Static checks and PREPARE_ONLY pass, run the full image build and final `verify-v2` job.
+
+Manual dispatches from any other ref are rejected. Normal push behavior is unchanged: a push to the work branch runs full-build only when the commit message contains `[full-build]`. The ephemeral P-256 key, `example.invalid` package URL and logs/config-only artifact policy remain in force.
+
+The source-level dispatch gate is checked by Static validation. A real Actions UI dispatch with both `false` and `true` is still required before CI-04 is closed.
+
 ## Automatic PREPARE_ONLY job
 
 After static checks pass, GitHub Actions runs the normal project `build.sh` with `PREPARE_ONLY=1` on an Ubuntu runner. This stage:
