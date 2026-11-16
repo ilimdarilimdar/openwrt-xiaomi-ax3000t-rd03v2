@@ -2,10 +2,10 @@
 
 > **Назначение файла:** единая точка входа для следующего ИИ-агента. Сначала прочитать этот файл, затем сверить живое состояние GitHub. SHA, очередь CI и статус сборки проверять перед каждым действием.
 
-**Последняя сверка:** 2026-11-16, после полного разбора build-log artifact 14184373198 из CI #124, проверки последующих commits и фиксов verifier.
+**Последняя сверка:** 2026-11-16, live-проверка branch ref, Actions runs #125–#129, job records и логов #125–#127.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Текущий code/test HEAD:** `49d3579437389e2ffc111b94a08839ef7bd29ae7` (новый guard: требовать CONFIG_AUTOREMOVE=y при fallback проверки ECM sources после очистки build dir). Более поздние commits меняют только документацию.
-**Последний подтверждённый результат:** CI #124 собрал qca-nss-ecm и создал sysupgrade/initramfs images; marker FIB notifier найден в ecm.ko. Финальный verify-v2 завершился с 3 FAIL: 26 watchdog harness scenarios из-за BusyBox applet dispatch и два ложных ECM source-fingerprint FAIL из-за CONFIG_AUTOREMOVE. Исправления закоммичены, но новые CI #127–#129 отменены; HEAD 49d3579 пока без workflow run/status. Build/test fixes пока NOT CI-VALIDATED. Hardware Dual-WAN/NSS остаётся NOT TESTED.
+**Текущий code/test HEAD:** `49d3579437389e2ffc111b94a08839ef7bd29ae7` (guard: требовать `CONFIG_AUTOREMOVE=y` при fallback проверки ECM sources после очистки build dir). Более поздние коммиты до этой записи меняли только документацию.
+**Состояние CI:** #124 собрал `qca-nss-ecm` и создал sysupgrade/initramfs images; финальный `verify-v2` завершился с 3 FAIL: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE. #125/#126 остановились на whitespace check до PREPARE_ONLY; #127: Static и PREPARE_ONLY **PASS**, full-build прерван runner shutdown (exit 143); #128/#129 отменены до создания jobs. Для code/test HEAD `49d3579` нет отдельного workflow run/status. Watchdog runtime suite и исправление AUTOREMOVE verifier всё ещё **NOT CI-VALIDATED**. Hardware Dual-WAN/NSS — **NOT TESTED**.
 
 ## Текущая контрольная точка
 
@@ -53,8 +53,8 @@
 
 ### Next actions
 
-1. Дождаться завершения [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), затем скачать build-log artifact и проверить package logs именно для `qca-nss-ecm`, конечный образ и каждую строку `verify-v2.sh`. Отдельно убедиться, что новые `qemu-user`/`device-tree-compiler` host dependencies дали PASS.
-2. Во время full build проверить компиляцию именно `qca-nss-ecm`, notifier marker в собранном `ecm.ko`, kernel config, rootfs/image manifest и полный итог `verify-v2.sh`. CI images не публикуются и не предназначены для прошивки.
+1. Перед следующими изменениями заново сверить живой branch HEAD и Actions. Последний code/test HEAD `49d3579` не имеет отдельного workflow run/status. CI #127 дал Static/PREPARE_ONLY **PASS** на `faa82e24`, но full-build был оборван runner shutdown (exit 143); #128/#129 jobs не создали. #125/#126 провалили только `git diff --check` из-за лишней пустой строки в handoff; `e31ca88` её исправил.
+2. Получить завершённый full CI на актуальном code/test HEAD: подтвердить watchdog runtime suite, компиляцию `qca-nss-ecm`, notifier marker в `ecm.ko`, kernel config, rootfs/image manifest и полный итог `verify-v2.sh`. Текущий GitHub connector не предоставляет dispatch нового workflow; документационные изменения не запускать ради CI, так как `docs/**` игнорируются workflow trigger.
 3. Не считать PREPARE_ONLY или Static checks сборкой прошивки. Не выпускать и не прошивать образ до отдельного контроля target/profile, package manifest, kernel/module versions, hashes, signing и recovery.
 4. Только после успешной сборки подготовить отдельное второе RD03v2 и recovery-метод. Проверять module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, conntrack marks, NSS/ECM counters, throughput, CPU, latency и packet loss.
 5. Основной домашний маршрутизатор оставить на stock MiWiFi. Никакие CI артефакты не прошивать.
@@ -429,20 +429,18 @@ CI-образ на temporary key/`example.invalid` годится как док�
 - Последующее завершение full build и final verifier зафиксировано ниже: сборка ECM и image generation прошли, но verify-v2 завершился FAIL на трёх проверках.
 - Основной роутер остаётся на stock MiWiFi; аппаратные Dual-WAN тесты не запускались.
 
-### 2026-11-16 — post-build audit, verifier fixes and current HEAD
+### 2026-11-16 — post-build audit, CI #125–#129 и текущее состояние
 
-- Актуальный рабочий HEAD после этого продолжения: 49d3579437389e2ffc111b94a08839ef7bd29ae7 в work/rd03v2-dualwan-mwan3-baseline.
-- Важное уточнение по CI #124: full build дошёл до конца сборки, создал sysupgrade и initramfs-factory images, собрал qca-nss-ecm, включил kmod-qca-nss-ecm и marker FIB notifier в ecm.ko. Финальный workflow всё же завершился FAIL на трёх проверках verifier; это не ECM compiler failure.
-- Build-log artifact: 14184373198. В rootfs найдено 223 пакета; оба типа образов существуют; verify-v2 подтвердил маркер ECM: policy routing rule changes defunct accelerated connections в модуле.
-- Три FAIL в #124: watchdog --check (20 passed / 26 failed), fingerprint ECM 9001 и fingerprint ECM 9002. Остальные выведенные verifier checks в журнале до этих строк прошли.
-- Причина watchdog FAIL: BusyBox applet dispatch обходил PATH и запускал собственные dmesg, rmmod, modprobe, reboot вместо тестовых заглушек; это видно по сообщениям reboot: Operation not permitted, пустому fake-board call log и отсутствующим событиям из fake dmesg. Commit f372d519 ввёл wd_command с абсолютными путями заглушек в --check mode; commit 0d2aeadb передаёт WD_TEST_STUB_DIR в test harness. Повторный полный watchdog test ещё не завершён CI.
-- Причина двух ECM fingerprint FAIL: CONFIG_AUTOREMOVE=y удаляет исходники package build dir, но может оставить сам каталог. Старый verifier считал существование каталога доказательством наличия patched sources и искал fingerprint внутри пустого дерева. Commit e7846a1 исправил критерий на наличие ecm_db/ecm_db.c; если исходник удалён, verifier сравнивает точные файлы patch series в подготовленном NSS feed. PREPARE_ONLY artifact 14181217573 независимо подтверждает CONFIG_AUTOREMOVE=y.
-- Commit e398b3f просил новый full-build для проверки AUTOREMOVE fallback, но run #129 отменён до появления jobs. Runs #127/#128 также cancelled. Run #126 остановился только на whitespace check из-за trailing blank line в handoff; commit e31ca88 исправил blank line.
-- Текущий commit 49d3579 добавил дополнительный guard: при отсутствии исходников ECM verifier требует CONFIG_AUTOREMOVE=y прежде, чем принимать feed-copy fallback.
-- После commit 49d3579 live lookup по SHA вернул zero workflow runs и empty commit statuses. Поэтому watchdog stub fix, AUTOREMOVE fix и новый guard пока NOT CI-VALIDATED. Требуется новый Actions run через обычный push с Actions-triggering credentials или workflow dispatch; не считать прежний cancelled #129 проверкой нового HEAD.
-- Изменения этой сессии не меняли ECM C patch series, pinned source commits, feeds или kernel config. Основной роутер не прошивался.
-- Следующие шаги: получить новый CI на exact HEAD 49d3579; подтвердить Static/PREPARE_ONLY; подтвердить watchdog suite PASS; подтвердить qca-nss-ecm compile PASS, final verify-v2 PASS, package/kernel versions and manifests; затем только планировать аппаратную проверку на втором RD03v2.
-- Важно: артефакты CI по-прежнему используют временный signing key и example.invalid; это не опубликованные, не пригодные к установке образы. Dual-WAN/NSS hardware status остаётся NOT TESTED. Главный роутер оставлять на stock MiWiFi.
+- Последний code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`. Branch ref на момент начала этой сверки был `bd804659f1e6ac202ca0720434dafe101c4a84f0`; это документационный коммит, не изменение firmware source/test. Не считать его code/test HEAD.
+- CI #124: full build дошёл до конца сборки, создал sysupgrade и initramfs-factory images, собрал `qca-nss-ecm`, включил `kmod-qca-nss-ecm` и marker FIB notifier в `ecm.ko`. Финальный workflow завершился FAIL на трёх проверках verifier; это не compiler failure. Artifact `14184373198`; rootfs — 223 пакета.
+- Три FAIL в #124: watchdog `--check` (20 PASS / 26 FAIL), fingerprint ECM 9001 и fingerprint ECM 9002. Watchdog test fix: `f372d519` добавил `wd_command` с абсолютными путями stubs в `--check`; `0d2aeadb` передаёт `WD_TEST_STUB_DIR` в harness и Q6 policy step.
+- CI #125 (`f372d519`) и #126 (`0d2aeadb`) провалили только `git diff --check`: лишняя пустая строка в конце `docs/AI_AGENT_HANDOFF_RU.md`. `prepare-only` и `full-build` были skipped; watchdog scenarios не выполнялись. Commit `e31ca88` удалил лишнюю строку.
+- CI #127 (`faa82e24`): Static checks **PASS**, PREPARE_ONLY **PASS**, в том числе QSDK source preflight и полный порядок ECM patch queue. Full-build запустился, создал временную P-256 signing pair, вошёл в `./build.sh`, но runner получил shutdown; процесс завершился кодом 143. Это **не** compile PASS и **не** результат `verify-v2`. Preparation artifact: `14185375390`.
+- CI #128 (`e7846a1`) и #129 (`e398b3f`) были отменены до создания jobs.
+- AUTOREMOVE fingerprint fix в `e7846a1`: verifier проверяет наличие настоящего `ecm_db/ecm_db.c`, а не только каталога; если исходники удалены, сравнивает exact patch files в подготовленном NSS feed. Commit `49d3579` добавил guard: fallback принимается только если `.config` содержит ровно `CONFIG_AUTOREMOVE=y`. Оба изменения ещё не проходили завершённый full build на актуальном code/test HEAD.
+- Live lookup по SHA `49d3579` возвращает ноль workflow runs и пустые commit statuses. Поэтому watchdog runtime suite после абсолютных stubs и AUTOREMOVE verifier fallback/guard остаются **NOT CI-VALIDATED**. Статические проверки и PREPARE_ONLY #127 — отдельное, более узкое подтверждение.
+- Никакие текущие commits не доказывают безопасную загрузку/выгрузку ECM на железе, Dual-WAN failover или сохранение NSS throughput. Hardware status — **NOT TESTED**. Главный роутер не прошивался и остаётся на stock MiWiFi.
+- Дальше: получить полный CI run на точном актуальном code/test HEAD; проверить runtime watchdog suite, ECM compile, image verifier и manifests; затем подготовить только второй RD03v2 к аппаратным тестам с recovery-планом. CI artifacts используют disposable signing key и `example.invalid`; **не прошивать** их.
 
 ### Уточнение по fuzz при применении ECM patch 9002 — 2026-11-16
 
