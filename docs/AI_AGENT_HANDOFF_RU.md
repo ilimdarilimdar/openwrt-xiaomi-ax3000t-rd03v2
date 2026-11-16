@@ -29,7 +29,7 @@
 - [#122](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762283467), HEAD `693e8f5`: Static **PASS**, PREPARE_ONLY preparation **PASS**, raw QSDK patch 9002 **PASS**, full sorted ECM queue of 32 patches **PASS**; lifecycle guard **FAIL**: FIB worker stop was still not placed before normal frontend shutdown. Full build skipped.
 - Исправление в commit `c875a7f71c28209118f5668ae823d78e4e1433d5`: hunk расширен до восьми исходных строк вокруг `ecm_exit()`; в DEBUG_INFO contexts оставлен один обратный слеш перед `n`, как в QSDK source. Это исключает зависимость от полностью проигнорированного контекста при GNU patch fuzz до 2. Требуется подтвердить CI.
 - [#123](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762558933), HEAD `c875a7f`: Static **PASS**, PREPARE_ONLY preparation **PASS**, raw QSDK patch 9002 **PASS**, полная очередь 32 ECM-патчей **PASS**; FIB notifier init/unwind/normal-exit ordering **PASS**; worker drain перед frontend teardown **PASS**; atomic-callback guards **PASS**. Это подтверждает применение и source-level lifecycle guards, но не C-компиляцию ECM.
-- [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), HEAD `bb3d25b`: Static **PASS** и PREPARE_ONLY **PASS**, включая raw QSDK 9002 apply, все 32 ECM patches и lifecycle guards. Full signed-image build job **IN PROGRESS**, step `Build and run verify-v2` выполняется. Build logs появятся после завершения job; C-компиляция ECM и конечный verifier пока **NOT CONFIRMED**.
+- [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), HEAD `bb3d25b`: Static/PREPARE_ONLY, полный 32-патчевый ECM preflight и lifecycle guards **PASS**. Полная сборка завершилась: qca-nss-ecm скомпилирован, оба образа созданы, FIB notifier marker найден в ecm.ko. Финальный verify-v2 завершился **FAIL** на watchdog suite и двух ECM source fingerprints после AUTOREMOVE; детали и последующие исправления записаны ниже.
 - Preflight воспроизводит pinned `scripts/patch-kernel.sh`: `${PATCH:-patch} -f -p1` отдельно к чистому QSDK archive и последовательно после всей сортированной очереди ECM feed patches. Оба пути и все lifecycle guards прошли в #123.
 - История full-build [#16](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43686188656): image generation и package assembly завершились; старый `verify-v2` показал 6 отказов. Artifact logs установили причины: watchdog harness остановился с `qemu-aarch64 is needed`; migration host-shell прогнал 8 тестов PASS, а target BusyBox прогнал 8 ERROR из-за отсутствующего `qemu-aarch64`; 4 DTB checks не нашли `fdtget`. Это ошибки host verification environment, не компиляции ECM и не утверждение о неверном поведении функций.
 - В текущем workflow #124 шаг `Install image verification host tools` завершён PASS; workflow YAML устанавливает `qemu-user` и `device-tree-compiler` до `./build.sh`. Это закрывает конкретные зависимости из #16. Нужно дождаться фактического `verify-v2` #124; не считать эти исправления уже проверенным PASS.
@@ -215,10 +215,10 @@ RD03v2 — не MediaTek RD03/RD23. Образы, device tree, инструкц�
 ## 5. Состояние CI при последней подтверждённой проверке — 2026-11-16
 
 Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`.
-Текущий code/test HEAD: `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`.
+Текущий code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`; верхняя часть этого файла содержит актуальный handoff checkpoint.
 GitHub compare ранее в этой сессии показал ветку на 212 коммитов впереди и 0 позади `main`; `main` указывает на upstream v2.1.3, но рабочая Dual-WAN-разработка ведётся в отдельной ветке.
 
-### CI #124 — актуальный запуск
+### CI #124 — завершённый запуск (историческая контрольная точка)
 
 [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), HEAD `bb3d25b`:
 
@@ -228,17 +228,17 @@ GitHub compare ранее в этой сессии показал ветку н�
 - PREPARE_ONLY artifact `14181217573` скачан и проверен. Итоговая конфигурация выбрала `qualcommax/ipq50xx`, RD03v2 target, `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper и nft-backed xtables пакеты.
 - В `defconfig.log` остались три recursive-dependency diagnostics для Qt5 GUI, fwknopd/LuCI fwknopd и squeezelite-custom; эти пакеты не выбраны в финальном `.config`. Выбранный ранее NSS cycle отсутствует после patch 0014.
 - `CONFIG_PACKAGE_conntrack` не выбран. `iptables-mod-conntrack-extra` не предоставляет userspace CLI `conntrack`; selective mark-aware conntrack cleanup не реализован.
-- Full signed-image build и `verify-v2`: **IN PROGRESS**. Текущий шаг `Build and run verify-v2` выполняется. C-компиляция `qca-nss-ecm`, marker внутри собранного `ecm.ko`, image generation и итоговый verifier пока **NOT CONFIRMED**.
-- Получение job log во время работающего шага вернуло временный `BlobNotFound`; это ограничение доступности лога, не результат сборки и не FAIL.
+- Full signed-image build: **COMPLETED**. qca-nss-ecm compiled; both image types were created; marker found in ecm.ko; rootfs count 223 packages. Final `verify-v2`: **FAIL** (watchdog 20 PASS / 26 FAIL; ECM 9001/9002 fingerprints false-negative after AUTOREMOVE). See build artifact `14184373198`.
+- Build-log artifact `14184373198` downloaded and inspected; it records the three verifier failures. PREPARE_ONLY artifact `14181217573` confirms `CONFIG_AUTOREMOVE=y`.
 
-Предыдущие итерации #107–#122 выявляли несовпадения контекста GNU patch и порядок lifecycle teardown. Они являются историей исправления. Текущие source/preflight проверки подтверждены #123 и повторены в #124; это не означает, что C-компиляция уже завершилась.
+Предыдущие итерации #107–#122 выявляли несовпадения контекста GNU patch и порядок lifecycle teardown. Они являются историей исправления. CI #124 подтвердил source/preflight и C-компиляцию, но не дал final verify PASS. Исправления watchdog и AUTOREMOVE находятся в commits `f372d519`, `0d2aeadb`, `e7846a1` и `49d3579`; новый CI на точном HEAD 49d3579 ещё не найден.
 
 ### Следующие действия
 
-1. Повторно проверить job #124 до появления конечного `conclusion` и artifacts.
-2. После завершения скачать build-log artifact; проверить package logs именно для `qca-nss-ecm`, итоговый `ecm.ko`, kernel config, rootfs manifest, sysupgrade image и каждую проверку `verify-v2.sh`.
-3. Если сборка или verifier FAIL — сначала классифицировать конкретный лог; не прошивать и не подменять результат статическим PASS.
-4. После build/verify PASS спланировать отдельное стендовое тестирование на втором RD03v2. Основной домашний роутер оставить на stock MiWiFi.
+1. Запустить новый workflow на code/test HEAD `49d3579` через GitHub Actions с учётными данными, которые имеют право запускать Actions; доступный здесь GitHub connector поддерживает чтение и работу с содержимым, но не ручной dispatch нового run.
+2. На новом run подтвердить Static, PREPARE_ONLY, watchdog suite, повторную компиляцию qca-nss-ecm и final `verify-v2` PASS. Проверить package/kernel versions, rootfs manifest и image hashes.
+3. Если build или verifier FAIL — классифицировать конкретный log, исправить источник и повторить; не прошивать и не подменять результат статическим PASS.
+4. Только после успешного build/verify спланировать аппаратные испытания на втором RD03v2. Основной домашний роутер оставить на stock MiWiFi.
 
 **CI-ограничения:** workflow использует временную P-256 signing keypair и URL `example.invalid`; публикуются только логи/конфигурация. CI image нельзя устанавливать как релиз и нельзя прошивать на роутер.
 
