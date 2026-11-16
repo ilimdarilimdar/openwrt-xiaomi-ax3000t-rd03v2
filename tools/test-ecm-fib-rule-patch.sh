@@ -235,10 +235,10 @@ PY
 echo "PASS: patch structure is valid before source preflight"
 
 
-# Catch a direct lock-order inversion in a single ECM translation unit. This is
-# deliberately a narrow source guard: it does not replace lockdep or call-graph
-# review for indirect helpers.
-check_no_direct_rtnl_with_family_lock() {
+# Catch direct RTNL acquisition while an ECM IPv4/IPv6 family spinlock is held.
+# This is intentionally a narrow source guard, not a substitute for lockdep:
+# indirect helper calls still require call-graph review and runtime testing.
+check_no_rtnl_inside_family_lock() {
   local ecm_root=$1
   python3 - "$ecm_root" <<'PY'
 from pathlib import Path
@@ -246,26 +246,44 @@ import re
 import sys
 
 root = Path(sys.argv[1])
-family_lock = re.compile(r"\bspin_lock(?:_bh)?\s*\(\s*&ecm_ipv[46]_lock\s*\)")
+family_lock = re.compile(
+    r"\bspin_lock(?:_bh)?\s*\(\s*&(?P<lock>ecm_ipv[46]_lock)\s*\)\s*;"
+)
 rtnl_lock = re.compile(
     r"\b(?:rtnl_(?:net_)?(?:lock|trylock)|rtnl_lock_(?:interruptible|killable)|"
     r"rtnl_net_lock_killable)\s*\("
 )
 violations = []
+unpaired = []
 for source_path in sorted(root.rglob("*.c")):
     if not source_path.is_file():
         continue
     source = source_path.read_text(errors="replace")
-    if family_lock.search(source) and rtnl_lock.search(source):
-        violations.append(source_path.relative_to(root).as_posix())
+    for match in family_lock.finditer(source):
+        lock_name = match.group("lock")
+        unlock_pattern = re.compile(
+            rf"\bspin_unlock(?:_bh)?\s*\(\s*&{re.escape(lock_name)}\s*\)\s*;"
+        )
+        unlock = unlock_pattern.search(source, match.end())
+        relative = source_path.relative_to(root).as_posix()
+        if not unlock:
+            unpaired.append(f"{relative}:{source.count(chr(10), 0, match.start()) + 1}")
+            continue
+        critical_section = source[match.end():unlock.start()]
+        if rtnl_lock.search(critical_section):
+            violations.append(
+                f"{relative}:{source.count(chr(10), 0, match.start()) + 1} ({lock_name})"
+            )
 
+if unpaired:
+    raise SystemExit(f"FAIL: family spinlock acquisition has no following unlock: {unpaired}")
 if violations:
     raise SystemExit(
-        "FAIL: direct RTNL acquisition and ECM IPv4/IPv6 family spinlock "
-        f"appear in the same translation unit: {violations}"
+        "FAIL: direct RTNL acquisition occurs while an ECM IPv4/IPv6 "
+        f"family spinlock is held: {violations}"
     )
 
-print("PASS: no direct RTNL acquisition appears in an ECM translation unit that acquires ecm_ipv4_lock/ecm_ipv6_lock")
+print("PASS: no direct RTNL acquisition occurs inside ECM IPv4/IPv6 family spinlock critical sections")
 PY
 }
 
@@ -565,7 +583,7 @@ grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$S
 grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SERIES_ECM_DB" ||
   die "runtime registration diagnostic is missing after applying the complete feed series"
 check_stop_temp_refcount "$SERIES_ROOT"
-check_no_direct_rtnl_with_family_lock "$SERIES_ROOT"
+check_no_rtnl_inside_family_lock "$SERIES_ROOT"
 echo "PASS: complete patch queue ($series_count patches, including 9001 and 9002) applies with OpenWrt patch-kernel.sh semantics"
 
 # ecm_db_init() must not register the FIB notifier if an existing route-notifier
