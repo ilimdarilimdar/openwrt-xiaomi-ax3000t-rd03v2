@@ -5,7 +5,7 @@
 **Последняя ревизия:** 2026-11-16.
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Текущий branch HEAD:** `07a4063eb59555ce883970546b5c97f047d65435`.
+**Последний code/source snapshot до аннотационной ревизии:** `07a4063eb59555ce883970546b5c97f047d65435`. Последующие commits в этой серии меняют только документацию; фактический HEAD всегда сверять по GitHub.
 **Функциональный ECM patch commit:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`.
 **Последняя тестовая ревизия:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
 **Blob patch 9002:** `794bb980bf753515e9b61c48c6c393acfeeff874`.
