@@ -107,8 +107,8 @@ Hardware validation remains **NOT TESTED**. A successful source preflight, build
 
 ## Current validation snapshot — 2026-11-16
 
-Live status for branch `work/rd03v2-dualwan-mwan3-baseline`, code/test
-HEAD `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`:
+Historical run #124 status for branch `work/rd03v2-dualwan-mwan3-baseline`, built from code/test
+HEAD `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`. The current code/test HEAD is `49d3579437389e2ffc111b94a08839ef7bd29ae7`:
 
 - **Static checks: PASS** — repository ancestry/whitespace, shell syntax,
   Python tools, signing-key helper, RD03v2 config/manifest and private-key guard.
