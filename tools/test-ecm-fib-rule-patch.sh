@@ -543,6 +543,8 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: FIB notifier result is not stored separately in {db_path}")
     if "ret = " + registration in db_init or "return fib_ret;" in db_init:
         sys.exit(f"FAIL: FIB registration must not overwrite/replace route-notifier status in {db_path}")
+    if "return ret;" not in db_init[reg_pos:]:
+        sys.exit(f"FAIL: ecm_db_init() no longer preserves the route-notifier return status in {db_path}")
     if "if (fib_ret) {" not in db_init or "ecm_db_fib_rule_notifier_fail_closed(fib_ret);" not in db_init:
         sys.exit(f"FAIL: FIB registration error has no fail-closed branch in {db_path}")
 
@@ -564,6 +566,17 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: fail-closed helper misses required IPv4/drain behavior in {db_path}")
     if positions != sorted(positions):
         sys.exit(f"FAIL: fail-closed helper does not gate, drain and defunct in order in {db_path}")
+
+    ipv6_sequence = [
+        "ecm_front_end_ipv6_stop_temp(1);",
+        "clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);",
+        "ecm_db_connection_defunct_ip_version(6);",
+    ]
+    ipv6_positions = [fail_fn.find(token) for token in ipv6_sequence]
+    if any(position < 0 for position in ipv6_positions):
+        sys.exit(f"FAIL: fail-closed helper misses IPv6 stop/pending/defunct handling in {db_path}")
+    if ipv6_positions != sorted(ipv6_positions):
+        sys.exit(f"FAIL: fail-closed helper does not preserve IPv6 gate/drain/defunct order in {db_path}")
     if "ecm_front_end_ipv4_stop_temp(0)" in fail_fn or "ecm_front_end_ipv6_stop_temp(0)" in fail_fn:
         sys.exit(f"FAIL: fail-closed helper reopens an ECM frontend in {db_path}")
     if "ecm_db_fib_rule_notifier_fail_closed(fib_ret);" not in db_init:
