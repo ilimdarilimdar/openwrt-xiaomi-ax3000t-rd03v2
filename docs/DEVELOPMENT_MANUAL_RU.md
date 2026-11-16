@@ -20,18 +20,17 @@
 > Это инженерный план, а не сертификат готовности прошивки. По состоянию на 16.11.2026 CI #124 прошёл Static/PREPARE_ONLY, скомпилировал qca-nss-ecm, создал sysupgrade и initramfs-factory images и подтвердил marker FIB notifier в ecm.ko. Финальный verify-v2 завершился FAIL на трёх проверках: watchdog harness и два ECM source fingerprints после AUTOREMOVE. Исправления watchdog и verifier записаны в code/test HEAD 49d3579, но новый CI на этом SHA пока не найден. Аппаратные Dual-WAN/NSS испытания не проводились. CI использует временный ключ и example.invalid; его образы не являются пользовательским релизом и не предназначены для установки. Основной роутер не прошивать.
 
 
-### Live CI checkpoint — 2026-11-15
+### Live CI checkpoint — 2026-11-16
 
-- Latest code/test HEAD before the documentation-only refresh: `a0e72ce6fa04a243849a96825f4891e0f0608b39` (test-only callback guard).
-- Documentation-only commits after that checkpoint: `a8d15e9` (engineering manual) and `0b5bf9f` (CI snapshot); neither changes firmware source.
-- Firmware-source revision: `006e14a5d0348528a021943b1fd595cc233451db`. Commits `eba9d02` and `a0e72ce` update regression tests only; they do not change the ECM C patch.
+- Current code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`. Later commits update documentation only.
 - Pinned OpenWrt/NSS tree: `c36db6321c11595dc45a160cdab36b5c2d787744`; kernel package version is **Linux 6.18.55**.
 - Pinned QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`; NSS/packages feed pins are recorded in `upstream.lock` and `feeds.lock`.
-- Workflow #106: Static **PASS**, PREPARE_ONLY **PASS**, raw QSDK source apply and full 31-patch ECM feed-series preflight **PASS**. The preflight checks all 19 diff hunks, source archive SHA-256, temporary-stop lock alignment, RTNL pending-bit snapshot, stop-gate/`synchronize_net()` ordering, notifier init/unwind/exit and worker drain.
-- Workflow #107: Static **PASS**, PREPARE_ONLY **PASS**; the atomic-callback regression guard also passed. Full signed-image build and `verify-v2.sh` are **IN PROGRESS** at the latest live check.
-- Workflow #108: **PENDING** behind #107. It adds a stricter test requiring the atomic notifier callback to contain only `set_bit()` operations and `schedule_work()`; it is not a new firmware-code revision.
-- PREPARE_ONLY confirms `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper and nft-backed iptables packages are selected. Kernel config fragments enable `CONFIG_FIB_RULES`, `CONFIG_IP_MULTIPLE_TABLES` and, through the project config, `CONFIG_IPV6_MULTIPLE_TABLES`; the final kernel config check is part of `verify-v2.sh`.
-- Three unrelated Kconfig recursive-dependency diagnostics remain (Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom). These packages are unset in the generated final `.config`; the former selected NSS dependency cycle is absent after tree patch 0014. Keep the warnings visible and re-check the generated config on future feed changes.
+- CI #124: Static **PASS**, PREPARE_ONLY **PASS**, raw QSDK source apply, full 32-patch ECM feed-series and notifier/lifecycle/atomic-callback guards **PASS**.
+- The full build completed: qca-nss-ecm compiled, kmod-qca-nss-ecm was packaged, both sysupgrade and initramfs-factory images were created, the image's ecm.ko contains the FIB notifier marker, and rootfs verification counted 223 packages.
+- Final `verify-v2.sh` in #124 returned **FAIL** with three issues: watchdog harness (20 passed / 26 failed) and source fingerprints for ECM patches 9001/9002 after CONFIG_AUTOREMOVE removed their package source tree.
+- Watchdog fixes in commits `f372d519` and `0d2aeadb` route hardware commands to absolute stub paths in test mode. ECM verifier fixes in `e7846a1` and `49d3579` distinguish a genuinely present patched source from an AUTOREMOVE-cleaned directory and require CONFIG_AUTOREMOVE=y before using the feed-copy fallback.
+- Runs #127–#129 were cancelled. A fresh workflow run for exact HEAD `49d3579` was not found at the latest live check; the follow-up fixes remain **NOT CI-VALIDATED**.
+- PREPARE_ONLY confirms `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper and nft-backed iptables packages are selected. Three unrelated Kconfig recursive-dependency diagnostics remain (Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom); these packages are unset in the generated final `.config`, and the selected NSS dependency cycle is absent after tree patch 0014.
 - Runtime module loading, FIB churn, mwan3 failover, NSS counters/throughput and all hardware tests remain **NOT TESTED**.
 
 The full-build CI job uses a disposable signing key and an `example.invalid` package repository URL. It uploads logs, not a usable release image. Do not flash a CI artifact; keep the primary router on stock MiWiFi.
