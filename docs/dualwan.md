@@ -339,8 +339,8 @@ transactional rollback changes have not been re-applied to the exact archive,
 compiled, or fault-injected after that update. The preflight script's presence
 and source-level assertions are not a substitute for executing it.
 
-The current branch HEAD is `07a4063eb59555ce883970546b5c97f047d65435`. No workflow run or successful commit
-status is associated with it. Hardware module lifecycle, FIB churn, mwan3
+The last code/source snapshot before the documentation cleanup was `07a4063eb59555ce883970546b5c97f047d65435`. The subsequent commits in this review change documentation only. No workflow run or successful commit
+status is associated with the current source/test revision. Hardware module lifecycle, FIB churn, mwan3
 failover, conntrack behavior, NSS/ECM counters, throughput, CPU, latency,
 packet loss and recovery on the second RD03v2 are **NOT TESTED**.
 
