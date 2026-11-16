@@ -32,7 +32,7 @@ Snapshot: 2026-11-16. Source implementation commit: 16193bfb29eecca103a370270458
 | mwan3 2.12.5 / LuCI / nft-backed xtables | Выбраны в конфигурации и manifest; пакетная сборка текущей ревизии **NOT CI-VALIDATED** |
 | ECM patch 9002 gate-first callback + drain-loop | Реализовано в source candidate; static harness обновлён; exact QSDK apply, compile и execution тестов **NOT TESTED** |
 | Callback behavior | Gate закрывается до pending-bit queue; initial replay queue откладывается до возврата register_fib_notifier; runtime поведение **NOT TESTED** |
-| Worker drain | Pending bits обрабатываются циклом; gate release только после empty snapshot под RTNL; lockdep и fault-injection **NOT TESTED** |
+| Worker drain | Pending bits обрабатываются циклом; gate release только после empty snapshot под RTNL. Exact QSDK 14.0 raw-source audit не нашёл прямого RTNL acquisition в translation units, где берётся family spinlock; в harness добавлен same-file direct-lock guard. Indirect call graph, lockdep и fault-injection **NOT TESTED** |
 | CI #123/#124 | Применение/компиляция относятся к более ранним версиям patch 9002 |
 | CI #124 qca-nss-ecm compilation / images | **PASS для более ранней версии patch**; нельзя переносить на 16193bf |
 | CI #124 final verify-v2 | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
@@ -41,6 +41,10 @@ Snapshot: 2026-11-16. Source implementation commit: 16193bfb29eecca103a370270458
 | Current candidate | Нового CI run и commit status нет; manual dispatch false/true не запускались |
 | Runtime FIB notifier / ECM module lifecycle | **NOT TESTED** |
 | Hardware Dual-WAN/NSS, WAN failover, RTT/loss/throughput | **NOT TESTED** |
+
+### ECM lock-order source audit — 2026-11-16
+
+Проверен закреплённый QSDK ECM source SHA `7894b769eeb64f1c44fde547a107a8b866997590` через raw-файлы GitLab source repository. В просмотренных `*.c` файлах явных `rtnl_lock()`/`rtnl_net_lock()` вызовов внутри translation units, которые напрямую захватывают `ecm_ipv4_lock` или `ecm_ipv6_lock`, не обнаружено. `ecm_interface.c` содержит отдельный `rtnl_lock()` для регистрации WLAN netdev hooks, но family-lock primitive там не найден. Несколько raw-запросов к отдельным файлам завершились ошибкой доступа; значит это ручной source scan, а не исчерпывающий формальный call-graph proof. В `tools/test-ecm-fib-rule-patch.sh` добавлена проверка прямого совпадения RTNL acquisition и family-lock acquisition в одном `.c` файле. Этот тест не видит косвенные вызовы и не заменяет lockdep.
 
 The new gate-first implementation is a source candidate only. Actions API still shows #129 as the latest run. The last UI checkpoint reported that workflows on this fork were paused. CI artifacts use a temporary key and example.invalid; they are not releases and must not be flashed.
 
