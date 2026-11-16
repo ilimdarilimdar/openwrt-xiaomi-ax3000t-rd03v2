@@ -220,10 +220,10 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
  	if (ecm_db_ipv4_route_enable) {
 -		ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb);
 -		if (ret) {
--			DEBUG_ERROR("Could not register for the IPV4 routing events error:%d\\n", ret);
+-			DEBUG_ERROR("Could not register for the IPV4 routing events error:%d\n", ret);
 +		route_ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb);
 +		if (route_ret) {
-+			DEBUG_ERROR("Could not register for the IPV4 routing events error:%d\\n", route_ret);
++			DEBUG_ERROR("Could not register for the IPV4 routing events error:%d\n", route_ret);
 +			ret = route_ret;
 +		} else {
 +			ecm_db_ipv4_route_registered = true;
@@ -234,10 +234,10 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
  	if (ecm_db_ipv6_route_enable) {
 -		ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb);
 -		if (ret) {
--			DEBUG_ERROR("Could not register for the IPV6 routing events error:%d\\n", ret);
+-			DEBUG_ERROR("Could not register for the IPV6 routing events error:%d\n", ret);
 +		route_ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb);
 +		if (route_ret) {
-+			DEBUG_ERROR("Could not register for the IPV6 routing events error:%d\\n", route_ret);
++			DEBUG_ERROR("Could not register for the IPV6 routing events error:%d\n", route_ret);
 +			if (!ret) {
 +				ret = route_ret;
 +			}
@@ -289,7 +289,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +	if (ecm_db_ipv4_route_registered) {
  		ret = ip_rt_unregister_notifier(&ecm_db_iproute_table_update_nb);
  		if (ret) {
- 			DEBUG_ERROR("Could not unregister for the IPV4 routing events error:%d\\n", ret);
+ 			DEBUG_ERROR("Could not unregister for the IPV4 routing events error:%d\n", ret);
 +		} else {
 +			ecm_db_ipv4_route_registered = false;
  		}
@@ -300,7 +300,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +	if (ecm_db_ipv6_route_registered) {
  		ret = rt6_unregister_notifier(&ecm_db_ip6route_table_update_nb);
  		if (ret) {
- 			DEBUG_ERROR("Could not unregister for the IPV6 routing events error:%d\\n", ret);
+ 			DEBUG_ERROR("Could not unregister for the IPV6 routing events error:%d\n", ret);
 +		} else {
 +			ecm_db_ipv6_route_registered = false;
  		}
