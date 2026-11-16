@@ -15,7 +15,7 @@ front-end shutdown sequence: unregister the FIB notifier, wait for any active
 atomic callbacks to quiesce, then call `cancel_work_sync()`. A fallback stop
 remains in `ecm_db_exit()`.
 
-## Proven on v1.x, not yet proven on v2
+## What v1.x demonstrated; what remains unproven on v2
 
 PR #40 and its linked test report describe:
 - A reproducible routed-IPv6 upload stall with stock ECM when mwan3-like policy
@@ -40,11 +40,9 @@ From this repository's v2.1.3 build inputs:
 - qca-nss-ecm source version: QSDK 14.0, 2026-09-06.
 - Kernel line: Linux 6.18.
 
-The v2 project's own VALIDATION.md says the current ECM has no FIB-rule
-notifier and lists issue #36 as not fully settled on the v2 test bench. That
-is the reason for a separate v2 port rather than blindly applying the v1 patch.
+The repository's inherited `VALIDATION.md` describes the upstream v2.1.3 baseline and predates this branch's experimental Dual-WAN changes. The active branch now carries a separate v2/QSDK 14.0 implementation in patch 9002. The inherited release validation is not evidence for or against the new branch's runtime behavior; only the specific CI and hardware results below apply.
 
-## Reproducible source and patch preflight
+## Historical v1-reference patch preflight (superseded for the current v2 port)
 
 The v2 ECM archive URL and digest are pinned by the qca-nss-ecm package
 Makefile. Use these commands in the actual OpenWrt build workspace (or a
@@ -79,17 +77,16 @@ ECM_ROOT=${ECM_DB%/ecm_db/ecm_db.c}
 
 Interpretation:
 
-- A successful dry-run means the v1 patch context still matches the v2 source;
-  it does **not** prove that the resulting module compiles or works.
-- A failed dry-run is a stop condition. Inspect the actual v2 function bodies
-  and port the notifier against their current signatures and teardown order.
-  Do not hand-edit hunk offsets until the code context has been compared.
-- The reference patch must not be copied into
-  `feed-overlay/nss/qca-nss-ecm/patches/` yet. The active overlay currently
-  contains only the existing RD03v2 patch 9001; a candidate 9002 belongs there
-  only after review and successful compilation.
-- After an approved patch is staged, compile the feed package in the prepared
-  OpenWrt tree with:
+- This is a historical comparison procedure for the v1 reference patch, not the
+  current v2 implementation workflow.
+- Do **not** copy v1 patch 0030 into the v2 feed. The active v2 implementation
+  is the separately reviewed patch 9002 in `feed-overlay/nss/qca-nss-ecm/patches/`.
+- A v1 patch dry-run does not validate the v2 patch; use
+  `tools/test-ecm-fib-rule-patch.sh`, which applies 9002 using OpenWrt's
+  `patch -f -p1` semantics to the exact pinned QSDK source and then to the
+  complete sorted feed patch queue.
+- A source preflight is not a substitute for compilation, final image
+  verification, runtime registration or hardware testing.
 
 ```sh
 make package/feeds/nss/qca-nss-ecm/compile V=s
@@ -100,7 +97,7 @@ Then inspect the produced `ecm.ko` for the runtime registration message
 `tools/verify-v2.sh`, and test the module on a controlled bench before
 building a sysupgrade image.
 
-## v2 source review and candidate patch status (2026-11-15)
+## v2 source review and applied patch status (2026-11-16)
 
 **Per-net RTNL publication-order and pending-bit race:** Linux 6.18 calls the rule-add notifier before the new rule is linked into the rules list, and the delete notifier after `list_del_rcu()` but before the per-net RTNL lock is released. The worker now uses the exact same `rtnl_net_lock(&init_net)` / `rtnl_net_unlock(&init_net)` pair as the `init_net` rule update. This is important when `CONFIG_DEBUG_NET_SMALL_RTNL` is enabled: a plain global `rtnl_lock()` alone would not serialize with the additional per-net mutex. The worker snapshots and clears IPv4/IPv6 pending bits while holding the matching per-net lock, then releases it before walking the ECM database. This also closes the pending-bit race: an event arriving after the snapshot sets a fresh bit and can schedule another pass. The preflight script checks lock, pending-bit snapshots, unlock and both family-specific defunct paths.
 The Linux 6.18 event path was also checked in the exact tagged kernel sources:
@@ -157,43 +154,55 @@ v1 reference in a critical API detail:
   sets a per-family pending bit and schedules work; it does not walk the ECM
   database or take its locks.
 
-An experimental candidate now exists at
+The active implementation is:
 `feed-overlay/nss/qca-nss-ecm/patches/9002-rd03v2-defunct-ecm-flows-on-fib-policy-rule-changes.patch`.
-It is separate from the pinned upstream feed, after existing patch 9001. It
-has **not yet passed the pinned-archive apply test, has not been compiled, and
-has not been tested on hardware**. Do not call this feature implemented or
+It is a separate RD03v2/QSDK 14.0 port, applied after pinned feed patch 9001.
+
+Evidence:
+- CI #123 and #124 passed the SHA-256-verified raw QSDK source apply and the
+  complete sorted queue of 32 ECM feed patches using `patch -f -p1`.
+- Lifecycle guards passed: FIB notifier init/unwind/normal-exit ordering,
+  pending work drain before frontend teardown, atomic callback restrictions,
+  RTNL/pending-bit and `synchronize_net()` requirements.
+- CI #124 compiled `qca-nss-ecm`, packaged `kmod-qca-nss-ecm`, created both
+  image types and found the notifier marker in image `ecm.ko`.
+- CI #124's final `verify-v2` still failed on watchdog scenarios and two ECM
+  source-fingerprint checks after `CONFIG_AUTOREMOVE=y`; those were verifier/
+  harness issues, not an ECM C compilation failure.
+- The watchdog/AUTOREMOVE fixes were committed later, but #127's full build
+  was interrupted by runner shutdown (exit 143), #128/#129 were cancelled,
+  and code/test HEAD `49d3579` has no separate Actions run/status.
+
+The current preflight script is `tools/test-ecm-fib-rule-patch.sh`. It reads
+the source version/commit/archive URL/SHA from the pinned feed Makefile,
+hash-verifies the QSDK archive, applies 9002 with the same `patch -f -p1`
+semantics as OpenWrt, and checks the full ordered feed series and lifecycle
+invariants. The `verify-v2.sh` marker check proves that the registration
+string is present in the built image module; it does not prove runtime
+registration on a router.
+
+Patch 9002 is therefore **source-preflight PASS and compile/image PASS on
+CI #124's older code/test revision; latest verifier fixes NOT CI-VALIDATED;
+runtime/hardware NOT TESTED**. Do not call the feature production-ready or
 NSS-safe yet.
 
-The preparation workflow now runs
-`tools/test-ecm-fib-rule-patch.sh` after PREPARE_ONLY. The script reads the
-exact QSDK version, source commit, archive URL and SHA-256 from the prepared
-feed Makefile, downloads the archive, verifies its hash, applies patch 9002
-with `git apply --check`, then checks for the expected notifier events and v2
-temporary stop helpers. `verify-v2.sh` also checks the runtime registration
-string inside `ecm.ko` in the final sysupgrade root filesystem. These are
-intended gates; their CI results remain pending until a successful run reports
-them.
+## Remaining v2 validation checklist
 
-## Porting checklist
+The source port itself is present and has passed the source/build gates listed
+above. The remaining tasks are validation, not porting the patch from scratch:
 
-- Extract and hash-verify the exact source archive from the pinned qca-nss-ecm
-  package Makefile.
-- Check current v2 definitions/call sites for:
-  - `ecm_db_connection_defunct_ip_version()`;
-  - `ecm_front_end_ipv4_stop_temp()` and `ecm_front_end_ipv6_stop_temp()` (the current v2 API);
-  - `register_fib_notifier()` / `unregister_fib_notifier()`;
-  - the event structure and `FIB_EVENT_RULE_ADD/DEL` family field;
-  - the module init/exit error and teardown paths.
-- Port notifier registration, pending-family bit handling, worker and teardown
-  to the current file layout and Linux 6.18 API.
-- Use a new patch number after the current feed's 0059 series; do not collide
-  with upstream patches.
-- Add build verification that the expected notifier string is present in
-  `ecm.ko`, then runtime verification that registration succeeded.
-- Compare control (stock ECM) and patched ECM under both rule restore orders.
-  Include IPv4, routed IPv6, NAT66, PPPoE, DHCP/static WAN and actual cable pulls.
-- Stress repeated rule changes and record kernel warnings, workqueue state,
-  ECM rule counters, CPU, throughput and memory.
+- finish a full CI run on current code/test HEAD and pass `verify-v2.sh`;
+- review and, where possible, remove GNU patch fuzz reported for 9002 in #124;
+- confirm the notifier actually registers on a booted RD03v2 and unregisters
+  cleanly on module teardown;
+- test initial FIB dump/replay, rule churn during registration, both families,
+  pending-bit coalescing and worker drain under load;
+- run lockdep/concurrency/teardown tests and save dmesg/workqueue/counter logs;
+- compare rule-restore order, IPv4 routed/NAT, IPv6 routed/NAT66 where supported,
+  PPPoE and both WAN types;
+- measure slow-path/re-acceleration, CPU, throughput, RAM, latency and packet loss;
+- run mwan3 tracker `disconnected`, netifd `ifdown`, cable pulls and recovery
+  as separate scenarios, with conntrack marks recorded independently of ECM.
 
 ## Safety gate
 
@@ -262,20 +271,20 @@ Primary Linux 6.18 source references:
 - [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
 - [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
 
-## Current preflight and lifecycle status — 2026-11-15
+## Current preflight/build status — 2026-11-16
 
-The exact pinned QSDK 14.0 archive is:
+Pinned QSDK 14.0 source:
 - source commit: `7894b769eeb64f1c44fde547a107a8b866997590`;
 - archive: `qca-nss-ecm-14.0.2026.09.06.7894b769eeb64f1c44fde547a107a8b866997590.tar.zst`;
-- CI #93 successfully downloaded the archive and verified its configured SHA-256. The failure was not a network or archive-integrity problem.
+- SHA-256: `a4d5f4c4a6c4bfac3ded4af993c88249f7afc4444ed78368f367eda4ef231886`.
 
-The lifecycle changes in patch 9002 remain:
-- FIB notifier callbacks only set per-family pending bits and schedule work;
-- the worker snapshots/clears pending bits while holding `rtnl_net_lock(&init_net)`, then releases RTNL before stop gates, `synchronize_net()` and the ECM DB walk;
-- notifier shutdown unregisters the callback and drains work before database/front-end teardown;
-- module init unwind paths stop the worker before tearing down initialized front ends.
+- CI #123: raw apply and full sorted 32-patch ECM queue PASS; notifier init/unwind/normal-exit ordering, worker drain, and atomic callback guards PASS.
+- CI #124: the same preflight/source guards PASS; `qca-nss-ecm` compiled, `kmod-qca-nss-ecm` entered rootfs, image marker found, sysupgrade and initramfs-factory images created.
+- CI #124 final `verify-v2`: FAIL on watchdog 20/46 and source-fingerprint checks for 9001/9002 after AUTOREMOVE.
+- CI #127: Static and PREPARE_ONLY PASS; full build interrupted by runner shutdown (exit 143). #128/#129 cancelled before jobs.
+- Current code/test HEAD `49d3579`: no separate workflow run or commit status. Runtime/module/hardware verification remains NOT TESTED.
 
-A green source-apply preflight does not prove that `ecm.ko` compiles or runs. Required gates remain: complete feed-series preflight, full `kmod-qca-nss-ecm` compilation, notifier marker in the built module, `verify-v2.sh`, and controlled second-router hardware tests.
+A successful source-preflight and the older CI #124 compile/image result do not validate the later verifier fixes or runtime notifier behavior. The exact current CI status and all remaining tasks are maintained in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
 ## Concurrent temporary-stop accounting — corrected source audit, 2026-11-15
 
