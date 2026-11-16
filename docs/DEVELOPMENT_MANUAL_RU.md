@@ -32,6 +32,7 @@
 - Workflow has `workflow_dispatch` with boolean `full_build`, but real dispatch runs have not been performed. No new Actions run/status exists for current HEAD after #129.
 - mwan3 2.12.5 and `ECM_CLASSIFIER_MARK_ENABLE=y` are pinned/configured. Runtime fwmark/CONNMARK handling and actual NSS offload remain **NOT TESTED**.
 - ECM exact-source preflight after rollback, complete feed series, current C compilation, runtime FIB notifier, firewall4/mwan3, WAN failover, latency/loss/throughput, soak and recovery remain **NOT TESTED**.
+- Source review found a potential gate-open interval if a new FIB event requeues the worker after its pending-bit snapshot but before the current defunct pass opens the frontend gate. It is not a confirmed runtime failure; deterministic event injection and a safe drain-loop/lock-order review are now required (ECM-06).
 - Keep the primary router on stock MiWiFi. CI images are not installable releases.
 
 
