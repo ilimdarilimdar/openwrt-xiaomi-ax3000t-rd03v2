@@ -12,7 +12,7 @@
 ## Текущая контрольная точка — 2026-11-16
 
 - Рабочая ветка: work/rd03v2-dualwan-mwan3-baseline.
-- Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-file envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-file envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 946b5bab7fb83f75356c181896361a5d183d2db0.
 - Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 - Candidate 9002 закрывает per-family gate непосредственно в atomic callback на первом ADD/DEL событии, использует readiness barrier для initial FIB replay, drain-loop worker, RTNL-serialized final gate release и teardown cleanup.
 - Callback закрывает gate до публикации pending bit. Повторные события coalesce и не увеличивают temporary-stop counter повторно. Во время initial register_fib_notifier replay callback не queue-ит worker; после успешного return caller выставляет ready и ставит один worker.
