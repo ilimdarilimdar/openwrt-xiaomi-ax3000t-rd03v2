@@ -24,7 +24,7 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Snapshot: 2026-11-16. Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+Snapshot: 2026-11-16. Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 
 | Этап | Текущий подтверждённый результат |
 |---|---|
