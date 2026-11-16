@@ -13,7 +13,7 @@ This fork is developed with AI assistance (ChatGPT/Codex). **All project-specifi
 
 AI-generated output is not presumed correct. Unless a change is explicitly marked as compiled and hardware-tested, treat it as unverified. Test status must be reported honestly (PASS, FAIL, NOT TESTED, or INCONCLUSIVE).
 
-**Experimental Dual-WAN branch:** `work/rd03v2-dualwan-mwan3-baseline` is development work, not a published release. Its current ECM rollback changes have not yet passed a fresh full CI build or hardware validation. Do not install images from that branch; use only a published release with its own documented validation.
+**Experimental Dual-WAN branch:** `work/rd03v2-dualwan-mwan3-baseline` is development work, not a published release. Its current gate-first ECM FIB notifier/drain-loop candidate and notifier rollback changes have not passed a fresh exact-source apply, C build, full CI verification or hardware validation. Do not install images from that branch; use only a published release with its own documented validation.
 
 
 **RD03v2 only.** The MediaTek RD03/RD23 revisions use different hardware and incompatible
