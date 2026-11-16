@@ -1,5 +1,7 @@
 # v2 validation
 
+> **Scope:** this file records the inherited upstream v2.0.0–v2.1.3 platform validation performed before the current experimental Dual-WAN branch changes. It is evidence for the underlying RD03v2/NSS base only. It does **not** validate mwan3 integration, ECM patch 9002's current transactional rollback, dual-WAN failover, or the current working branch. See [the branch test plan](docs/TEST_PLAN_RU.md) and [open-items register](docs/OPEN_ITEMS_REGISTER_RU.md) for those gates.
+
 What v2.0.0 to v2.1.2 were tested on before release, and what they were not. Everything
 here ran on one Xiaomi AX3000T (RD03v2, 256 MB), installed on NAND, with:
 
