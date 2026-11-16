@@ -420,15 +420,14 @@ CI-образ на temporary key/`example.invalid` годится как док�
 - Источники: https://github.com/torvalds/linux/blob/v6.18/net/core/fib_notifier.c ; https://github.com/torvalds/linux/blob/v6.18/kernel/notifier.c ; https://github.com/torvalds/linux/blob/v6.18/net/core/fib_rules.c ; https://github.com/torvalds/linux/blob/v6.18/net/ipv4/fib_notifier.c ; https://github.com/torvalds/linux/blob/v6.18/net/ipv6/fib6_notifier.c .
 
 
-### 2026-11-16 — актуальная сверка CI #124 и PREPARE_ONLY artifact
+### 2026-11-16 — архивный PREPARE_ONLY snapshot перед завершением #124
 
-- Повторно проверены GitHub repository refs, рабочая ветка и CI jobs. `main` содержит upstream v2.1.3; активная Dual-WAN-разработка остаётся в `work/rd03v2-dualwan-mwan3-baseline`.
-- Code/test HEAD на момент проверки: `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`; test-only commit закрепляет требование, чтобы FIB worker drain непосредственно предшествовал остановке conntrack notifier в `ecm_exit()`.
-- CI #124: Static **PASS**, PREPARE_ONLY **PASS**, QSDK source apply **PASS**, полная 32-патчевая ECM очередь **PASS**, lifecycle/atomic callback guards **PASS**.
-- Скачан и исследован PREPARE_ONLY artifact `14181217573`. Подтверждены RD03v2 `qualcommax/ipq50xx`, mwan3/LuCI mwan3, NSS/ECM, DWMAC helper и nft-compatible пакетный набор. После patch 0014 ранее выбранный NSS Kconfig cycle отсутствует; три предупреждения Kconfig относятся к невыбранным Qt5 GUI, fwknopd/LuCI fwknopd и squeezelite-custom.
+- На тот момент code/test HEAD был `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`; более актуальная сводка находится в верхнем блоке этого handoff и в следующем разделе post-build audit.
+- CI #124 подтвердил Static/PREPARE_ONLY, QSDK source apply, полную 32-патчевую ECM очередь и lifecycle/atomic callback guards.
+- PREPARE_ONLY artifact `14181217573` подтвердил RD03v2 `qualcommax/ipq50xx`, mwan3/LuCI mwan3, NSS/ECM, DWMAC helper, nft-compatible пакетный набор и `CONFIG_AUTOREMOVE=y`. Три unrelated Kconfig diagnostics относятся к невыбранным Qt5 GUI, fwknopd/LuCI fwknopd и squeezelite-custom.
 - Userspace `conntrack` CLI не включён; selective conntrack cleanup по WAN mark остаётся будущей отдельной функцией.
-- Full signed-image build job #124 всё ещё **IN PROGRESS** при последней live-проверке. Компиляция ECM, marker в `ecm.ko`, image/manifest и полный `verify-v2` не подтверждены. Получение job logs во время исполнения вернуло `BlobNotFound`, что не трактуется как FAIL.
-- Изменения этого продолжения ограничены документацией; ECM patch, build config, pinned feeds и workflow не менялись. Основной роутер остаётся на stock MiWiFi; аппаратные Dual-WAN тесты не запускались.
+- Последующее завершение full build и final verifier зафиксировано ниже: сборка ECM и image generation прошли, но verify-v2 завершился FAIL на трёх проверках.
+- Основной роутер остаётся на stock MiWiFi; аппаратные Dual-WAN тесты не запускались.
 
 ### 2026-11-16 — post-build audit, verifier fixes and current HEAD
 
