@@ -5,32 +5,34 @@
 **Последняя ревизия:** 2026-11-16.
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`.
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
-**Последний code/source snapshot до аннотационной ревизии:** `07a4063eb59555ce883970546b5c97f047d65435`. Последующие commits в этой серии меняют только документацию; фактический HEAD всегда сверять по GitHub.
-**Функциональный ECM patch commit:** `fb88ba491df72d6d37e974a44f739d296c87ee0d`.
-**Последняя тестовая ревизия:** `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
-**Blob patch 9002:** `794bb980bf753515e9b61c48c6c393acfeeff874`.
-**Blob ECM preflight test:** `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6`.
+**Source patch code commit:** 16193bfb29eecca103a370270458a779403ac619.
+**Latest test-harness commit:** 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+**Patch blob:** 7807d27f592dca0585267285a7adb487e47b6b2c.
+**Test blob:** 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+**Previous source/test baseline:** 02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791 (new candidate is later and unvalidated).
 **Реестр задач:** [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
 ## Текущий подтверждённый статус
 
-- После `02ee20e` ветка продвинулась на 19 коммитов, 0 behind. Compare показывает только изменения документации и пояснительного текста заголовка patch 9002. C-hunks, preflight script, workflow и firmware config не изменялись.
-- Patch 9002 содержит per-family регистрацию IPv4/IPv6 route notifier, сохранение первой ошибки, флаги фактической регистрации и DB rollback при ошибке route/FIB notifier. Source-level regression guards проверяют порядок очистки и lifecycle.
-- Важное ограничение: текущий rollback patch `fb88ba4` и тестовые guards `02ee20e` **не прошли повторный exact archive preflight, полную 32-patch series, C compilation или fault injection после изменения**. Старые CI PASS относятся к предыдущей версии patch.
-- Последний GitHub Actions run — #129, cancelled до jobs. #127 прошёл Static и PREPARE_ONLY, но full-build остановлен runner shutdown с exit 143. #124 — последний полный build; он собрал предыдущую версию ECM и образы, но final `verify-v2` завершился FAIL.
-- Текущий HEAD не имеет commit status и успешного CI run. Workflow с `workflow_dispatch` и boolean `full_build` реализован, но реальные dispatch false/true ещё не выполнялись. После #129 новых Actions runs API не показывает; последняя UI-проверка указывала на паузу Actions для fork.
-- Runtime notifier, module load/unload, firewall4/mwan3, conntrack marks, NSS offload для WAN flows, latency/loss/throughput, Warface и soak — **NOT TESTED**.
-- Дополнительный source-review риск: worker 9002 обрабатывает один pending snapshot за проход; повторно поставленный FIB worker может начать второй проход после того, как первый уже открыл frontend gate. Не доказано, что stale flow успевает появиться, но deterministic injection и проверка gate-open window обязательны (ECM-06).
-- CI использует временный P-256 ключ и `example.invalid`, не публикует установочные образы. Основной домашний роутер остаётся на stock MiWiFi.
+- New source candidate: 16193bfb29eecca103a370270458a779403ac619. Latest regression-test candidate: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. These commits update patch 9002 and tools/test-ecm-fib-rule-patch.sh; workflow and firmware config were not changed.
+- Gate-first callback: the first IPv4/IPv6 event atomically sets a family-gated bit and closes its temporary frontend gate before setting pending state/queueing work. Repeated events coalesce without incrementing the temporary counter again.
+- Initial register_fib_notifier replay is handled with a readiness barrier: callback records/gates events but does not queue until registration returns; successful init arms ready and queues one worker.
+- Worker drains pending family bits in a loop. It releases gates only after an empty-pending check under per-net RTNL. Teardown disarms, unregisters, cancels/drains work and cleans residual pending/gated references.
+- This remains an **UNVALIDATED SOURCE CANDIDATE**. Exact pinned QSDK archive apply, full sorted 32-patch queue, C compile, fault injection, lockdep/KASAN and runtime stress were not executed. RTNL → frontend spinlock order requires lockdep confirmation.
+- Last Actions run #129 is cancelled before jobs. #127 passed Static/PREPARE_ONLY but full build stopped with runner exit 143. #124 is the last full image-generating build and applies to an older ECM patch; verify-v2 failed. No run/status exists for the new candidate.
+- Manual workflow_dispatch exists but actual false/true dispatches have not run; GitHub Actions was last reported paused for this fork.
+- Runtime notifier, module load/unload, firewall4/mwan3, conntrack marks, NSS WAN-flow offload, latency/loss/throughput, Warface and soak are **NOT TESTED**.
+- CI uses a temporary P-256 key and example.invalid, publishes no installable firmware. Primary router remains on stock MiWiFi.
 
 ## Следующие действия
 
-1. После восстановления Actions выполнить manual dispatch `full_build=false` на рабочей ветке и проверить Static + PREPARE_ONLY.
-2. Затем выполнить `full_build=true` и проверить exact QSDK apply, полную ECM series, компиляцию `qca-nss-ecm`, оба образа и полный `verify-v2`.
-3. Отдельно выполнить fault injection ошибок IPv4 notifier, IPv6 notifier и FIB notifier.
-4. Проверить ECM-06: event injection во время defunct pass и закрытие pending-bit requeue/gate-open window, с отдельным lock-order review.
-5. Только после успешного CI перейти к module load/unload и аппаратным тестам на втором RD03v2 с recovery-процедурой.
+1. Восстановить GitHub Actions на форке и выполнить manual dispatch full_build=false для source/test candidate.
+2. Проверить exact QSDK archive apply, полную 32-patch series и Static/PREPARE_ONLY; затем выполнить full_build=true с C compilation, image generation и полным verify-v2.
+3. Выполнить fault injection initial replay/retry, IPv4/IPv6 route notifier registration, FIB notifier registration и worker events during defunct pass.
+4. Запустить lockdep/KASAN/concurrency/load-unload checks, особенно RTNL → ECM frontend spinlock.
+5. Только после CI/fault/lockdep PASS перейти к hardware тестированию на втором RD03v2 с recovery-процедурой.
 6. Не прошивать CI images и не трогать основной домашний роутер.
+
 
 ## Текущая контрольная точка
 
