@@ -6,8 +6,20 @@
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
 **Code/test baseline:** `49d3579437389e2ffc111b94a08839ef7bd29ae7`  
-**Branch HEAD на момент ревизии:** `e81dbad389ad558e72aab6c23295c72299a6d7fe` (после code/test baseline шли только документальные коммиты; это подтверждено GitHub compare).  
+**Branch HEAD в начале исходной ревизии:** `e81dbad389ad558e72aab6c23295c72299a6d7fe` (исторический снимок до документальных коммитов, добавивших этот реестр).  
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
+
+
+## Актуальная live-перепроверка ветки и CI — 2026-11-16
+
+- Текущий Branch HEAD: `3cfa87d72b81cde60d2ec597458e63d2067071e3`.
+- Code/test baseline: `49d3579437389e2ffc111b94a08839ef7bd29ae7`; он не изменился.
+- GitHub Compare `49d3579...3cfa87d`: `ahead_by=34`, `behind_by=0`. Все 8 изменённых файлов — `README.md` и документация: handoff, CI guide, development manual, этот реестр, test plan, Dual-WAN и ECM port. Изменений source/config/test/workflow нет.
+- Последний workflow run — #129 (`e398b3f`), cancelled до создания jobs. #128 также cancelled до jobs. В #127 Static и PREPARE_ONLY прошли; full-build был прерван shutdown runner: в job log явно записаны exit 143 и сигнал остановки runner. #124 остаётся последним завершённым full-build: image generation прошла, финальный `verify-v2` завершился с 3 FAIL.
+- Для code/test SHA `49d3579` и текущего Branch HEAD `3cfa87d` GitHub не возвращает commit status checks; отдельных workflow runs на этих SHA нет.
+- Триггеры workflow: push в эту рабочую ветку и pull_request в `main`; `**/*.md` и `docs/**` исключены через `paths-ignore`. События `workflow_dispatch` нет. Full-build разрешён только для push, commit message которого содержит `[full-build]`. Документальные коммиты поэтому не запускают CI.
+- GitHub branch API показывает `protected=false`; обязательные status checks для рабочей ветки не настроены. Это не дефект прошивки, но политику защиты веток следует отдельно решить.
+
 
 ## 1. Краткий итог аудита
 
@@ -258,6 +270,16 @@ mwan3 распределяет независимые flows/соединения
 **Приоритет:** P2.
 
 Ранее были обнаружены stale claims в `DEVELOPMENT_MANUAL_RU.md` и `ecm-policy-routing-port.md`: они говорили, что patch 9002 отсутствует/не применялся, хотя он уже в overlay, прошёл preflight и скомпилировался в CI #124. Эти места обновляются в рамках ревизии. Дальше поддерживать этот register и handoff синхронными.
+
+### MAINT-04 — Решить вопрос branch protection и обязательных CI checks
+
+**Приоритет:** P2; не блокирует работу прошивки напрямую.
+
+На live-проверке GitHub branch API для `work/rd03v2-dualwan-mwan3-baseline` вернул `protected=false`; required status checks отсутствуют. Это может быть допустимо для экспериментальной ветки, но сейчас ничто на стороне GitHub не запрещает продвинуть коммит без обязательного CI gate.
+
+**Действия:** решить, какие защиты нужны для `main` и будущей release-ветки; после стабилизации CI подключить обязательные статические проверки и full-build/verify gate там, где это практически возможно. Не включать жёсткую защиту на экспериментальной ветке до тех пор, пока workflow не станет воспроизводимым и доступным для ручного запуска.
+
+**Критерий закрытия:** принято и документировано решение по branch protection; required checks настроены на защищаемых стабильных ветках либо явно зафиксировано, почему они пока не используются.
 
 ## 8. Рекомендуемый порядок работ
 
