@@ -242,6 +242,7 @@ The relevant exact Linux 6.18.55 sources are:
 - [FIB notifier register/unregister](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c#L81-L125): initial dump/replay, registration retry and atomic-chain unregister.
 - [Atomic notifier unregister](https://github.com/gregkh/linux/blob/v6.18.55/kernel/notifier.c#L178-L198): successful removal waits for an RCU grace period; absent notifier returns `-ENOENT`.
 - [Workqueue requeue semantics](https://github.com/gregkh/linux/blob/v6.18.55/Documentation/core-api/workqueue.rst#L760-L781): a work item is not executed reentrantly, and requeueing it is allowed.
+- [Workqueue implementation](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L3255-L3294) clears the pending bit before calling the worker function; [queue_work_on()](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L2413-L2425) can therefore enqueue the same work item from another context while the first invocation is executing. The second invocation remains non-reentrant and runs after the first.
 
 Required deterministic injection points: after pending-bit snapshot, after frontend gate close, during the DB defunct pass, and immediately before gate open. A possible drain-loop must keep frontend gates closed across repeated passes and serialize the final empty-pending check/gate-open transition with live RTNL-protected rule changes. Initial FIB replay occurs without RTNL and must be handled separately. Review RTNL/frontend-lock ordering before implementing that change.
 
