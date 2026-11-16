@@ -350,10 +350,16 @@ patch queue and RD03v2 patch 9001.
 
 ### Still not confirmed
 
-- The Full signed-image build job in CI #124 is **IN PROGRESS**.
-- C compilation of the current `qca-nss-ecm` patch series is not yet confirmed.
-- The notifier marker inside the compiled `ecm.ko`, rootfs/image generation
-  and final `verify-v2` result are not yet confirmed.
+- A fresh CI run on code/test HEAD `49d3579` is still required. The watchdog
+  harness fix, AUTOREMOVE-aware source fallback and its explicit config guard
+  have not yet completed CI.
+- The final `verify-v2` result for a build containing those latest fixes is
+  therefore **NOT CONFIRMED**. Do not inherit the #124 FAIL as proof the fixes
+  are bad, but do not label them PASS either.
+- CI #124 emitted GNU patch fuzz for several hunks in ECM patch 9002
+  (including the `ecm_exit()` insertion). PREPARE_ONLY's exact pinned-source
+  and full-series lifecycle guard passed and checks the stop call's placement;
+  actual runtime teardown remains a separate gate.
 - Module load/unload, FIB-rule churn, mwan3 failover, conntrack behavior,
   NSS/ECM counters, throughput, CPU, latency, packet loss and recovery on the
   second RD03v2 are **NOT TESTED**.
