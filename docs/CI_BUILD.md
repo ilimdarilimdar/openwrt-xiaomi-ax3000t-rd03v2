@@ -156,3 +156,11 @@ Current branch HEAD is 49d3579437389e2ffc111b94a08839ef7bd29ae7. The attempted r
 Next required action: trigger a fresh CI run through an Actions-enabled push or workflow dispatch, then verify that static checks, PREPARE_ONLY, the watchdog suite and final verify-v2 all pass on the exact new HEAD. Rebuild is still needed because #124 predates the final fixes. Inspect the build artifact and all test summaries. Do not flash CI artifacts: they use a disposable signing key and example.invalid package repository.
 
 Dual-WAN/NSS hardware validation remains NOT TESTED; keep the primary router on stock MiWiFi.
+
+### ECM patch-application fuzz note — 2026-11-16
+
+The real #124 qca-nss-ecm compile log shows GNU patch applied parts of 9002 with fuzz: ecm_db/ecm_db.c hunks #1/#2/#4 at fuzz 1/1/2, and ecm_init.c hunks #2/#4 at fuzz 1/2. In particular, the ecm_init.c hunk #4 is the ecm_exit() teardown insertion. Do not describe the actual application as fuzz-free.
+
+This does not show that the insertion landed incorrectly: PREPARE_ONLY's test-ecm-fib-rule-patch.sh reproduces the real sorted feed patch queue using patch -f -p1, then parses both the pristine-patch result and the full-series result. Its lifecycle guard requires exactly one ecm_db_fib_rule_notifier_stop() inside ecm_exit(), immediately followed by DEBUG_INFO("stop conntrack notifier\n"), and requires the stop before conntrack/frontend teardown. CI #124's PREPARE_ONLY job and lifecycle guards passed. The exact package build used the same pinned source and patch order.
+
+Residual status: the patch's build-time placement is source-guarded, but module load/unload and runtime teardown stress remain NOT TESTED on hardware. The compiler also emitted non-fatal warnings for an unused init_cleanup_1 label and missing MODULE_DESCRIPTION(); they did not prevent linking ecm.ko.
