@@ -31,8 +31,8 @@ The authoritative task list and closure criteria are in
 ## Current validation status — 2026-11-16
 
 - Working branch: work/rd03v2-dualwan-mwan3-baseline.
-- Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
-- Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; preflight/test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+- Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; preflight/test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 - Candidate 9002 closes per-family gates directly in the atomic callback on the first ADD/DEL event, uses a readiness barrier for initial FIB replay, a drain-loop worker, RTNL-serialized final gate release and teardown cleanup.
 - The callback closes the gate before publishing the pending bit. Repeated events coalesce and do not increment the temporary-stop counter repeatedly. During initial register_fib_notifier replay the callback does not queue work; after successful return the caller arms ready and schedules one worker.
 - Live rule ADD/DEL callbacks run under per-net RTNL. Worker uses the same RTNL lock for pending snapshot and final empty-check/gate release; it does not hold RTNL across synchronize_net() or the ECM DB walk.
