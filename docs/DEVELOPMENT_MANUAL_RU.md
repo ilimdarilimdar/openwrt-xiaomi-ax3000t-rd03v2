@@ -17,23 +17,23 @@
 
 Результат, созданный ИИ, не считается автоматически корректным. Если изменение явно не отмечено как скомпилированное и проверенное на аппаратуре, оно считается непроверенным. Статусы проверки: PASS, FAIL, NOT TESTED и INCONCLUSIVE.
 
-**Текущая инженерная добавка 2026-11-16:** patch 9002 commit `fb88ba4` исправляет route/FIB notifier registration транзакционно: раздельные результаты IPv4/IPv6, сохранение первой ошибки, учёт успешно зарегистрированных notifier и DB rollback до возврата ошибки. ECM packet frontends и conntrack notifier инициализируются после `ecm_db_init()`, поэтому ошибка notifier abort-ит загрузку ECM-модуля до включения его packet hooks. Regression guards последней версии `02ee20e` проверяют это поведение и неперекрывающиеся diff hunk’и. Эти изменения ещё не прошли exact archive preflight, C compilation и fault injection: GitHub Actions page сообщает о приостановке запусков на fork. Не считать кодовый патч проверенным только потому, что он записан в Git.
+**Текущая инженерная добавка 2026-11-16 (исходники, ещё не повторно собранные в CI):** patch 9002 commit `fb88ba4` исправляет route/FIB notifier registration транзакционно: раздельные результаты IPv4/IPv6, сохранение первой ошибки, учёт успешно зарегистрированных notifier и DB rollback до возврата ошибки. ECM packet frontends и conntrack notifier инициализируются после `ecm_db_init()`, поэтому ошибка notifier abort-ит загрузку ECM-модуля до включения его packet hooks. Regression guards последней версии `02ee20e` проверяют это поведение и неперекрывающиеся diff hunk’и. Эти изменения ещё не прошли exact archive preflight, C compilation и fault injection: GitHub Actions page сообщает о приостановке запусков на fork. Не считать кодовый патч проверенным только потому, что он записан в Git.
 
-> Это инженерный план, а не сертификат готовности прошивки. Полная ревизия 16.11.2026 зафиксирована в [реестре незакрытых задач](OPEN_ITEMS_REGISTER_RU.md). current source/test revision — `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791` (ECM patch source `fb88ba491df72d6d37e974a44f739d296c87ee0d`); branch HEAD на момент аудита содержал только документальные коммиты поверх этого code/test baseline. CI #124 собрал `qca-nss-ecm` и оба типа образов, но финальный `verify-v2` завершился FAIL. CI #127 прошёл Static и PREPARE_ONLY, однако full-build был прерван runner shutdown (exit 143). После source/test update `fb88ba4`/`02ee20e` нового CI run не видно: Actions page сообщает, что workflows на fork приостановлены из-за масштаба использования Actions; требуется re-enable maintainer’ом. Runtime Dual-WAN/NSS на железе не проверялся. CI-артефакты используют временный ключ и `example.invalid`; они не пригодны для установки. Основной роутер оставить на stock MiWiFi.
+> Это инженерный план, а не сертификат готовности прошивки. Текущий branch HEAD — `07a4063eb59555ce883970546b5c97f047d65435`; functional ECM patch — `fb88ba491df72d6d37e974a44f739d296c87ee0d`; последняя тестовая ревизия — `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Сравнение `02ee20e` с HEAD показывает только документационные изменения и пояснительную шапку patch 9002. Текущий rollback patch ещё не получил повторные exact-source apply, C compilation, полный `verify-v2` или fault injection. #124 собрал предыдущую версию ECM и оба типа образов, но final `verify-v2` завершился FAIL; #127 прошёл Static/PREPARE_ONLY, но full-build оборван runner shutdown; #128/#129 отменены. После #129 новых workflow runs не видно. Runtime Dual-WAN/NSS на железе не проверялся. CI-артефакты используют временный ключ и `example.invalid`, они не пригодны для установки. Основной роутер оставить на stock MiWiFi.
 
 ### Live status — 2026-11-16
 
-- Code/test baseline: `49d3579437389e2ffc111b94a08839ef7bd29ae7`; для изменений исходников/тестов всегда сверять актуальный branch HEAD отдельно.
+- Branch HEAD: `07a4063eb59555ce883970546b5c97f047d65435`; functional source patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest source-level test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
+- The branch is 19 commits ahead of `02ee20e`, 0 behind. Changes after that test revision are documentation and patch 9002's explanatory preface only; no C-hunk, test-script, workflow or firmware-config change.
 - Pinned OpenWrt/NSS tree: `c36db6321c11595dc45a160cdab36b5c2d787744`; kernel package version **Linux 6.18.55**.
-- Pinned QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`; NSS/packages feed pins находятся в `upstream.lock` и `feeds.lock`.
-- В active feed-overlay присутствуют ECM patches 9001 и 9002. CI #123/#124 подтвердили raw QSDK apply, полную очередь 32 ECM patches и lifecycle/atomic callback source guards.
-- CI #124: Static/PREPARE_ONLY PASS; `qca-nss-ecm` compiled; sysupgrade и initramfs-factory images созданы; marker FIB notifier найден в image `ecm.ko`; rootfs — 223 packages. Final `verify-v2` FAIL: watchdog 20 PASS / 26 FAIL и два AUTOREMOVE source-fingerprint false negative.
-- Watchdog fixes: `f372d519`, `0d2aeadb`. ECM AUTOREMOVE verifier fixes: `e7846a1`, `49d3579`. Они требуют completed CI на точном code/test baseline.
-- CI #125/#126 остановились на whitespace check до PREPARE_ONLY; #127 Static и PREPARE_ONLY PASS, full-build прерван runner shutdown с кодом 143; #128/#129 отменены до jobs. Для `49d3579` нет отдельного run/status.
-- PREPARE_ONLY выбирает `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC helper и nft-backed iptables packages. Три unrelated Kconfig diagnostics (Qt5 GUI, fwknopd/LuCI fwknopd, squeezelite-custom) остаются; пакеты не выбраны.
-- ECM runtime, FIB churn, firewall4/mwan3 runtime, WAN failover, conntrack marks, NSS counters/throughput, IPv4/IPv6 hardware tests и soak — **NOT TESTED**.
+- Pinned QSDK 14.0 ECM source: `7894b769eeb64f1c44fde547a107a8b866997590`; NSS/packages feed pins are in `upstream.lock` and `feeds.lock`.
+- CI #123/#124 apply/source guards and #124 C compilation/image generation apply to the earlier ECM notifier implementation, not the current transactional rollback patch.
+- #124 final `verify-v2`: **FAIL** (watchdog 20 PASS / 26 FAIL and two AUTOREMOVE source-fingerprint false negatives). #127 Static/PREPARE_ONLY **PASS**, full-build interrupted with exit 143. #128/#129 cancelled before jobs.
+- Workflow has `workflow_dispatch` with boolean `full_build`, but real dispatch runs have not been performed. No new Actions run/status exists for current HEAD after #129.
+- mwan3 2.12.5 and `ECM_CLASSIFIER_MARK_ENABLE=y` are pinned/configured. Runtime fwmark/CONNMARK handling and actual NSS offload remain **NOT TESTED**.
+- ECM exact-source preflight after rollback, complete feed series, current C compilation, runtime FIB notifier, firewall4/mwan3, WAN failover, latency/loss/throughput, soak and recovery remain **NOT TESTED**.
+- Keep the primary router on stock MiWiFi. CI images are not installable releases.
 
-Текущий реестр действий и критерии закрытия: [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md). CI workflow использует disposable signing key и `example.invalid`; не прошивать эти образы.
 
 ---
 
@@ -78,7 +78,7 @@ pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
 - Родительский проект: `ADCDS/openwrt-xiaomi-ax3000t-rd03v2`
 - `main`: `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`
 - Рабочая ветка: `work/rd03v2-dualwan-mwan3-baseline`
-- Code/test baseline на момент ревизии: `49d3579437389e2ffc111b94a08839ef7bd29ae7`. Более ранний `f5e828f` — не текущий firmware source/config HEAD: compare до `49d3579` показывает последующие функциональные изменения, включая workflow, watchdog, ECM patch 9002 и тесты.
+- Последняя source/test ревизия: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`; текущий branch HEAD: `07a4063eb59555ce883970546b5c97f047d65435`. Изменения после test revision не трогают исполняемый код, тестовый скрипт, workflow или firmware config.
 - GitHub compare на 15.11.2026: общая точка с `main` — `14a07fbf317a00d2c592c7ffd262bcc3f4b6328c`, рабочая ветка `behind_by=0` (она содержит `main`). В ранней проверке было `ahead_by=52`, в более поздней — `ahead_by=54`; счётчик включает документационные commits и не означает столько же изменений прошивки. Перед PR/merge проверять live refs, не полагаться на сохранённое число. Merge/rebase из `main` на этой контрольной точке не требуется.
 
 Сверять refs/SHA заново перед каждой работой: ветки и upstream со временем меняются. Не выполнять merge или rebase автоматически.
