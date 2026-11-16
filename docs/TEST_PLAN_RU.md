@@ -25,7 +25,7 @@
 ## 2. Текущий подтверждённый baseline
 
 Снимок состояния на 16.11.2026 по GitHub Actions и рабочей ветке
-`work/rd03v2-dualwan-mwan3-baseline`. Source/test revision: `f00d6c68a9f5b6962c88f1ebc2cf22625d4be211` (test-only IPv4/IPv6 fail-closed assertions); ECM source patch: `c586d83e02537d17b1595f5026944e088d7e6f6e`.
+`work/rd03v2-dualwan-mwan3-baseline`. ECM source patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
 
 | Этап | Результат |
 |---|---|
@@ -41,11 +41,11 @@
 | CI #128–#129 | **CANCELLED before jobs were created** |
 | Watchdog absolute-stub dispatch (`f372d519`, `0d2aeadb`) | Static checks **PASS** in #127; watchdog runtime suite **NOT CI-VALIDATED** |
 | ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** on current code/test HEAD |
-| ECM source patch `c586d83` + latest test revision `f00d6c6` | Fail-closed code and IPv4/IPv6 source guards committed; preflight/build **NOT TESTED** after update |
+| ECM source patch `fb88ba4` + latest test revision `02ee20e` | Route/FIB notifier transactional rollback and per-family guards committed; exact source apply/build **NOT TESTED** after update |
 | GitHub Actions after #129 | **PAUSED**: Actions page says workflows are not currently being run on this fork due to Actions usage scale |
 | Manual `workflow_dispatch` false/true | Workflow implementation added; real UI dispatch **NOT TESTED** until Actions are re-enabled |
-| ECM FIB notifier fail-closed fallback | Source guard added; fault injection and runtime cleanup **NOT TESTED** |
-| Completed CI on exact source/test revision `c586d83` | **NO RUN visible** |
+| Route/FIB notifier rollback | Source guards added for first-error preservation and per-family cleanup; fault injection and runtime teardown **NOT TESTED** |
+| Completed CI on source/test revisions `fb88ba4` / `02ee20e` | **NO RUN visible**; GitHub Actions paused on fork |
 | Runtime module load on RD03v2 | **NOT TESTED** |
 | Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
 
