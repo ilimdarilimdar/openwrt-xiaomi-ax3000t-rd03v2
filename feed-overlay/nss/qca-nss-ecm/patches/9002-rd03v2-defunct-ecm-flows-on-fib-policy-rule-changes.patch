@@ -29,7 +29,11 @@ before the database is marked terminating or freed. The patch does not
 promise preservation of conntrack/NAT sessions across a public-WAN change.
 
 ---
-ecm_db/ecm_db.c | +197 -8
+diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
+--- a/ecm_db/ecm_db.c
++++ b/ecm_db/ecm_db.c
+
+ecm_db/ecm_db.c | +165 -8
 ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
@@ -38,10 +42,7 @@ frontends/include/ecm_front_end_ipv4.h | +1 -1
 frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
-9 files changed, 232 insertions(+), 44 deletions(-)
-diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
---- a/ecm_db/ecm_db.c
-+++ b/ecm_db/ecm_db.c
+9 files changed, 200 insertions(+), 44 deletions(-)
 @@ -22,5 +22,10 @@
  #include <asm/uaccess.h>	/* for put_user */
  #include <net/ipv6.h>
@@ -65,7 +66,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +static bool ecm_db_ipv6_route_registered;
  #endif
  
-@@ -469,9 +476,149 @@
+@@ -469,5 +476,110 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -87,76 +88,97 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +
 +static unsigned long ecm_db_fib_rule_pending;
 +static bool ecm_db_fib_rule_registered;
++static bool ecm_db_fib_rule_ready;
 +
 +/*
 + * ecm_db_fib_rule_work_fn()
-+ * 	Defunct connections for every address family with a policy-rule change.
++ * 	Defunct connections until every queued policy-rule change is drained.
 + */
 +static void ecm_db_fib_rule_work_fn(struct work_struct *work)
 +{
 +	bool ipv4_pending;
++	bool ipv4_stop_held = false;
 +	bool any_pending;
 +#ifdef ECM_IPV6_ENABLE
 +	bool ipv6_pending;
++	bool ipv6_stop_held = false;
 +#endif
 +
 +	(void)work;
 +
-+	/*
-+	 * Live rule ADD/DEL changes run under init_net's per-net RTNL. Initial
-+	 * register_fib_notifier() replay instead runs under RCU without RTNL.
-+	 * Snapshot and clear pending bits under RTNL for live updates; atomic
-+	 * pending bits and work re-queueing preserve replay events too.
-+	 */
-+	rtnl_net_lock(&init_net);
-+	ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
++	for (;;) {
++		/*
++		 * Live rule ADD/DEL callbacks run under init_net's per-net RTNL.
++		 * Initial register_fib_notifier() replay runs under RCU without
++		 * RTNL; the callback does not queue this worker until registration
++		 * returns. Keep the final empty check and gate release under RTNL
++		 * so a live rule update cannot slip between them.
++		 */
++		rtnl_net_lock(&init_net);
++		ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
 +#ifdef ECM_IPV6_ENABLE
-+	ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
-+#endif
-+	rtnl_net_unlock(&init_net);
-+
-+	any_pending = ipv4_pending;
-+#ifdef ECM_IPV6_ENABLE
-+	any_pending |= ipv6_pending;
++		ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
 +#endif
 +
-+	/*
-+	 * Close every affected frontend before waiting, so new Netfilter hooks
-+	 * cannot start ECM processing while pre-existing hooks are draining.
-+	 */
-+	if (ipv4_pending) {
-+		ecm_front_end_ipv4_stop_temp(1);
-+	}
++		any_pending = ipv4_pending;
 +#ifdef ECM_IPV6_ENABLE
-+	if (ipv6_pending) {
-+		ecm_front_end_ipv6_stop_temp(1);
-+	}
++		any_pending |= ipv6_pending;
 +#endif
 +
-+	/*
-+	 * nf_hook() holds rcu_read_lock() across the complete hook chain.
-+	 * synchronize_net() waits for those pre-existing readers to finish.
-+	 * We dropped init_net's RTNL lock above, so this wait is sleepable.
-+	 */
-+	if (any_pending) {
++		if (!any_pending) {
++			/*
++			 * Do not open a frontend between coalesced worker passes.
++			 * Holding RTNL serializes this release with live FIB rule events.
++			 */
++			if (ipv4_stop_held) {
++				ecm_front_end_ipv4_stop_temp(0);
++			}
++#ifdef ECM_IPV6_ENABLE
++			if (ipv6_stop_held) {
++				ecm_front_end_ipv6_stop_temp(0);
++			}
++#endif
++			rtnl_net_unlock(&init_net);
++			return;
++		}
++		rtnl_net_unlock(&init_net);
++
++		/*
++		 * Acquire each family gate once and retain it across every pass.
++		 * A new event during synchronize_net() or DB defuncting sets a
++		 * pending bit; the loop consumes it before releasing either gate.
++		 */
++		if (ipv4_pending && !ipv4_stop_held) {
++			ecm_front_end_ipv4_stop_temp(1);
++			ipv4_stop_held = true;
++		}
++#ifdef ECM_IPV6_ENABLE
++		if (ipv6_pending && !ipv6_stop_held) {
++			ecm_front_end_ipv6_stop_temp(1);
++			ipv6_stop_held = true;
++		}
++#endif
++
++		/*
++		 * nf_hook() holds rcu_read_lock() across the complete hook chain.
++		 * synchronize_net() waits for pre-existing readers to finish.
++		 * RTNL is deliberately not held across this sleepable wait or DB walk.
++		 */
 +		synchronize_net();
-+	}
 +
-+	if (ipv4_pending) {
-+		DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
-+		ecm_db_connection_defunct_ip_version(4);
-+		ecm_front_end_ipv4_stop_temp(0);
-+	}
++		if (ipv4_pending) {
++			DEBUG_TRACE("FIB rule update: defunct all IPv4 connections\n");
++			ecm_db_connection_defunct_ip_version(4);
++		}
 +#ifdef ECM_IPV6_ENABLE
-+	if (ipv6_pending) {
-+		DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\n");
-+		ecm_db_connection_defunct_ip_version(6);
-+		ecm_front_end_ipv6_stop_temp(0);
-+	}
++		if (ipv6_pending) {
++			DEBUG_TRACE("FIB rule update: defunct all IPv6 connections\n");
++			ecm_db_connection_defunct_ip_version(6);
++		}
 +#endif
-+}
-+
-+static DECLARE_WORK(ecm_db_fib_rule_work, ecm_db_fib_rule_work_fn);
++	}
+NaN
+0+static DECLARE_WORK(ecm_db_fib_rule_work, ecm_db_fib_rule_work_fn);
 +
 +/*
 + * ecm_db_fib_rule_event()
@@ -183,7 +205,10 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +		return NOTIFY_DONE;
 +	}
 +
-+	schedule_work(&ecm_db_fib_rule_work);
++	/* Initial FIB replay runs before registration returns; queue after it. */
++	if (READ_ONCE(ecm_db_fib_rule_ready)) {
++		schedule_work(&ecm_db_fib_rule_work);
++	}
 +	return NOTIFY_DONE;
 +}
 +
@@ -199,6 +224,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +{
 +	int ret;
 +
++	WRITE_ONCE(ecm_db_fib_rule_ready, false);
 +	if (ecm_db_fib_rule_registered) {
 +		ret = unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb);
 +		if (ret) {
@@ -215,13 +241,13 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -675,4 +822,5 @@
+@@ -675,4 +787,5 @@
  int ecm_db_init(struct dentry *dentry)
  {
  	int ret = 0;
 +	int route_ret = 0;
  
-@@ -747,20 +895,56 @@
+@@ -747,20 +860,59 @@
  	/*
  	 * register for route table modification events
  	 */
@@ -279,17 +305,20 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +		}
 +
 +		ecm_db_fib_rule_registered = true;
++		WRITE_ONCE(ecm_db_fib_rule_ready, true);
++		/* Drain the initial FIB dump events recorded before ready became true. */
++		schedule_work(&ecm_db_fib_rule_work);
 +		printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\n");
 +	}
 +
  	return ret;
  
-@@ -785,3 +969,4 @@
+@@ -785,3 +937,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
  	DEBUG_INFO("ECM DB Module exit\n");
-@@ -795,19 +980,23 @@
+@@ -795,19 +948,23 @@
  	/*
  	 * unregister for route table update events only if registered.
  	 */
