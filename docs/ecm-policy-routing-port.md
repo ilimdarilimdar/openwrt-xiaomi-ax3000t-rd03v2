@@ -221,6 +221,32 @@ Runtime notifier behavior, module lifecycle and hardware Dual-WAN/NSS
 acceptance remain **NOT TESTED**. Do not describe this patch as compiled at
 its current revision, production-ready or NSS-safe.
 
+## Worker requeue window — additional concurrency finding (2026-11-16)
+
+The current worker handles one snapshot of the pending-family bits per invocation:
+it clears the bits under `rtnl_net_lock(&init_net)`, releases RTNL, gates the
+affected frontend, waits with `synchronize_net()`, defuncts that family, and
+opens the gate. A new FIB rule event can arrive after the snapshot while the
+defunct operation is in progress. The atomic callback then sets a fresh pending
+bit and queues the same work item again.
+
+Linux workqueue guarantees non-reentrant execution of the same work item, while
+allowing it to be requeued; the queued invocation runs after the current one.
+The current worker therefore may decrement the stop gate before the next
+invocation begins. This creates a **potential gate-open interval between two
+passes**. It is not yet demonstrated that a stale accelerated flow escapes in
+that interval, so this is recorded as an unresolved concurrency risk rather
+than a confirmed functional defect.
+
+The relevant exact Linux 6.18.55 sources are:
+- [FIB notifier register/unregister](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c#L81-L125): initial dump/replay, registration retry and atomic-chain unregister.
+- [Atomic notifier unregister](https://github.com/gregkh/linux/blob/v6.18.55/kernel/notifier.c#L178-L198): successful removal waits for an RCU grace period; absent notifier returns `-ENOENT`.
+- [Workqueue requeue semantics](https://github.com/gregkh/linux/blob/v6.18.55/Documentation/core-api/workqueue.rst#L760-L781): a work item is not executed reentrantly, and requeueing it is allowed.
+
+Required deterministic injection points: after pending-bit snapshot, after frontend gate close, during the DB defunct pass, and immediately before gate open. A possible drain-loop must keep frontend gates closed across repeated passes and serialize the final empty-pending check/gate-open transition with live RTNL-protected rule changes. Initial FIB replay occurs without RTNL and must be handled separately. Review RTNL/frontend-lock ordering before implementing that change.
+
+Do not mark ECM worker concurrency complete until this window is either disproven with a test or closed with code plus regression evidence.
+
 ## Remaining v2 validation checklist
 
 The source port itself is present and has passed the source/build gates listed
@@ -230,7 +256,7 @@ above. The remaining tasks are validation, not porting the patch from scratch:
 - review and, where possible, remove GNU patch fuzz reported for 9002 in #124;
 - confirm the notifier actually registers on a booted RD03v2 and unregisters
   cleanly on module teardown;
-- test initial FIB dump/replay, rule churn during registration, both families,
+- test initial FIB dump/replay, rule churn during registration, the pending-bit requeue/gate-open window, both families,
   pending-bit coalescing and worker drain under load;
 - run lockdep/concurrency/teardown tests and save dmesg/workqueue/counter logs;
 - compare rule-restore order, IPv4 routed/NAT, IPv6 routed/NAT66 where supported,
