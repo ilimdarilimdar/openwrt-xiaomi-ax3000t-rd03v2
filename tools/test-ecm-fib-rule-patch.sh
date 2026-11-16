@@ -583,8 +583,8 @@ def check_source(db_path, init_path, header_path):
     if "ecm_db_ipv4_route_registered = true;" not in db_init or "ecm_db_ipv6_route_registered = true;" not in db_init:
         sys.exit(f"FAIL: successful route notifier registrations are not tracked per family in {db_path}")
     for route_log in (
-        r"Could not register for the IPV4 routing events error:%d\\n",
-        r"Could not register for the IPV6 routing events error:%d\\n",
+        r"Could not register for the IPV4 routing events error:%d\n",
+        r"Could not register for the IPV6 routing events error:%d\n",
     ):
         if route_log not in db_init:
             sys.exit(f"FAIL: route notifier diagnostic string is malformed in {db_path}")
