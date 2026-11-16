@@ -25,7 +25,7 @@
 ## 2. Текущий подтверждённый baseline
 
 Снимок состояния на 16.11.2026 по GitHub Actions и рабочей ветке
-`work/rd03v2-dualwan-mwan3-baseline`. Source/test revision: `c586d83e02537d17b1595f5026944e088d7e6f6e` (fail-closed ECM registration fallback, extended preflight guards and manual workflow dispatch).
+`work/rd03v2-dualwan-mwan3-baseline`. Source/test revision: `f00d6c68a9f5b6962c88f1ebc2cf22625d4be211` (test-only IPv4/IPv6 fail-closed assertions); ECM source patch: `c586d83e02537d17b1595f5026944e088d7e6f6e`.
 
 | Этап | Результат |
 |---|---|
@@ -41,7 +41,7 @@
 | CI #128–#129 | **CANCELLED before jobs were created** |
 | Watchdog absolute-stub dispatch (`f372d519`, `0d2aeadb`) | Static checks **PASS** in #127; watchdog runtime suite **NOT CI-VALIDATED** |
 | ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** on current code/test HEAD |
-| New source/test revision `c586d83` | Patch, tests and workflow changed; preflight/build **NOT TESTED** after update |
+| ECM source patch `c586d83` + latest test revision `f00d6c6` | Fail-closed code and IPv4/IPv6 source guards committed; preflight/build **NOT TESTED** after update |
 | GitHub Actions after #129 | **PAUSED**: Actions page says workflows are not currently being run on this fork due to Actions usage scale |
 | Manual `workflow_dispatch` false/true | Workflow implementation added; real UI dispatch **NOT TESTED** until Actions are re-enabled |
 | ECM FIB notifier fail-closed fallback | Source guard added; fault injection and runtime cleanup **NOT TESTED** |
