@@ -430,20 +430,20 @@ if worker.find("ecm_db_connection_defunct_ip_version(4)") < worker.find("ecm_fro
     sys.exit("FAIL: IPv4 DB defunct pass runs before the stop gate closes")
 if worker.find("synchronize_net();") < worker.find("ecm_front_end_ipv4_stop_temp(1)"):
     sys.exit("FAIL: synchronize_net() runs before the IPv4 stop gate closes")
-if worker.find("ecm_front_end_ipv4_stop_temp(0)") < worker.find("ecm_db_connection_defunct_ip_version(4)"):
-    sys.exit("FAIL: IPv4 stop gate opens before the defunct pass")
-#ifdef ECM_IPV6_ENABLE
-# Runtime source is compiled with this preprocessor symbol; ensure parallel family handling is present.
+if worker.find("synchronize_net();") > worker.find("ecm_db_connection_defunct_ip_version(4)"):
+    sys.exit("FAIL: IPv4 DB defunct pass starts before synchronize_net() completes")
 if "ipv6_pending && !ipv6_stop_held" not in worker:
     sys.exit("FAIL: IPv6 stop gate is not retained across drain passes")
 if worker.count("ecm_front_end_ipv6_stop_temp(1)") != 1 or worker.count("ecm_front_end_ipv6_stop_temp(0)") != 1:
     sys.exit("FAIL: IPv6 stop gate must be acquired once and released after the drain")
-#endif
+if "ecm_front_end_ipv6_stop_temp(0)" not in empty:
+    sys.exit("FAIL: IPv6 gate release is not serialized under RTNL in the empty-pending branch")
 
 print("PASS: FIB worker drains coalesced events without reopening frontend gates between passes")
 print("PASS: final empty-pending check and gate release are serialized with live RTNL rule updates")
 print("PASS: stop gates close before synchronize_net() and DB defunct; release occurs after the final pass")
-PYgrep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
+PY
+grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
 grep -qF 'ecm_db_connection_defunct_ip_version(4)' "$ECM_DB" ||
   die "IPv4 connection defunct pass is missing"
@@ -556,6 +556,10 @@ def check_source(db_path, init_path, header_path):
     reg_pos = db_init.find(registration)
     if reg_pos < 0:
         sys.exit(f"FAIL: FIB notifier registration missing in {db_path}")
+    ready_on = db_init.find("WRITE_ONCE(ecm_db_fib_rule_ready, true)", reg_pos)
+    initial_queue = db_init.find("schedule_work(&ecm_db_fib_rule_work)", ready_on)
+    if ready_on < 0 or initial_queue < 0 or not (reg_pos < ready_on < initial_queue):
+        sys.exit(f"FAIL: worker must be armed and queued only after register_fib_notifier() completes in {db_path}")
 
     route_positions = [
         db_init.find("ip_rt_register_notifier("),
@@ -638,10 +642,11 @@ def check_source(db_path, init_path, header_path):
     if stop_start < 0 or stop_end < 0:
         sys.exit(f"FAIL: FIB notifier stop hook missing in {db_path}")
     stop_fn = db[stop_start:stop_end]
+    ready_off = stop_fn.find("WRITE_ONCE(ecm_db_fib_rule_ready, false)")
     unregister = stop_fn.find("unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb)")
     cancel = stop_fn.find("cancel_work_sync(&ecm_db_fib_rule_work)")
-    if unregister < 0 or cancel < 0 or unregister > cancel:
-        sys.exit(f"FAIL: stop hook must unregister before cancel_work_sync in {db_path}")
+    if min(ready_off, unregister, cancel) < 0 or not (ready_off < unregister < cancel):
+        sys.exit(f"FAIL: stop hook must disarm, unregister, then drain work in {db_path}")
     if "void ecm_db_fib_rule_notifier_stop(void);" not in header:
         sys.exit(f"FAIL: stop-hook prototype missing in {header_path}")
 
@@ -753,11 +758,13 @@ def check_atomic_callback(path):
 
     calls = re.findall(r"\b([A-Za-z_]\w*)\s*\(", body)
     actual = [name for name in calls if name not in {"if", "switch"}]
-    if actual != ["set_bit", "set_bit", "schedule_work"]:
+    if actual != ["set_bit", "set_bit", "READ_ONCE", "schedule_work"]:
         sys.exit(
             f"FAIL: atomic FIB callback contains unexpected calls in {path}: {actual}; "
-            "only set_bit() and schedule_work() are allowed"
+            "only set_bit(), READ_ONCE() and schedule_work() are allowed"
         )
+    if body.find("READ_ONCE(ecm_db_fib_rule_ready)") > body.find("schedule_work("):
+        sys.exit(f"FAIL: FIB work is queued before checking initial-replay readiness in {path}")
 
     if body.find("set_bit(ECM_DB_FIB_RULE_PENDING_IPV4") > body.find("schedule_work("):
         sys.exit(f"FAIL: IPv4 pending bit is set after queuing work in {path}")
