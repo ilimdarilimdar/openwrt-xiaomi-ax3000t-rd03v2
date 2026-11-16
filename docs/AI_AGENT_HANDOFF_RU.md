@@ -7,9 +7,9 @@
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 **Source implementation commit:** 16193bfb29eecca103a370270458a779403ac619.
 **Latest patch-envelope repair commit:** f9f33b314ef11ad42037ad81de18e05f6e0e11f3.
-**Latest test-harness commit:** c6c2f2147bd3a6bdffb40dd2b3f3695bd79bd1cf.
+**Latest test-harness commit:** 946b5bab7fb83f75356c181896361a5d183d2db0.
 **Current patch blob:** 3dbe8c97bdab7ee7452fc49b4ae77580788ef659.
-**Latest test blob:** 7aadf86ed161fbd1475e5cc2f5d47bdcf290a5e1.
+**Latest test blob:** 86925012eeb6bc205c826cde3004f2aa3b0c0768.
 **Previous source/test baseline:** 02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791 (new candidate is later and unvalidated).
 **Реестр задач:** [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
@@ -19,7 +19,7 @@
 - Gate-first callback: the first IPv4/IPv6 event atomically sets a family-gated bit and closes its temporary frontend gate before setting pending state/queueing work. Repeated events coalesce without incrementing the temporary counter again.
 - Initial register_fib_notifier replay is handled with a readiness barrier: callback records/gates events but does not queue until registration returns; successful init arms ready and queues one worker.
 - Worker drains pending family bits in a loop. It releases gates only after an empty-pending check under per-net RTNL. Teardown disarms, unregisters, cancels/drains work and cleans residual pending/gated references.
-- Exact pinned QSDK 14.0 source SHA `7894b769eeb64f1c44fde547a107a8b866997590` was reviewed at raw-file level for RTNL/family-lock order. No direct RTNL acquisition was found in the inspected translation units that acquire `ecm_ipv4_lock`/`ecm_ipv6_lock`; `ecm_interface.c` has a separate WLAN-hook registration `rtnl_lock()` site without direct family-lock acquisition. Several raw paths could not be fetched during retries, and this is not a complete indirect call-graph proof. The harness now guards this direct same-file case. This remains an **UNVALIDATED SOURCE CANDIDATE**: exact pinned archive apply, full sorted 32-patch queue, C compile, fault injection, lockdep/KASAN and runtime stress were not executed. Lockdep remains required.
+- Exact pinned QSDK 14.0 source SHA `7894b769eeb64f1c44fde547a107a8b866997590` was reviewed at raw-file level for RTNL/family-lock order. No direct RTNL acquisition was found in the inspected translation units that acquire `ecm_ipv4_lock`/`ecm_ipv6_lock`; `ecm_interface.c` has a separate WLAN-hook registration `rtnl_lock()` site without direct family-lock acquisition. Several raw paths could not be fetched during retries, and this is not a complete indirect call-graph proof. The harness now rejects direct RTNL acquisition inside a textual ECM family-spinlock critical section; it does not inspect indirect helper calls or replace lockdep. This remains an **UNVALIDATED SOURCE CANDIDATE**: exact pinned archive apply, full sorted 32-patch queue, C compile, fault injection, lockdep/KASAN and runtime stress were not executed. Lockdep remains required.
 - Last Actions run #129 is cancelled before jobs. #127 passed Static/PREPARE_ONLY but full build stopped with runner exit 143. #124 is the last full image-generating build and applies to an older ECM patch; verify-v2 failed. No run/status exists for the new candidate.
 - Manual workflow_dispatch exists but actual false/true dispatches have not run; GitHub Actions was last reported paused for this fork.
 - Runtime notifier, module load/unload, firewall4/mwan3, conntrack marks, NSS WAN-flow offload, latency/loss/throughput, Warface and soak are **NOT TESTED**.
