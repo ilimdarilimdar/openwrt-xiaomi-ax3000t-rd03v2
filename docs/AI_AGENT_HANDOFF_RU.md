@@ -19,6 +19,14 @@
 **Подтверждённые pinned feed options:** mwan3 2.12.5; qca-nss-ecm включает `ECM_CLASSIFIER_MARK_ENABLE=y` на qualcommax. Runtime fwmark/NSS datapath всё ещё **NOT TESTED**.
 
 
+## Live follow-up — 2026-11-16, 09:00 UTC+3
+
+- Текущий branch HEAD: `20e8125af1ffe4cceef272249fa141bdfeaad13d`.
+- Compare от test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`: 10 commits ahead, 0 behind. C/test review reconciled: test script blob `1a4ccf0d650ad64238f400f10e0d29a25e3e8dd6` unchanged; patch 9002 blob `794bb980bf753515e9b61c48c6c393acfeeff874` differs only in explanatory header prose, not code hunks.
+- Workflow has boolean-gated `workflow_dispatch` on the work branch. false = Static + PREPARE_ONLY; true = full build + `verify-v2`. Temporary key, placeholder package URL and no-publish safeguard remain.
+- HEAD commit statuses and PR-associated workflow runs are empty. No new build or final verifier result exists after the recorded CI runs. Actions are reported as paused at repository level and require maintainer re-enable.
+- Next: maintainer re-enables Actions in the repository Actions page; run dispatch false then true; inspect logs/artifacts and require zero `verify-v2` failures. Only then move to runtime tests on the second RD03v2. Keep the primary router on stock MiWiFi.
+
 ## Следующее действие без повторного аудита
 
 1. Повторно включить GitHub Actions в настройках репозитория, поскольку live Actions page сообщает о приостановке workflow runs на fork.
