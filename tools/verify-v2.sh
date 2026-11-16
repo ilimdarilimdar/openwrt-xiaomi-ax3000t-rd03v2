@@ -296,6 +296,8 @@ for p in "$V2"/feed-overlay/nss/qca-nss-ecm/patches/*.patch; do
 	if [ "$EC_SOURCE_PRESENT" = yes ]; then
 		chk "ecm $(basename "$p")" "$(fp "$p" "$EC")" yes
 	else
+		chk "ECM source cleanup is explained by CONFIG_AUTOREMOVE=y" \
+			"$(grep -cxF 'CONFIG_AUTOREMOVE=y' "$TREE/.config")" 1
 		chk "ecm $(basename "$p") is in the prepared feed" \
 			"$(yes_ cmp -s "$p" "$TREE/feeds/nss/qca-nss-ecm/patches/$(basename "$p")")" yes
 	fi
