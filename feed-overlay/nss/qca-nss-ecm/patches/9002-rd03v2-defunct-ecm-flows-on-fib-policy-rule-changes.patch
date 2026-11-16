@@ -261,27 +261,27 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
 --- a/ecm_db/ecm_db.h
 +++ b/ecm_db/ecm_db.h
-@@ -45,2 +244,3 @@
+@@ -45,2 +45,3 @@
  int ecm_db_init(struct dentry *dentry);
 +void ecm_db_fib_rule_notifier_stop(void);
  void ecm_db_exit(void);
 diff --git a/ecm_init.c b/ecm_init.c
 --- a/ecm_init.c
 +++ b/ecm_init.c
-@@ -307,2 +507,3 @@
+@@ -307,2 +307,3 @@
  err_ct:
 +	ecm_db_fib_rule_notifier_stop();
  #ifdef ECM_IPV6_ENABLE
-@@ -310,3 +511,4 @@
+@@ -310,3 +311,4 @@
  err_fe_ipv6:
  #endif
 +	ecm_db_fib_rule_notifier_stop();
  	ecm_front_end_ipv4_exit();
-@@ -313,2 +515,3 @@
+@@ -313,2 +315,3 @@
  err_fe_ipv4:
 +	ecm_db_fib_rule_notifier_stop();
  #ifdef ECM_INTERFACE_BOND_ENABLE
-@@ -381,8 +584,9 @@
+@@ -381,8 +384,9 @@
  static void __exit ecm_exit(void)
  {
  	printk(KERN_INFO "ECM exit\n");
@@ -294,7 +294,7 @@ diff --git a/ecm_init.c b/ecm_init.c
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
-@@ -58,8 +262,4 @@
+@@ -58,8 +58,4 @@
  extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
  
 -/*
@@ -303,7 +303,7 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 -atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
  
  /*
-@@ -428,19 +628,6 @@
+@@ -428,19 +424,6 @@
  }
  
 -/*
@@ -326,7 +326,7 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 --- a/frontends/ecm_front_end_ipv6.c
 +++ b/frontends/ecm_front_end_ipv6.c
-@@ -59,8 +246,4 @@
+@@ -59,8 +59,4 @@
  extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
  
 -/*
@@ -335,7 +335,7 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 -atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
  
  /*
-@@ -503,19 +686,6 @@
+@@ -503,19 +499,6 @@
  }
  
 -/*
@@ -358,7 +358,7 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
 --- a/frontends/include/ecm_front_end_ipv4.h
 +++ b/frontends/include/ecm_front_end_ipv4.h
-@@ -19,3 +189,3 @@
+@@ -19,3 +19,3 @@
  extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
 -extern atomic_t ecm_front_end_ipv4_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
 +extern void ecm_front_end_ipv4_stop_temp(int num);
@@ -366,7 +366,7 @@ diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_fron
 diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_front_end_ipv6.h
 --- a/frontends/include/ecm_front_end_ipv6.h
 +++ b/frontends/include/ecm_front_end_ipv6.h
-@@ -19,3 +189,3 @@
+@@ -19,3 +19,3 @@
  extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
 -extern atomic_t ecm_front_end_ipv6_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
 +extern void ecm_front_end_ipv6_stop_temp(int num);
@@ -374,14 +374,14 @@ diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_fron
 diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 --- a/frontends/cmn/ecm_ipv4.c
 +++ b/frontends/cmn/ecm_ipv4.c
-@@ -12,5 +182,6 @@
+@@ -12,5 +12,6 @@
  #include <linux/tcp.h>
  #include <linux/module.h>
 +#include <linux/atomic.h>
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/kthread.h>
-@@ -96,7 +267,20 @@
+@@ -96,7 +97,20 @@
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
   */
  DEFINE_SPINLOCK(ecm_ipv4_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
@@ -405,13 +405,13 @@ diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
 --- a/frontends/cmn/ecm_ipv6.c
 +++ b/frontends/cmn/ecm_ipv6.c
-@@ -13,4 +197,5 @@
+@@ -13,4 +13,5 @@
  #include <linux/module.h>
 +#include <linux/atomic.h>
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/debugfs.h>
-@@ -100,9 +285,22 @@
+@@ -100,9 +101,22 @@
  /*
   * Locking of the classifier - concurrency control for file global parameters.
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
