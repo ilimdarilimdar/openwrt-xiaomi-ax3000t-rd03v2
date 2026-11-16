@@ -26,19 +26,19 @@
 
 ## Оценка зрелости проекта — 2026-11-16
 
-**Инженерный прогресс: 45%. Готовность к установке как пользовательского релиза: около 10%.**
+**Инженерный прогресс: 44%. Готовность к установке как пользовательского релиза: около 10%.**
 
 Оценка — взвешенная инженерная модель, а не процент строк кода или число тестов:
 
 | Область | Вес | Выполнено в области | Вклад |
 |---|---:|---:|---:|
 | Унаследованная платформа RD03v2/NSS | 15% | 100% | 15,0 п.п. |
-| Собственные source/config изменения Dual-WAN и ECM | 35% | 70% | 24,5 п.п. |
+| Собственные source/config изменения Dual-WAN и ECM | 35% | 68% | 23,8 п.п. |
 | Сборка и CI на актуальной ревизии | 20% | 25% | 5,0 п.п. |
 | Runtime Dual-WAN, FIB notifier и NSS datapath | 15% | 0% | 0 п.п. |
 | Аппаратные измерения, latency/loss и стабильность | 10% | 0% | 0 п.п. |
 | Подписанный релиз, repository и recovery-процедура | 5% | 10% | 0,5 п.п. |
-| **Итого** | **100%** |  | **45,0%** |
+| **Итого** | **100%** |  | **44,3% (округлено до 44%)** |
 
 Унаследованная платформа уже имеет отдельные результаты upstream build/hardware validation. Эти результаты не засчитываются как проверка новых Dual-WAN/ECM изменений. Текущая версия patch 9002 с транзакционным rollback новее исходников, собранных в CI #124, и пока не прошла повторный apply/compile/verify. Поэтому 45% означает завершённость инженерной работы, а не готовность безопасно прошивать устройство.
 
@@ -190,6 +190,23 @@ Pinned QSDK 14.0 инициализирует ECM DB до IPv4/IPv6 packet front
 **Что ещё требуется:** на точном QSDK archive проверить применение patch 9002 после полной сортированной ECM patch series; проверить raw `patch -f -p1` и offsets; собрать `qca-nss-ecm`; добавить/выполнить fault injection отдельно для IPv4 route notifier, IPv6 route notifier и FIB notifier; подтвердить first-error propagation, rollback только успешных notifier, drain worker, освобождение DB без leak/oops/deadlock и нормальную повторную загрузку модуля.
 
 **Текущий статус:** source implementation и source-level assertions закоммичены; структурная проверка unified diff (9 sections, 22 hunks, без пересечений) пройдена в рамках ревизии. Exact archive apply/full-series preflight, C compilation, runtime fault injection и module load/unload — **NOT TESTED**. ECM-05 остаётся открытым до CI и fault-injection evidence.
+
+### ECM-06 — Закрыть окно между повторно поставленными FIB worker passes
+
+**Приоритет:** P1; source-level concurrency review до аппаратного acceptance.
+
+**Наблюдение по текущей реализации patch 9002:** один запуск `ecm_db_fib_rule_work_fn()` берёт RTNL, снимает pending IPv4/IPv6 bits, освобождает RTNL, закрывает frontend stop gate, вызывает `synchronize_net()`, выполняет `ecm_db_connection_defunct_ip_version()` и затем открывает gate. Если новое FIB rule событие приходит после snapshot во время defunct-прохода, callback снова выставляет pending bit и ставит ту же work item в очередь. Linux workqueue не запускает один work item параллельно самому себе; повторное выполнение начинается после текущего запуска. Поэтому текущий проход может открыть frontend gate до того, как начнётся повторный проход.
+
+Это **потенциальное race window**, а не доказанный аппаратный сбой: нужно определить, может ли в этом интервале появиться или ускориться поток, закреплённый по уже изменённому policy rule, и воспроизвести это детерминированно. Текущий source guard проверяет последовательность одного worker pass, но не моделирует событие, поступившее во время defunct.
+
+**Проверка и возможное исправление:**
+1. Добавить детерминированные точки инъекции FIB ADD/DEL после snapshot, после закрытия gate, во время DB defunct и непосредственно перед открытием gate.
+2. Зафиксировать, что повторно поставленный worker действительно запускается только после возврата текущего pass; сопоставить порядок callback, gate counter и фактический egress новых flows.
+3. Рассмотреть drain-loop, который сохраняет stop gate между проходами и открывает его только после подтверждения отсутствия pending событий. Финальную проверку pending state и открытие gate необходимо сериализовать с live FIB rule updates под per-net RTNL; отдельно учесть initial FIB replay, callback которого вызывается без RTNL.
+4. Перед внесением изменения разобрать lock ordering RTNL ↔ ECM frontend locks. Не добавлять RTNL вокруг gate transition без проверки всех callsites и возможных обратных lock dependencies.
+5. Повторить raw QSDK apply, полную patch series, compile, source guards и fault/stress tests.
+
+**Критерий закрытия:** детерминированные тесты закрывают все перечисленные окна; после каждого rule change ни один новый flow не остаётся ускоренным на предыдущем WAN; нет deadlock/oops/lockdep warning; worker unload/drain проходит без потери событий.
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
