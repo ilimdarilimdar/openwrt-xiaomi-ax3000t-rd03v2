@@ -198,3 +198,21 @@ The real #124 qca-nss-ecm compile log shows GNU patch applied parts of 9002 with
 This does not show that the insertion landed incorrectly: PREPARE_ONLY's test-ecm-fib-rule-patch.sh reproduces the real sorted feed patch queue using patch -f -p1, then parses both the pristine-patch result and the full-series result. Its lifecycle guard requires exactly one ecm_db_fib_rule_notifier_stop() inside ecm_exit(), immediately followed by DEBUG_INFO("stop conntrack notifier\n"), and requires the stop before conntrack/frontend teardown. CI #124's PREPARE_ONLY job and lifecycle guards passed. The exact package build used the same pinned source and patch order.
 
 Residual status: the patch's build-time placement is source-guarded, but module load/unload and runtime teardown stress remain NOT TESTED on hardware. The compiler also emitted non-fatal warnings for an unused init_cleanup_1 label and missing MODULE_DESCRIPTION(); they did not prevent linking ecm.ko.
+
+## 2026-11-16 — ECM preflight harness cleanup
+
+Commit `0ca5b790cded21107f4ca72b987d3129790a9b18` changes only
+`tools/test-ecm-fib-rule-patch.sh`. It removes 2,211 duplicated/orphaned
+lines, preserving the canonical 923-line script body, then adds preflight
+assertions for the exact 32-entry sorted ECM patch queue, presence of local
+patches 9001 and 9002, and the required 9001-before-9002 order. GitHub readback
+confirms the new script blob `221127144eed86b46a564b814b18531808140eff`
+and 930 lines.
+
+No workflow run or commit status is associated with this exact code SHA at
+the time of this note. The available GitHub connector cannot dispatch
+`workflow_dispatch`; therefore `bash -n`, fresh pinned-source application,
+the complete 32-patch queue, PREPARE_ONLY and full-build/verify remain
+**NOT CI-VALIDATED** for this revision. The code edit does not modify firmware
+inputs. Keep the CI temporary-key/`example.invalid` artifact non-installable
+and keep hardware Dual-WAN/NSS validation **NOT TESTED**.
