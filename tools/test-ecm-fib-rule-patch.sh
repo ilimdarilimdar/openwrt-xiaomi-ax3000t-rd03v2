@@ -396,7 +396,7 @@ grep -qF '#include <linux/netdevice.h>' "$ECM_DB" ||
   die "ECM DB does not include the synchronize_net() declaration"
 grep -qF 'synchronize_net();' "$ECM_DB" ||
   die "FIB worker does not drain pre-existing network readers"
-grep -qF "register_fib_notifier() replay instead runs under RCU without RTNL." "$ECM_DB" ||
+grep -qF "Initial register_fib_notifier() replay runs under RCU without" "$ECM_DB" ||
   die "initial FIB replay / live RTNL distinction is missing"
 
 python3 - "$ECM_DB" <<'PY'
@@ -731,9 +731,9 @@ check_source(*sys.argv[4:7])
 print("PASS: FIB worker is drained before front-end teardown")
 PY
 
-# The FIB notifier callback runs in atomic context. It must only record the
-# affected family and queue process-context work; all sleeping and DB work
-# belongs in the worker.
+# The FIB notifier callback runs in atomic context. It closes the affected
+# frontend gate and records the family, then queues process-context work.
+# Sleeping and ECM DB defunct operations remain in the worker.
 python3 - "$ECM_DB" "$SERIES_ECM_DB" <<'PY'
 from pathlib import Path
 import re
