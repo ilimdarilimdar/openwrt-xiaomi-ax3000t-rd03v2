@@ -444,3 +444,11 @@ CI-образ на temporary key/`example.invalid` годится как док�
 - Изменения этой сессии не меняли ECM C patch series, pinned source commits, feeds или kernel config. Основной роутер не прошивался.
 - Следующие шаги: получить новый CI на exact HEAD 49d3579; подтвердить Static/PREPARE_ONLY; подтвердить watchdog suite PASS; подтвердить qca-nss-ecm compile PASS, final verify-v2 PASS, package/kernel versions and manifests; затем только планировать аппаратную проверку на втором RD03v2.
 - Важно: артефакты CI по-прежнему используют временный signing key и example.invalid; это не опубликованные, не пригодные к установке образы. Dual-WAN/NSS hardware status остаётся NOT TESTED. Главный роутер оставлять на stock MiWiFi.
+
+### Уточнение по fuzz при применении ECM patch 9002 — 2026-11-16
+
+В реальном compile log CI #124 GNU patch сообщил fuzz при применении 9002: ecm_db/ecm_db.c hunks #1/#2/#4 — fuzz 1/1/2; ecm_init.c hunks #2/#4 — fuzz 1/2. В частности, ecm_init.c hunk #4 вставляет FIB notifier stop в ecm_exit(). Поэтому нельзя описывать фактическое применение 9002 как полностью fuzz-free.
+
+Это не доказывает неправильное расположение вызова. PREPARE_ONLY script test-ecm-fib-rule-patch.sh воспроизводит сортированную очередь feed patches точной операцией patch -f -p1, а затем анализирует pristine-patch результат и результат полной серии. Lifecycle guard требует ровно один ecm_db_fib_rule_notifier_stop() в ecm_exit(), непосредственно перед DEBUG_INFO("stop conntrack notifier\n"), и проверяет, что stop находится раньше conntrack/frontend teardown. В CI #124 PREPARE_ONLY и lifecycle guards прошли. Фактическая сборка использовала те же pinned source и patch order.
+
+Остаточный статус: положение кода проверено на уровне исходников и статических guards, но module load/unload, runtime teardown stress и аппаратное поведение остаются NOT TESTED. Компилятор также выдал некритичные warnings: неиспользуемая метка init_cleanup_1 и отсутствующий MODULE_DESCRIPTION(); они не помешали сборке ecm.ko.
