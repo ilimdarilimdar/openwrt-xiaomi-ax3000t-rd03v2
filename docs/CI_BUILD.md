@@ -2,6 +2,8 @@
 
 This workflow separates cheap source/configuration checks from a full signed firmware build.
 
+The current CI outcome and all remaining engineering actions are tracked in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
+
 ## Automatic static checks
 
 A push to `work/rd03v2-dualwan-mwan3-baseline` and a pull request targeting `main` run:
