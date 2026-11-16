@@ -98,15 +98,15 @@ pinned `conntrack-tools` 1.4.8. См. `docs/dualwan.md`.
 
 Patch 9002 **есть в active overlay**, прошёл pinned-source/full-feed-series source preflight и был скомпилирован в CI #124. Но его runtime корректность и NSS-safe failover **не доказаны на железе**. Ветка не содержит готовой аппаратно проверенной конфигурации второго WAN. Полный перечень работ — [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
-### 2.3. Подтверждённые результаты CI на 16.11.2026
+### 2.3. Исторические результаты CI #124–#129 (16.11.2026)
 
 - CI #124: Static **PASS**, PREPARE_ONLY **PASS**, raw QSDK source apply, полная очередь 32 ECM feed patches, lifecycle и atomic-callback guards **PASS**.
 - Полная сборка #124 создала sysupgrade и initramfs-factory images; `qca-nss-ecm` скомпилирован, `kmod-qca-nss-ecm` включён в rootfs, marker FIB notifier найден в `ecm.ko`; rootfs — 223 packages.
 - Финальный `verify-v2` #124 — **FAIL**: watchdog suite 20 PASS / 26 FAIL и два ECM source fingerprints false-negative после `CONFIG_AUTOREMOVE=y`.
 - CI #125/#126 провалили только `git diff --check` из-за лишней пустой строки в handoff; PREPARE_ONLY/full-build были skipped. `e31ca88` устранил trailing blank line.
 - CI #127 на `faa82e24`: Static checks **PASS**, PREPARE_ONLY и exact QSDK/full ECM queue preflight **PASS**. Full-build job запустил `./build.sh`, но runner shutdown прервал процесс с кодом 143; compile и final verify не получены.
-- CI #128/#129 отменены до создания jobs. Для code/test SHA `49d3579` отдельного run/status нет.
-- Исправления watchdog (`f372d519`, `0d2aeadb`) и AUTOREMOVE verifier (`e7846a1`, `49d3579`) пока **NOT CI-VALIDATED** на актуальном code/test SHA.
+- CI #128/#129 отменены до создания jobs. На историческом code/test SHA `49d3579` отдельного run/status не было; после транзакционного rollback `fb88ba4` / `02ee20e` нового полного CI также нет.
+- Исправления watchdog (`f372d519`, `0d2aeadb`) и AUTOREMOVE verifier (`e7846a1`, `49d3579`) не получили завершённого full-build и final-verifier подтверждения на последующих source/test ревизиях.
 - Pinned kernel: Linux **6.18.55**. Generic config fragment включает `CONFIG_FIB_RULES`, `CONFIG_IP_ADVANCED_ROUTER` и `CONFIG_IP_MULTIPLE_TABLES`; проектная конфигурация включает `CONFIG_IPV6_MULTIPLE_TABLES`.
 - PREPARE_ONLY выбирает `mwan3`, `luci-app-mwan3`, `kmod-qca-nss-ecm`, NSS DWMAC и nft-backed iptables packages.
 - Три unrelated Kconfig diagnostics остаются для Qt5 GUI, fwknopd/LuCI fwknopd и squeezelite-custom; пакеты не выбраны. Цикл Kconfig выбранного NSS отсутствует после patch 0014.
@@ -178,11 +178,11 @@ mwan3 выполняет policy routing, распределение **отдел
 
 Это свидетельство относится к конкретной комбинации v1.x kernel/ECM. Оно **не доказывает** корректность того же патча в v2.
 
-### 4.2. Текущий v2 статус
+### 4.2. Исторические результаты v2 и актуальный статус
 
-В active feed-overlay присутствует отдельный RD03v2/QSDK 14.0 ECM patch 9002 для FIB policy-rule ADD/DEL. Он прошёл raw apply к SHA-256-проверенному QSDK source и применение после полной pinned feed queue в CI #123/#124. Source guards подтвердили callback/worker separation, pending-bit lifecycle, notifier teardown до frontend/conntrack teardown. В CI #124 `qca-nss-ecm` скомпилировался, оба типа образов созданы, notifier marker найден в image `ecm.ko`.
+В active feed-overlay присутствует отдельный RD03v2/QSDK 14.0 ECM patch 9002 для FIB policy-rule ADD/DEL. Raw apply, полная pinned feed queue и C-компиляция в CI #123/#124 относятся к более ранней реализации patch. Текущая функциональная ревизия `fb88ba4` добавила транзакционный rollback route/FIB notifier registration, а regression revision `02ee20e` — соответствующие source guards. Эти последние изменения ещё не получили повторный exact-source apply, compile и final verifier.
 
-Final `verify-v2.sh` в #124 завершился **FAIL** по трём проверкам: watchdog test harness и source fingerprints 9001/9002 после `CONFIG_AUTOREMOVE=y`. Watchdog fixes (`f372d519`, `0d2aeadb`) и AUTOREMOVE verifier fixes (`e7846a1`, `49d3579`) коммичены, но на актуальном code/test SHA ещё нет completed CI. CI #127 прошёл Static и PREPARE_ONLY, но full-build был прерван runner shutdown (exit 143). Поэтому повторная компиляция и final verifier после этих исправлений не подтверждены.
+Final `verify-v2.sh` в #124 завершился **FAIL** по трём проверкам: watchdog test harness и source fingerprints 9001/9002 после `CONFIG_AUTOREMOVE=y`. Watchdog fixes (`f372d519`, `0d2aeadb`) и AUTOREMOVE verifier fixes (`e7846a1`, `49d3579`) коммичены, но не получили завершённого full CI с `verify-v2` PASS. CI #127 прошёл Static и PREPARE_ONLY, но full-build был прерван runner shutdown (exit 143). Поэтому повторная компиляция и final verifier после этих исправлений не подтверждены.
 
 При применении patch 9002 в compile log CI #124 GNU patch сообщил fuzz 1–2 на нескольких hunks, включая ecm_exit insertion. Source lifecycle guard подтвердил placement notifier stop перед conntrack/frontend teardown, но patch нельзя называть fuzz-free. Runtime обязательные gates:
 
