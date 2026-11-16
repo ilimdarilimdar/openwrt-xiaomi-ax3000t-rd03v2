@@ -76,11 +76,11 @@
 
 ### Next actions
 
-1. Перед следующими изменениями заново сверить живой branch HEAD и Actions. Последний code/test HEAD `49d3579` не имеет отдельного workflow run/status. CI #127 дал Static/PREPARE_ONLY **PASS** на `faa82e24`, но full-build был оборван runner shutdown (exit 143); #128/#129 jobs не создали. #125/#126 провалили только `git diff --check` из-за лишней пустой строки в handoff; `e31ca88` её исправил.
-2. Получить завершённый full CI на актуальном code/test HEAD: подтвердить watchdog runtime suite, компиляцию `qca-nss-ecm`, notifier marker в `ecm.ko`, kernel config, rootfs/image manifest и полный итог `verify-v2.sh`. Текущий GitHub connector не предоставляет dispatch нового workflow; документационные изменения не запускать ради CI, так как `docs/**` игнорируются workflow trigger.
-3. Не считать PREPARE_ONLY или Static checks сборкой прошивки. Не выпускать и не прошивать образ до отдельного контроля target/profile, package manifest, kernel/module versions, hashes, signing и recovery.
-4. Только после успешной сборки подготовить отдельное второе RD03v2 и recovery-метод. Проверять module load/unload, FIB rule churn, mwan3 restart, tracker `disconnected`, реальный `ifdown`/cable pull, IPv4/IPv6 отдельно, conntrack marks, NSS/ECM counters, throughput, CPU, latency и packet loss.
-5. Основной домашний маршрутизатор оставить на stock MiWiFi. Никакие CI артефакты не прошивать.
+1. Сверить живые branch HEAD, source/test SHA и Actions. Текущая функциональная база — patch `fb88ba4` и regression tests `02ee20e`; последующие commits в checkpoint выше документальные.
+2. Получить завершённый full CI именно после транзакционного rollback patch: exact QSDK archive apply, вся 32-patch ECM queue, C compilation `qca-nss-ecm`, image generation и полный `verify-v2.sh` без FAIL. Перед этим maintainer должен восстановить Actions, если репозиторий по-прежнему находится на паузе; затем выполнить manual dispatch `false` и `true`.
+3. Отдельно выполнить fault injection отказов IPv4 route notifier, IPv6 route notifier и FIB notifier; проверить first-error propagation, partial-registration cleanup, worker drain и повторную загрузку модуля.
+4. Только после успешного CI подготовить второй RD03v2 и recovery-метод. Проверить module load/unload, FIB rule churn, mwan3 tracker `disconnected`, netifd `ifdown`/cable pull, оба WAN, conntrack marks, NSS/ECM counters, throughput, CPU, RTT и loss.
+5. Основной домашний маршрутизатор оставить на stock MiWiFi. CI-артефакты с временным ключом и `example.invalid` не прошивать.
 
 ### Safety and release limits
 
