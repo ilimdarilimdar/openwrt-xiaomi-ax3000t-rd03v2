@@ -5,10 +5,20 @@
 **Дата полной ревизии:** 2026-11-16  
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
-**Code/test baseline:** `49d3579437389e2ffc111b94a08839ef7bd29ae7`  
+**Code/test baseline:** `c586d83e02537d17b1595f5026944e088d7e6f6e` (fail-closed ECM FIB notifier handling + corrected per-file patch hunk offsets)  
 **Branch HEAD в начале исходной ревизии:** `e81dbad389ad558e72aab6c23295c72299a6d7fe` (исторический снимок до документальных коммитов, добавивших этот реестр).  
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
+
+## Live checkpoint после ECM fail-closed и CI dispatch updates — 2026-11-16
+
+- Source/test revision: `c586d83e02537d17b1595f5026944e088d7e6f6e`. Branch HEAD на момент source update: тот же SHA; последующие изменения этой ревизии — документационные.
+- В patch 9002 результат `register_fib_notifier()` сохраняется в отдельном `fib_ret`, не меняя `ret` от IPv4/IPv6 route-notifier init. При ошибке вызывается fail-closed helper: он удерживает IPv4/IPv6 ECM stop gates закрытыми, дожидается/отменяет worker, очищает pending bits, вызывает `synchronize_net()`, defunct-ит существующие IPv4/IPv6 ECM connections и оставляет трафик на штатном Linux datapath. Это деградация без NSS ECM acceleration, а не попытка продолжать небезопасный offload.
+- `tools/test-ecm-fib-rule-patch.sh` расширен source guards для раздельного `fib_ret` и fail-closed sequence. Сам preflight, compile и fault injection после изменения **не запускались**.
+- Workflow теперь имеет `workflow_dispatch` с boolean `full_build`: `false` — Static + PREPARE_ONLY; `true` — дополнительно full-build + `verify-v2`. Manual dispatch ограничен рабочей веткой. Push с `[full-build]` сохраняет прежнюю семантику.
+- Live Actions page показывает: “Workflows are not currently being run on this fork due to the scale of GitHub Actions usage.” На момент этой проверки новых запусков после #129 нет. GitHub сообщает, что maintainer может повторно включить workflows; без этого автоматический/ручной CI запуск не подтверждается.
+- CI-образы остаются временными: ephemeral P-256 signing key, `example.invalid` package URL, публикация образов отключена. Ни одна новая сборка не считается PASS.
+- Runtime FIB registration/failure injection, реальный ECM/NSS datapath и Dual-WAN на RD03v2 — **NOT TESTED**. Основной домашний роутер остаётся на stock MiWiFi.
 
 ## Актуальная live-перепроверка ветки и CI — 2026-11-16
 
@@ -82,11 +92,11 @@
 
 **Приоритет:** P1; снимает необходимость в искусственном source-коммите, когда нужно проверить неизменившийся code/test SHA.
 
-Workflow сейчас имеет только `push` и `pull_request`; событие `workflow_dispatch` отсутствует. Full-build дополнительно ограничен условием `github.event_name == 'push'` и маркером `[full-build]` в commit message. Поэтому текущий кодовый SHA нельзя вручную отправить на полный build из Actions UI.
+Workflow уже обновлён: добавлен `workflow_dispatch` с boolean input `full_build`. Значение `false` (default) должно запускать только Static + PREPARE_ONLY; `true` — также full-build + `verify-v2`. Ручной запуск из любого ref, кроме `work/rd03v2-dualwan-mwan3-baseline`, отклоняется. Обычный push-trigger с `[full-build]` сохранён.
 
-**Действия:** добавить `workflow_dispatch` с явным boolean input вроде `full_build`; при false выполнять Static + PREPARE_ONLY, при true — также full-build + `verify-v2`. Ограничить dispatch рабочей веткой/допустимыми refs, сохранить concurrency, временный CI signing key и `example.invalid`; не публиковать образы и не использовать постоянный private key.
+**Ограничение на текущей проверке:** GitHub Actions page сообщает, что workflows на этом fork сейчас не запускаются из-за масштаба использования Actions. Нового run после #129 не видно; UI-проверка dispatch false/true поэтому пока не выполнена. Сначала maintainer должен повторно включить workflows на странице Actions репозитория.
 
-**Критерий закрытия:** ручной dispatch на выбранном SHA проверенно запускает Static/PREPARE_ONLY; `full_build=true` запускает full build и final verifier, `false` гарантированно не запускает его. Проверено на тестовом dispatch, без пустого commit.
+**Критерий закрытия:** после повторного включения Actions выполнить реальный manual dispatch с `full_build=false` и подтвердить, что full-build job пропущен; затем выполнить `true` и подтвердить full-build + final `verify-v2`. Сохранить run IDs и результаты. Существующие safeguards — ephemeral P-256 key, `example.invalid`, отсутствие публикации образов — должны остаться.
 
 
 ### CI-02 — Подтвердить исправленный watchdog
@@ -169,11 +179,11 @@ Pinned qca-nss-ecm Makefile включает `ECM_CLASSIFIER_MARK_ENABLE=y` дл
 
 **Приоритет:** P1; решение обязательно до аппаратного Dual-WAN acceptance.
 
-В patch 9002 вызов `register_fib_notifier()` не проверяется как обязательный gate: при ошибке код пишет `KERN_WARNING` и продолжает инициализацию ECM. Это оставляет NSS acceleration включённым без гарантированного defunct при policy-rule-only изменениях. В `tools/test-ecm-fib-rule-patch.sh` есть guard, который запрещает присваивать результат регистрации в прежний `ret`; он защищает статус route-notifier init, но одновременно фиксирует текущую non-fatal семантику и не проверяет безопасный fallback.
+В source revision `c586d83` fail-open поведение заменено на fail-closed fallback. Результат регистрации теперь записывается в отдельный `fib_ret`, поэтому сохранён `ret` от route-notifier init. При ошибке helper удерживает frontend stop gates закрытыми для IPv4/IPv6, завершает/отменяет queued worker, очищает pending bits, ждёт `synchronize_net()`, defunct-ит существующие ECM connections и не открывает ECM frontends повторно. Ожидаемое состояние — обычная Linux forwarding path без ECM/NSS acceleration, пока модуль не будет выгружен. Source-level guard добавлен в preflight test.
 
-**Действия:** принять архитектурное решение: либо корректно отменять/откатывать ECM init при невозможности зарегистрировать FIB notifier, либо явно отключать несовместимый ECM/NSS acceleration path и запрещать Dual-WAN policy mode. Нельзя просто игнорировать ошибку или считать warning нормальным PASS. Переработать source guards так, чтобы отдельно проверять сохранение статуса IPv4/IPv6 route-notifier init и fail-safe обработку именно FIB registration failure. Добавить воспроизводимое fault-injection тестирование ошибки регистрации и проверки unwind.
+**Что ещё требуется:** проверить на точном QSDK archive, что patch применяется после всей pinned ECM series без fuzz/offset regressions; собрать `qca-nss-ecm`; провести fault injection возврата ошибки из `register_fib_notifier()`; подтвердить, что frontend gates остаются закрыты, нет worker race, leak/oops/deadlock, а host datapath продолжает передавать трафик. Проверить unload/reload. Тесты на стенде второго RD03v2 обязательны до аппаратной приёмки.
 
-**Критерий закрытия:** искусственно вызванная ошибка регистрации не оставляет активный ECM/NSS datapath, который может закрепить flow за прежним WAN; cleanup проходит без leak/oops/deadlock; решение и evidence зафиксированы. До этого runtime FIB notifier registration — NOT TESTED, безопасный fallback — NOT DEFINED.
+**Текущий статус:** source implementation + source guards есть; compile/preflight/fault injection — **NOT TESTED** после этой правки; runtime notifier — **NOT TESTED**. ECM-05 не закрывать до воспроизводимого fault-injection evidence.
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
