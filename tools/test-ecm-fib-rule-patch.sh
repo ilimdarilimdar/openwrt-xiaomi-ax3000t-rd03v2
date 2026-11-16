@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Verify the RD03v2 ECM FIB-rule notifier patch against the exact pinned QSDK archive.
+# Includes source guards for initial-dump arming and the FIB worker drain-loop.
 set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -330,6 +331,12 @@ grep -qF 'cancel_work_sync(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "notifier workqueue teardown is missing after patch"
 grep -qF 'schedule_work(&ecm_db_fib_rule_work)' "$ECM_DB" ||
   die "atomic callback does not defer work"
+grep -qF 'if (READ_ONCE(ecm_db_fib_rule_ready))' "$ECM_DB" ||
+  die "FIB callback can queue work before initial replay is complete"
+grep -qF 'WRITE_ONCE(ecm_db_fib_rule_ready, true)' "$ECM_DB" ||
+  die "FIB worker is not armed after successful initial replay"
+grep -qF 'WRITE_ONCE(ecm_db_fib_rule_ready, false)' "$ECM_DB" ||
+  die "FIB callback is not disarmed before notifier teardown"
 
 python3 - "$ECM_DB" <<'PY'
 from pathlib import Path
@@ -348,6 +355,7 @@ ordered = [
     "switch (info->family)",
     "set_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);",
     "set_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);",
+    "if (READ_ONCE(ecm_db_fib_rule_ready))",
     "schedule_work(&ecm_db_fib_rule_work);",
 ]
 positions = [callback.find(token) for token in ordered]
@@ -373,7 +381,7 @@ for token in forbidden:
 if callback.rfind("return NOTIFY_DONE;") < positions[-1]:
     sys.exit("FAIL: callback must return after scheduling the deferred worker")
 
-print("PASS: FIB notifier callback only records family state and queues deferred work")
+print("PASS: FIB notifier callback records family state and queues work only after initial replay")
 print("PASS: no ECM DB walk, network grace-period wait or sleepable operation runs in callback")
 PY
 grep -qF 'rtnl_net_lock(&init_net);' "$ECM_DB" ||
@@ -398,40 +406,44 @@ if start < 0 or end < 0:
     sys.exit("FAIL: ECM FIB-rule worker body not found")
 worker = source[start:end]
 
-ordered = [
-    "rtnl_net_lock(&init_net);",
-    "ipv4_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4",
-    "ipv6_pending = test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6",
-    "rtnl_net_unlock(&init_net);",
-    "any_pending = ipv4_pending;",
-    "any_pending |= ipv6_pending;",
-    "if (ipv4_pending)",
-    "ecm_front_end_ipv4_stop_temp(1)",
-    "if (ipv6_pending)",
-    "ecm_front_end_ipv6_stop_temp(1)",
-    "if (any_pending)",
-    "synchronize_net();",
-    "if (ipv4_pending)",
-    "ecm_db_connection_defunct_ip_version(4)",
-    "ecm_front_end_ipv4_stop_temp(0)",
-    "if (ipv6_pending)",
-    "ecm_db_connection_defunct_ip_version(6)",
-    "ecm_front_end_ipv6_stop_temp(0)",
-]
-positions = []
-offset = 0
-for token in ordered:
-    position = worker.find(token, offset)
-    if position < 0:
-        sys.exit(f"FAIL: required worker sequence element is missing: {token}")
-    positions.append(position)
-    offset = position + len(token)
-if positions != sorted(positions):
-    sys.exit("FAIL: worker must drain all in-flight Netfilter hooks before defuncting ECM DB entries")
-print("PASS: pending-bit snapshot is atomic with respect to RTNL rule updates")
-print("PASS: frontend stop gates close before synchronize_net() and DB walk")
-PY
-grep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
+if "for (;;)" not in worker:
+    sys.exit("FAIL: FIB worker does not drain pending events in a loop")
+if worker.count("ecm_front_end_ipv4_stop_temp(1)") != 1:
+    sys.exit("FAIL: IPv4 stop gate must be acquired once per worker invocation")
+if worker.count("ecm_front_end_ipv4_stop_temp(0)") != 1:
+    sys.exit("FAIL: IPv4 stop gate must be released only after pending work is empty")
+if "ipv4_pending && !ipv4_stop_held" not in worker:
+    sys.exit("FAIL: IPv4 stop gate is not retained across drain passes")
+if "rtnl_net_lock(&init_net);" not in worker or "test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4" not in worker:
+    sys.exit("FAIL: worker pending snapshot is not protected by per-net RTNL")
+if "if (!any_pending)" not in worker:
+    sys.exit("FAIL: worker lacks an empty-pending exit condition")
+empty_start = worker.find("if (!any_pending)")
+empty_end = worker.find("return;", empty_start)
+if empty_start < 0 or empty_end < 0:
+    sys.exit("FAIL: worker empty-pending exit block is malformed")
+empty = worker[empty_start:empty_end]
+for token in ("ecm_front_end_ipv4_stop_temp(0)", "rtnl_net_unlock(&init_net)"):
+    if token not in empty:
+        sys.exit(f"FAIL: IPv4 gate release is not serialized under RTNL: {token}")
+if worker.find("ecm_db_connection_defunct_ip_version(4)") < worker.find("ecm_front_end_ipv4_stop_temp(1)"):
+    sys.exit("FAIL: IPv4 DB defunct pass runs before the stop gate closes")
+if worker.find("synchronize_net();") < worker.find("ecm_front_end_ipv4_stop_temp(1)"):
+    sys.exit("FAIL: synchronize_net() runs before the IPv4 stop gate closes")
+if worker.find("ecm_front_end_ipv4_stop_temp(0)") < worker.find("ecm_db_connection_defunct_ip_version(4)"):
+    sys.exit("FAIL: IPv4 stop gate opens before the defunct pass")
+#ifdef ECM_IPV6_ENABLE
+# Runtime source is compiled with this preprocessor symbol; ensure parallel family handling is present.
+if "ipv6_pending && !ipv6_stop_held" not in worker:
+    sys.exit("FAIL: IPv6 stop gate is not retained across drain passes")
+if worker.count("ecm_front_end_ipv6_stop_temp(1)") != 1 or worker.count("ecm_front_end_ipv6_stop_temp(0)") != 1:
+    sys.exit("FAIL: IPv6 stop gate must be acquired once and released after the drain")
+#endif
+
+print("PASS: FIB worker drains coalesced events without reopening frontend gates between passes")
+print("PASS: final empty-pending check and gate release are serialized with live RTNL rule updates")
+print("PASS: stop gates close before synchronize_net() and DB defunct; release occurs after the final pass")
+PYgrep -qF 'test_and_clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4' "$ECM_DB" ||
   die "IPv4 pending-bit worker is missing"
 grep -qF 'ecm_db_connection_defunct_ip_version(4)' "$ECM_DB" ||
   die "IPv4 connection defunct pass is missing"
