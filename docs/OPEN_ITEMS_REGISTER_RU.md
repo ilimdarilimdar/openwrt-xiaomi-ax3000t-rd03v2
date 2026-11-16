@@ -5,16 +5,16 @@
 **Дата полной ревизии:** 2026-11-16  
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
-**Code/test baseline:** `c586d83e02537d17b1595f5026944e088d7e6f6e` (fail-closed ECM FIB notifier handling + corrected per-file patch hunk offsets)  
+**Code/test baseline:** `f00d6c68a9f5b6962c88f1ebc2cf22625d4be211` (test-only IPv6 fail-closed and route-notifier return guards; source patch at `c586d83e02537d17b1595f5026944e088d7e6f6e`) (fail-closed ECM FIB notifier handling + corrected per-file patch hunk offsets)  
 **Branch HEAD в начале исходной ревизии:** `e81dbad389ad558e72aab6c23295c72299a6d7fe` (исторический снимок до документальных коммитов, добавивших этот реестр).  
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
 
 ## Live checkpoint после ECM fail-closed и CI dispatch updates — 2026-11-16
 
-- Source/test revision: `c586d83e02537d17b1595f5026944e088d7e6f6e`. Branch HEAD на момент source update: тот же SHA; последующие изменения этой ревизии — документационные.
+- ECM source patch commit: `c586d83e02537d17b1595f5026944e088d7e6f6e`; latest test commit: `f00d6c68a9f5b6962c88f1ebc2cf22625d4be211` (тестовый guard добавил обязательную IPv6 gate/pending/defunct sequence и сохранение `return ret`). Source/config changes не было после patch commit.
 - В patch 9002 результат `register_fib_notifier()` сохраняется в отдельном `fib_ret`, не меняя `ret` от IPv4/IPv6 route-notifier init. При ошибке вызывается fail-closed helper: он удерживает IPv4/IPv6 ECM stop gates закрытыми, дожидается/отменяет worker, очищает pending bits, вызывает `synchronize_net()`, defunct-ит существующие IPv4/IPv6 ECM connections и оставляет трафик на штатном Linux datapath. Это деградация без NSS ECM acceleration, а не попытка продолжать небезопасный offload.
-- `tools/test-ecm-fib-rule-patch.sh` расширен source guards для раздельного `fib_ret` и fail-closed sequence. Сам preflight, compile и fault injection после изменения **не запускались**.
+- `tools/test-ecm-fib-rule-patch.sh` проверяет отдельный `fib_ret`, сохранение `return ret`, fail-closed sequence IPv4 и IPv6. Сам preflight, compile и fault injection после изменения **не запускались**.
 - Workflow теперь имеет `workflow_dispatch` с boolean `full_build`: `false` — Static + PREPARE_ONLY; `true` — дополнительно full-build + `verify-v2`. Manual dispatch ограничен рабочей веткой. Push с `[full-build]` сохраняет прежнюю семантику.
 - Live Actions page показывает: “Workflows are not currently being run on this fork due to the scale of GitHub Actions usage.” На момент этой проверки новых запусков после #129 нет. GitHub сообщает, что maintainer может повторно включить workflows; без этого автоматический/ручной CI запуск не подтверждается.
 - CI-образы остаются временными: ephemeral P-256 signing key, `example.invalid` package URL, публикация образов отключена. Ни одна новая сборка не считается PASS.
@@ -185,7 +185,7 @@ Pinned qca-nss-ecm Makefile включает `ECM_CLASSIFIER_MARK_ENABLE=y` дл
 
 **Что ещё требуется:** проверить на точном QSDK archive, что patch применяется после всей pinned ECM series без fuzz/offset regressions; собрать `qca-nss-ecm`; провести fault injection возврата ошибки из `register_fib_notifier()`; подтвердить, что frontend gates остаются закрыты, нет worker race, leak/oops/deadlock, а host datapath продолжает передавать трафик. Проверить unload/reload. Тесты на стенде второго RD03v2 обязательны до аппаратной приёмки.
 
-**Текущий статус:** source implementation + source guards есть; compile/preflight/fault injection — **NOT TESTED** после этой правки; runtime notifier — **NOT TESTED**. ECM-05 не закрывать до воспроизводимого fault-injection evidence.
+**Текущий статус:** source implementation + IPv4/IPv6 source guards есть; compile/preflight/fault injection — **NOT TESTED** после этой правки; runtime notifier — **NOT TESTED**. ECM-05 не закрывать до воспроизводимого fault-injection evidence.
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
