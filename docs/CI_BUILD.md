@@ -136,3 +136,23 @@ HEAD `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`:
 
 Report these stages separately. PREPARE_ONLY and a successful patch preflight
 are not a full firmware build, final image verification or hardware test.
+
+## Follow-up audit — 2026-11-16, after run #124
+
+The full build did complete image generation. The workflow conclusion is FAIL only at the final verifier stage; do not describe this as an ECM compiler failure.
+
+Evidence from run [#124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141), build-log artifact 14184373198:
+
+- qca-nss-ecm compile log completed successfully; the image contains kmod-qca-nss-ecm.
+- Both sysupgrade and initramfs-factory images were created.
+- The rootfs has 223 packages. The final verifier found the FIB notifier marker in the image's ecm.ko.
+- The final verifier recorded three failures: watchdog scenario test (20 passed / 26 failed) and the source fingerprints for ECM patches 9001 and 9002.
+- The watchdog failure is explained by BusyBox applet dispatch bypassing PATH stubs: dmesg, rmmod, modprobe and reboot could hit host applets instead of the fake-board commands. The watchdog test-only command wrapper was added in commit f372d519; the harness now passes WD_TEST_STUB_DIR in commit 0d2aeadb. These fixes have not yet received a completed CI run.
+- The ECM fingerprint failure is explained by CONFIG_AUTOREMOVE=y: OpenWrt left the package build-directory name but removed ecm_db/ecm_db.c. Commit e7846a1 changed the verifier to inspect patched source only when it exists, otherwise compare the exact patch copies in the prepared feed. Commit e398b3f requested another full build to exercise that path.
+- The prepared config artifact confirms CONFIG_AUTOREMOVE=y. Commit 49d3579 adds an explicit verifier check for that setting before accepting the feed-copy fallback.
+
+Current branch HEAD is 49d3579437389e2ffc111b94a08839ef7bd29ae7. The attempted runs #127–#129 were cancelled; #126 was a whitespace-only static failure caused by a trailing blank line in the handoff and was corrected by commit e31ca88. A live Actions lookup by HEAD 49d3579 currently returns no associated workflow run and no commit status, so the new verifier guard and watchdog stub fixes remain NOT CI-VALIDATED.
+
+Next required action: trigger a fresh CI run through an Actions-enabled push or workflow dispatch, then verify that static checks, PREPARE_ONLY, the watchdog suite and final verify-v2 all pass on the exact new HEAD. Rebuild is still needed because #124 predates the final fixes. Inspect the build artifact and all test summaries. Do not flash CI artifacts: they use a disposable signing key and example.invalid package repository.
+
+Dual-WAN/NSS hardware validation remains NOT TESTED; keep the primary router on stock MiWiFi.
