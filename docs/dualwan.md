@@ -5,9 +5,11 @@ The package selections use the feed revisions pinned in `feeds.lock`:
 `mwan3` 2.12.5 from the packages feed and `luci-app-mwan3` from the LuCI
 feed. Their declared package dependencies are resolved by OpenWrt Kconfig.
 
-This is a **packaging and source-validation baseline**, not a production-validated
-Dual-WAN/NSS firmware. The full CI build and final `verify-v2` are still running
-for the current branch HEAD; no image from this branch has passed hardware tests.
+This is an **experimental packaging, source-validation and build baseline**, not a
+production-validated Dual-WAN/NSS firmware. CI #124 successfully compiled ECM and
+created both image types, but final `verify-v2` failed on three verifier checks.
+The follow-up fixes are committed but have not yet passed a new CI run. No image
+from this branch has passed hardware tests.
 
 ## What this change does
 
