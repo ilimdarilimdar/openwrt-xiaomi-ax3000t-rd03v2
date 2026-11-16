@@ -24,7 +24,7 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Snapshot: 2026-11-16. Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+Snapshot: 2026-11-16. Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 946b5bab7fb83f75356c181896361a5d183d2db0. Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; latest test blob: 86925012eeb6bc205c826cde3004f2aa3b0c0768.
 
 | Этап | Текущий подтверждённый результат |
 |---|---|
@@ -32,7 +32,7 @@ Snapshot: 2026-11-16. Source implementation commit: 16193bfb29eecca103a370270458
 | mwan3 2.12.5 / LuCI / nft-backed xtables | Выбраны в конфигурации и manifest; пакетная сборка текущей ревизии **NOT CI-VALIDATED** |
 | ECM patch 9002 gate-first callback + drain-loop | Реализовано в source candidate; static harness обновлён; exact QSDK apply, compile и execution тестов **NOT TESTED** |
 | Callback behavior | Gate закрывается до pending-bit queue; initial replay queue откладывается до возврата register_fib_notifier; runtime поведение **NOT TESTED** |
-| Worker drain | Pending bits обрабатываются циклом; gate release только после empty snapshot под RTNL. Exact QSDK 14.0 raw-source audit не нашёл прямого RTNL acquisition в translation units, где берётся family spinlock; в harness добавлен same-file direct-lock guard. Indirect call graph, lockdep и fault-injection **NOT TESTED** |
+| Worker drain | Pending bits обрабатываются циклом; gate release только после empty snapshot под RTNL. Exact QSDK 14.0 raw-source audit не нашёл прямого RTNL acquisition в translation units, где берётся family spinlock; в harness добавлен guard от прямого RTNL acquisition внутри family-lock critical section. Indirect call graph, lockdep и fault-injection **NOT TESTED** |
 | CI #123/#124 | Применение/компиляция относятся к более ранним версиям patch 9002 |
 | CI #124 qca-nss-ecm compilation / images | **PASS для более ранней версии patch**; нельзя переносить на 16193bf |
 | CI #124 final verify-v2 | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
