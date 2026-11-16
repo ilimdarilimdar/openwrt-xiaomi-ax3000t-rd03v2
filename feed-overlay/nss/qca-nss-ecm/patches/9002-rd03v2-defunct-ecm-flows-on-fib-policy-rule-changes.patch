@@ -32,6 +32,17 @@ before the database is marked terminating or freed. The patch does not
 promise preservation of conntrack/NAT sessions across a public-WAN change.
 
 ---
+
+ecm_db/ecm_db.c | +151 -8
+ecm_db/ecm_db.h | +1 -0
+ecm_init.c | +4 -0
+frontends/ecm_front_end_ipv4.c | +0 -17
+frontends/ecm_front_end_ipv6.c | +0 -17
+frontends/include/ecm_front_end_ipv4.h | +1 -1
+frontends/include/ecm_front_end_ipv6.h | +1 -1
+frontends/cmn/ecm_ipv4.c | +14 -0
+frontends/cmn/ecm_ipv6.c | +14 -0
+9 files changed, 186 insertions(+), 44 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
@@ -46,18 +57,19 @@ frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
 9 files changed, 200 insertions(+), 44 deletions(-)
-@@ -22,5 +22,10 @@
+@@ -22,5 +22,11 @@
  #include <asm/uaccess.h>	/* for put_user */
  #include <net/ipv6.h>
  #include <net/ip6_route.h>
 +#include <net/fib_notifier.h>
 +#include <linux/bitops.h>
 +#include <linux/workqueue.h>
++#include <linux/compiler.h>
 +#include <linux/rtnetlink.h>
 +#include <linux/netdevice.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-@@ -78,9 +83,11 @@
+@@ -78,9 +84,11 @@
  static int ecm_db_ipv4_route_enable = 1;
 +static bool ecm_db_ipv4_route_registered;
  
@@ -69,7 +81,7 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 +static bool ecm_db_ipv6_route_registered;
  #endif
  
-@@ -469,5 +476,110 @@
+@@ -469,5 +477,95 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -85,11 +97,14 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 + * family here and defer connection defuncting to a work item.
 + */
 +#define ECM_DB_FIB_RULE_PENDING_IPV4 0
++#define ECM_DB_FIB_RULE_GATED_IPV4 2
 +#ifdef ECM_IPV6_ENABLE
 +#define ECM_DB_FIB_RULE_PENDING_IPV6 1
++#define ECM_DB_FIB_RULE_GATED_IPV6 3
 +#endif
 +
 +static unsigned long ecm_db_fib_rule_pending;
++static unsigned long ecm_db_fib_rule_gated;
 +static bool ecm_db_fib_rule_registered;
 +static bool ecm_db_fib_rule_ready;
 +
@@ -100,11 +115,9 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 +static void ecm_db_fib_rule_work_fn(struct work_struct *work)
 +{
 +	bool ipv4_pending;
-+	bool ipv4_stop_held = false;
 +	bool any_pending;
 +#ifdef ECM_IPV6_ENABLE
 +	bool ipv6_pending;
-+	bool ipv6_stop_held = false;
 +#endif
 +
 +	(void)work;
@@ -130,14 +143,14 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 +
 +		if (!any_pending) {
 +			/*
-+			 * Do not open a frontend between coalesced worker passes.
-+			 * Holding RTNL serializes this release with live FIB rule events.
++			 * The notifier callback closes a family gate before queuing
++			 * work. Open it only after the final empty check under RTNL.
 +			 */
-+			if (ipv4_stop_held) {
++			if (test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV4, &ecm_db_fib_rule_gated)) {
 +				ecm_front_end_ipv4_stop_temp(0);
 +			}
 +#ifdef ECM_IPV6_ENABLE
-+			if (ipv6_stop_held) {
++			if (test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV6, &ecm_db_fib_rule_gated)) {
 +				ecm_front_end_ipv6_stop_temp(0);
 +			}
 +#endif
@@ -147,25 +160,9 @@ frontends/cmn/ecm_ipv6.c | +14 -0
 +		rtnl_net_unlock(&init_net);
 +
 +		/*
-+		 * Acquire each family gate once and retain it across every pass.
-+		 * A new event during synchronize_net() or DB defuncting sets a
-+		 * pending bit; the loop consumes it before releasing either gate.
-+		 */
-+		if (ipv4_pending && !ipv4_stop_held) {
-+			ecm_front_end_ipv4_stop_temp(1);
-+			ipv4_stop_held = true;
-+		}
-+#ifdef ECM_IPV6_ENABLE
-+		if (ipv6_pending && !ipv6_stop_held) {
-+			ecm_front_end_ipv6_stop_temp(1);
-+			ipv6_stop_held = true;
-+		}
-+#endif
-+
-+		/*
-+		 * nf_hook() holds rcu_read_lock() across the complete hook chain.
-+		 * synchronize_net() waits for pre-existing readers to finish.
-+		 * RTNL is deliberately not held across this sleepable wait or DB walk.
++		 * The callback already closed the gate synchronously. Drain all
++		 * pre-existing Netfilter readers before walking the ECM database.
++		 * New events keep their family gate closed and set another pending bit.
 +		 */
 +		synchronize_net();
 +
@@ -197,10 +194,16 @@ NaN
 +
 +	switch (info->family) {
 +	case AF_INET:
++		if (!test_and_set_bit(ECM_DB_FIB_RULE_GATED_IPV4, &ecm_db_fib_rule_gated)) {
++			ecm_front_end_ipv4_stop_temp(1);
++		}
 +		set_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
 +		break;
 +#ifdef ECM_IPV6_ENABLE
 +	case AF_INET6:
++		if (!test_and_set_bit(ECM_DB_FIB_RULE_GATED_IPV6, &ecm_db_fib_rule_gated)) {
++			ecm_front_end_ipv6_stop_temp(1);
++		}
 +		set_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
 +		break;
 +#endif
@@ -237,6 +240,20 @@ NaN
 +		}
 +	}
 +	cancel_work_sync(&ecm_db_fib_rule_work);
++
++	/* No callback can run after unregister; release any gate left by a cancelled worker. */
++	rtnl_net_lock(&init_net);
++	clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
++	if (test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV4, &ecm_db_fib_rule_gated)) {
++		ecm_front_end_ipv4_stop_temp(0);
++	}
++#ifdef ECM_IPV6_ENABLE
++	clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
++	if (test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV6, &ecm_db_fib_rule_gated)) {
++		ecm_front_end_ipv6_stop_temp(0);
++	}
++#endif
++	rtnl_net_unlock(&init_net);
 +}
 +EXPORT_SYMBOL(ecm_db_fib_rule_notifier_stop);
 +
@@ -244,13 +261,13 @@ NaN
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -675,4 +787,5 @@
+@@ -675,4 +773,5 @@
  int ecm_db_init(struct dentry *dentry)
  {
  	int ret = 0;
 +	int route_ret = 0;
  
-@@ -747,20 +860,59 @@
+@@ -747,20 +846,59 @@
  	/*
  	 * register for route table modification events
  	 */
@@ -316,12 +333,12 @@ NaN
 +
  	return ret;
  
-@@ -785,3 +937,4 @@
+@@ -785,3 +923,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
  	DEBUG_INFO("ECM DB Module exit\n");
-@@ -795,19 +948,23 @@
+@@ -795,19 +934,23 @@
  	/*
  	 * unregister for route table update events only if registered.
  	 */
