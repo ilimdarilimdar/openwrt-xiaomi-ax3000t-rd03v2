@@ -19,7 +19,7 @@ The authoritative task list and closure criteria are in [OPEN_ITEMS_REGISTER_RU.
 - Adds nft-backed compatibility packages required by mwan3 with firewall4:
   `iptables-nft`, `ip6tables-nft`, `xtables-nft`, `ipset` and the selected
   xtables extensions.
-- Adds candidate ECM patch 9002 for FIB policy-rule ADD/DEL events. Its atomic
+- Adds experimental ECM patch 9002 for FIB policy-rule ADD/DEL events. Its atomic
   notifier callback queues deferred work; the worker gates the affected ECM
   frontend, waits for network readers, and invalidates accelerated connections
   for the affected address family.
