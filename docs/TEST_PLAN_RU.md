@@ -24,25 +24,25 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Снимок на 16.11.2026. Branch HEAD: `07a4063eb59555ce883970546b5c97f047d65435`; функциональный ECM patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; последняя тестовая ревизия: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
+Snapshot: 2026-11-16. Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 
 | Этап | Текущий подтверждённый результат |
 |---|---|
 | Унаследованная платформа RD03v2/NSS | Подтверждалась upstream-релизом v2.1.3; это не проверяет новые Dual-WAN изменения |
 | mwan3 2.12.5 / LuCI / nft-backed xtables | Выбраны в конфигурации и manifest; пакетная сборка текущей ревизии **NOT CI-VALIDATED** |
-| ECM patch 9002 transactional rollback | Код и source-level regression guards закоммичены; повторный exact apply, compile и fault injection **NOT TESTED** |
-| CI #123/#124 | Проходили source apply/lifecycle guards для более ранней реализации patch 9002 |
-| CI #124 qca-nss-ecm compilation / module packaging | **PASS для более ранней версии patch**; нельзя переносить на `fb88ba4` |
-| CI #124 image generation | **PASS для более ранней версии**; sysupgrade и initramfs-factory созданы |
-| CI #124 final `verify-v2` | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
-| CI #127 | Static + PREPARE_ONLY **PASS**; full-build прерван runner shutdown, exit 143; compile/final verifier не получены |
+| ECM patch 9002 gate-first callback + drain-loop | Реализовано в source candidate; static harness обновлён; exact QSDK apply, compile и execution тестов **NOT TESTED** |
+| Callback behavior | Gate закрывается до pending-bit queue; initial replay queue откладывается до возврата register_fib_notifier; runtime поведение **NOT TESTED** |
+| Worker drain | Pending bits обрабатываются циклом; gate release только после empty snapshot под RTNL; lockdep и fault-injection **NOT TESTED** |
+| CI #123/#124 | Применение/компиляция относятся к более ранним версиям patch 9002 |
+| CI #124 qca-nss-ecm compilation / images | **PASS для более ранней версии patch**; нельзя переносить на 16193bf |
+| CI #124 final verify-v2 | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
+| CI #127 | Static + PREPARE_ONLY **PASS**; full-build прерван runner shutdown, exit 143 |
 | CI #128–#129 | **CANCELLED** до создания jobs |
-| Текущая тестовая ревизия `02ee20e` и branch HEAD `07a4063` | Нового CI run и успешных commit status нет |
-| Manual `workflow_dispatch` | Workflow реализован; реальные dispatch `false` и `true` **NOT TESTED** |
+| Current candidate | Нового CI run и commit status нет; manual dispatch false/true не запускались |
 | Runtime FIB notifier / ECM module lifecycle | **NOT TESTED** |
 | Hardware Dual-WAN/NSS, WAN failover, RTT/loss/throughput | **NOT TESTED** |
 
-Actions API на момент ревизии показывает #129 последним запуском. Последняя UI-проверка фиксировала паузу workflow на fork. CI-образ с временным ключом и `example.invalid` не является релизом и не должен прошиваться.
+The new gate-first implementation is a source candidate only. Actions API still shows #129 as the latest run. The last UI checkpoint reported that workflows on this fork were paused. CI artifacts use a temporary key and example.invalid; they are not releases and must not be flashed.
 
 ### Исторические результаты preflight #106–#108
 
