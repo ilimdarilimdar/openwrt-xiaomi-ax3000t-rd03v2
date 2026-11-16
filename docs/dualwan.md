@@ -20,54 +20,31 @@ The authoritative task list and closure criteria are in
   `iptables-nft`, `ip6tables-nft`, `xtables-nft`, `ipset` and the selected
   xtables extensions.
 - Adds experimental ECM patch 9002 for FIB policy-rule ADD/DEL events. Its
-  atomic notifier callback queues deferred work; the worker gates the affected
-  ECM frontend, waits for network readers, and invalidates accelerated
-  connections for the affected address family.
+  atomic notifier callback closes the affected family's frontend gate on the
+  first event, records a pending bit and queues deferred work after initial
+  FIB replay. The worker drains coalesced events in a loop, waits for network
+  readers and invalidates accelerated connections for each pending family.
 - Adds source preflight and lifecycle guards intended to reproduce the pinned
   OpenWrt patch application path (`patch -f -p1`) against the hash-verified
   QSDK source and after the complete sorted ECM feed patch queue.
 
 ## Current validation status — 2026-11-16
 
-- Working branch: `work/rd03v2-dualwan-mwan3-baseline`; current HEAD:
-  `07a4063eb59555ce883970546b5c97f047d65435`.
-- Functional ECM patch commit: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest source-level test
-  revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
-- Compare `02ee20e` → current HEAD: 19 commits ahead, 0 behind. Changed
-  paths are documentation and the explanatory preface of patch 9002; its C
-  hunks, the preflight script, workflow and firmware configuration are
-  unchanged.
-- The transactional patch revision tracks IPv4/IPv6 route notifier
-  registration independently, preserves the first error, and rolls back DB
-  initialization if route or FIB notifier registration fails. The source
-  guards were updated, but exact QSDK apply, the full 32-patch feed series,
-  current C compilation and fault injection after this change are **NOT TESTED**.
-- CI #123/#124 validated an earlier patch 9002 implementation. CI #124
-  compiled that earlier ECM revision and created sysupgrade/initramfs-factory
-  images, but final `verify-v2` failed (watchdog 20/46 and two AUTOREMOVE
-  source-fingerprint false negatives). Do not transfer that compile PASS to
-  the current rollback patch.
-- CI #127 passed Static and PREPARE_ONLY, but its full build was interrupted
-  by runner shutdown (exit 143). #128/#129 were cancelled before jobs.
-  GitHub Actions API shows #129 as the latest run; no new run/status exists
-  for the current branch HEAD.
-- The workflow contains boolean-gated `workflow_dispatch` (`false` =
-  Static + PREPARE_ONLY; `true` = full build + `verify-v2`), but real
-  manual dispatches have not been run. The last UI status recorded a pause
-  of Actions on this fork.
-- PREPARE_ONLY artifact #124 selected the RD03v2 `qualcommax/ipq50xx`
-  target, mwan3, LuCI mwan3, ECM/NSS and nft-compatible xtables packages.
-  Three unrelated Kconfig diagnostics remained for Qt5 GUI, fwknopd/LuCI
-  fwknopd and squeezelite-custom; those packages were unset. The selected
-  NSS dependency cycle was absent after tree patch 0014.
-- Userspace `conntrack` CLI is **not selected**. `iptables-mod-conntrack-extra`
-  is not that CLI; selective WAN-mark-based conntrack cleanup is not implemented.
-- CI uses a disposable signing key and `example.invalid`; it does not publish
-  installable firmware or a usable package repository. **Do not flash CI images.**
-- Runtime firewall4/mwan3, Dual-WAN failover, conntrack marks, ECM/NSS datapath,
-  throughput, RTT, jitter, packet loss and game traffic are **NOT TESTED**.
-  The primary home router remains on stock MiWiFi; testing is reserved for a
-  second RD03v2 after build and recovery gates pass.
+- Working branch: work/rd03v2-dualwan-mwan3-baseline.
+- Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; preflight/test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+- Candidate 9002 closes per-family gates directly in the atomic callback on the first ADD/DEL event, uses a readiness barrier for initial FIB replay, a drain-loop worker, RTNL-serialized final gate release and teardown cleanup.
+- The callback closes the gate before publishing the pending bit. Repeated events coalesce and do not increment the temporary-stop counter repeatedly. During initial register_fib_notifier replay the callback does not queue work; after successful return the caller arms ready and schedules one worker.
+- Live rule ADD/DEL callbacks run under per-net RTNL. Worker uses the same RTNL lock for pending snapshot and final empty-check/gate release; it does not hold RTNL across synchronize_net() or the ECM DB walk.
+- This is **NOT CI-VALIDATED**. Exact pinned QSDK archive apply, complete sorted 32-patch feed queue, current C compilation, fault injection, lockdep/KASAN and runtime stress have not been executed. RTNL → ECM frontend spinlock ordering must be checked with lockdep.
+- CI #123/#124 apply/source guards and #124 compile/image generation refer to an earlier patch version. #124 final verify-v2 failed (watchdog 20/46 and two AUTOREMOVE source-fingerprint false negatives).
+- #127 passed Static/PREPARE_ONLY but full-build was interrupted by runner shutdown (exit 143); #128/#129 were cancelled before jobs. API latest remains #129; no Actions run/status for this new candidate.
+- workflow_dispatch exists with full_build=false/true, but manual dispatch has not run. Last UI checkpoint reported Actions paused for this fork.
+- PREPARE_ONLY artifact #124 selected RD03v2 qualcommax/ipq50xx, mwan3, LuCI mwan3, ECM/NSS and nft-compatible xtables packages. Three unrelated Kconfig diagnostics remained for Qt5 GUI, fwknopd/LuCI fwknopd and squeezelite-custom; those packages were unset. Selected NSS dependency cycle was absent after tree patch 0014.
+- Userspace conntrack CLI is **not selected**. iptables-mod-conntrack-extra is not that CLI; selective WAN-mark-based conntrack cleanup is not implemented.
+- CI uses a disposable signing key and example.invalid; it does not publish installable firmware. **Do not flash CI images.**
+- Runtime firewall4/mwan3, Dual-WAN failover, conntrack marks, ECM/NSS datapath, throughput, RTT, jitter, packet loss and game traffic are **NOT TESTED**. Primary home router remains on stock MiWiFi; testing is reserved for a second RD03v2 after build and recovery gates pass.
+
 
 ## v1.x reference and the separate v2 port
 
