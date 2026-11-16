@@ -81,10 +81,10 @@ jobs:
 
           workflow = Path(".github/workflows/rd03v2-validation.yml").read_text()
           required = [
-              "  workflow_dispatch:\\n",
-              "      full_build:\\n",
-              "        type: boolean\\n",
-              "        default: false\\n",
+              "workflow_dispatch:",
+              "full_build:",
+              "type: boolean",
+              "default: false",
               "github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/work/rd03v2-dualwan-mwan3-baseline'",
               "github.event_name == 'workflow_dispatch' && inputs.full_build == true",
               "github.ref == 'refs/heads/work/rd03v2-dualwan-mwan3-baseline'",
