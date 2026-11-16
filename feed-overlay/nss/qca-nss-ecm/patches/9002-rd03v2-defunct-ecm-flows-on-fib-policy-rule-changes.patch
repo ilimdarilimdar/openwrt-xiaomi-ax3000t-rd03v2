@@ -21,7 +21,7 @@ the host path and be re-accelerated. It does not promise preservation of
 conntrack/NAT sessions across a public-WAN change.
 
 ---
-ecm_db/ecm_db.c | +167 -0
+ecm_db/ecm_db.c | +199 -0
 ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
@@ -30,7 +30,7 @@ frontends/include/ecm_front_end_ipv4.h | +1 -1
 frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
- 9 files changed, 200 insertions(+), 36 deletions(-)
+9 files changed, 234 insertions(+), 36 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
@@ -45,7 +45,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +#include <linux/netdevice.h>
  #include <linux/inet.h>
  #include <linux/in.h>
-@@ -469,9 +474,149 @@
+@@ -469,9 +474,177 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -191,11 +191,39 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +}
 +EXPORT_SYMBOL(ecm_db_fib_rule_notifier_stop);
 +
++/*
++ * ecm_db_fib_rule_notifier_fail_closed()
++ * Keep ECM frontends stopped if the FIB notifier cannot be registered.
++ */
++static void ecm_db_fib_rule_notifier_fail_closed(int error)
++{
++	/*
++	 * Initial FIB replay may already have queued work before registration
++	 * reports an error. Hold the stop gates before draining that work; a
++	 * running worker can release only the stop reference that it acquired.
++	 */
++	ecm_front_end_ipv4_stop_temp(1);
++#ifdef ECM_IPV6_ENABLE
++	ecm_front_end_ipv6_stop_temp(1);
++#endif
++	cancel_work_sync(&ecm_db_fib_rule_work);
++	clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending);
++#ifdef ECM_IPV6_ENABLE
++	clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending);
++#endif
++	synchronize_net();
++	ecm_db_connection_defunct_ip_version(4);
++#ifdef ECM_IPV6_ENABLE
++	ecm_db_connection_defunct_ip_version(6);
++#endif
++	printk(KERN_ERR "ECM: FIB notifier registration failed (%d); ECM frontends remain disabled and traffic uses the Linux datapath\n", error);
++}
++
  /*
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -763,4 +908,24 @@
+@@ -763,4 +936,29 @@
  	}
  #endif
 +
@@ -207,20 +235,25 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +
 +	/*
 +	 * Register for policy-rule modifications (used by mwan3 and other
-+	 * policy-routing managers). Failure is non-fatal, but without this
-+	 * notifier ECM cannot invalidate accelerated flows on rule-only changes.
++	 * policy-routing managers). Keep the route-notifier result in ret;
++	 * a FIB registration failure must not silently leave ECM acceleration
++	 * active without a policy-rule invalidation callback.
 +	 */
-+	if (register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)) {
-+		cancel_work_sync(&ecm_db_fib_rule_work);
-+		printk(KERN_WARNING "ECM: failed to register FIB rule notifier; policy-rule changes will not defunct accelerated connections\n");
-+	} else {
-+		ecm_db_fib_rule_registered = true;
-+		printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\n");
++	{
++		int fib_ret;
++
++		fib_ret = register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL);
++		if (fib_ret) {
++			ecm_db_fib_rule_notifier_fail_closed(fib_ret);
++		} else {
++			ecm_db_fib_rule_registered = true;
++			printk(KERN_INFO "ECM: policy routing rule changes defunct accelerated connections\n");
++		}
 +	}
 +
  	return ret;
  
-@@ -785,3 +950,4 @@
+@@ -785,3 +983,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
@@ -228,27 +261,27 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 diff --git a/ecm_db/ecm_db.h b/ecm_db/ecm_db.h
 --- a/ecm_db/ecm_db.h
 +++ b/ecm_db/ecm_db.h
-@@ -45,2 +45,3 @@
+@@ -45,2 +244,3 @@
  int ecm_db_init(struct dentry *dentry);
 +void ecm_db_fib_rule_notifier_stop(void);
  void ecm_db_exit(void);
 diff --git a/ecm_init.c b/ecm_init.c
 --- a/ecm_init.c
 +++ b/ecm_init.c
-@@ -307,2 +307,3 @@
+@@ -307,2 +507,3 @@
  err_ct:
 +	ecm_db_fib_rule_notifier_stop();
  #ifdef ECM_IPV6_ENABLE
-@@ -310,3 +311,4 @@
+@@ -310,3 +511,4 @@
  err_fe_ipv6:
  #endif
 +	ecm_db_fib_rule_notifier_stop();
  	ecm_front_end_ipv4_exit();
-@@ -313,2 +315,3 @@
+@@ -313,2 +515,3 @@
  err_fe_ipv4:
 +	ecm_db_fib_rule_notifier_stop();
  #ifdef ECM_INTERFACE_BOND_ENABLE
-@@ -381,8 +384,9 @@
+@@ -381,8 +584,9 @@
  static void __exit ecm_exit(void)
  {
  	printk(KERN_INFO "ECM exit\n");
@@ -261,7 +294,7 @@ diff --git a/ecm_init.c b/ecm_init.c
 diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 --- a/frontends/ecm_front_end_ipv4.c
 +++ b/frontends/ecm_front_end_ipv4.c
-@@ -58,8 +58,4 @@
+@@ -58,8 +262,4 @@
  extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
  
 -/*
@@ -270,7 +303,7 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 -atomic_t ecm_front_end_ipv4_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
  
  /*
-@@ -428,19 +424,6 @@
+@@ -428,19 +628,6 @@
  }
  
 -/*
@@ -293,7 +326,7 @@ diff --git a/frontends/ecm_front_end_ipv4.c b/frontends/ecm_front_end_ipv4.c
 diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 --- a/frontends/ecm_front_end_ipv6.c
 +++ b/frontends/ecm_front_end_ipv6.c
-@@ -59,8 +59,4 @@
+@@ -59,8 +246,4 @@
  extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
  
 -/*
@@ -302,7 +335,7 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 -atomic_t ecm_front_end_ipv6_stopped_temp = ATOMIC_INIT(0);	/* When non-zero further traffic/process will not be processed where it is checked */
  
  /*
-@@ -503,19 +499,6 @@
+@@ -503,19 +686,6 @@
  }
  
 -/*
@@ -325,7 +358,7 @@ diff --git a/frontends/ecm_front_end_ipv6.c b/frontends/ecm_front_end_ipv6.c
 diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_front_end_ipv4.h
 --- a/frontends/include/ecm_front_end_ipv4.h
 +++ b/frontends/include/ecm_front_end_ipv4.h
-@@ -19,3 +19,3 @@
+@@ -19,3 +189,3 @@
  extern int ecm_front_end_ipv4_stopped;	/* When non-zero further traffic will not be processed */
 -extern atomic_t ecm_front_end_ipv4_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
 +extern void ecm_front_end_ipv4_stop_temp(int num);
@@ -333,7 +366,7 @@ diff --git a/frontends/include/ecm_front_end_ipv4.h b/frontends/include/ecm_fron
 diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_front_end_ipv6.h
 --- a/frontends/include/ecm_front_end_ipv6.h
 +++ b/frontends/include/ecm_front_end_ipv6.h
-@@ -19,3 +19,3 @@
+@@ -19,3 +189,3 @@
  extern int ecm_front_end_ipv6_stopped;	/* When non-zero further traffic will not be processed */
 -extern atomic_t ecm_front_end_ipv6_stopped_temp;	/* When non-zero further traffic/process will not be processed where it is checked */
 +extern void ecm_front_end_ipv6_stop_temp(int num);
@@ -341,14 +374,14 @@ diff --git a/frontends/include/ecm_front_end_ipv6.h b/frontends/include/ecm_fron
 diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 --- a/frontends/cmn/ecm_ipv4.c
 +++ b/frontends/cmn/ecm_ipv4.c
-@@ -12,5 +12,6 @@
+@@ -12,5 +182,6 @@
  #include <linux/tcp.h>
  #include <linux/module.h>
 +#include <linux/atomic.h>
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/kthread.h>
-@@ -96,7 +97,20 @@
+@@ -96,7 +267,20 @@
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
   */
  DEFINE_SPINLOCK(ecm_ipv4_lock);			/* Protect against SMP access between netfilter, events and private threaded function. */
@@ -372,13 +405,13 @@ diff --git a/frontends/cmn/ecm_ipv4.c b/frontends/cmn/ecm_ipv4.c
 diff --git a/frontends/cmn/ecm_ipv6.c b/frontends/cmn/ecm_ipv6.c
 --- a/frontends/cmn/ecm_ipv6.c
 +++ b/frontends/cmn/ecm_ipv6.c
-@@ -13,4 +13,5 @@
+@@ -13,4 +197,5 @@
  #include <linux/module.h>
 +#include <linux/atomic.h>
  #include <linux/skbuff.h>
  #include <linux/icmp.h>
  #include <linux/debugfs.h>
-@@ -100,9 +101,22 @@
+@@ -100,9 +285,22 @@
  /*
   * Locking of the classifier - concurrency control for file global parameters.
   * NOTE: It is safe to take this lock WHILE HOLDING a feci->lock.  The reverse is NOT SAFE.
