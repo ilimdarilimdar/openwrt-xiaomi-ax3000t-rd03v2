@@ -24,30 +24,25 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Снимок состояния на 16.11.2026 по GitHub Actions и рабочей ветке
-`work/rd03v2-dualwan-mwan3-baseline`. ECM source patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
+Снимок на 16.11.2026. Branch HEAD: `07a4063eb59555ce883970546b5c97f047d65435`; функциональный ECM patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; последняя тестовая ревизия: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`.
 
-| Этап | Результат |
+| Этап | Текущий подтверждённый результат |
 |---|---|
-| CI #124 Static checks | **PASS** |
-| CI #124 PREPARE_ONLY + QSDK raw apply + full 32-patch ECM queue + lifecycle/atomic guards | **PASS** |
-| CI #124 qca-nss-ecm C compilation and module packaging | **PASS** |
-| CI #124 sysupgrade + initramfs-factory image generation | **PASS** |
-| FIB notifier marker inside image `ecm.ko`; 223 rootfs packages | **PASS** |
-| CI #124 final `verify-v2` | **FAIL**: watchdog suite (20 PASS / 26 FAIL) + two ECM source fingerprint false negatives after AUTOREMOVE |
-| CI #125–#126 | **FAIL before PREPARE_ONLY**: `git diff --check` found an extra blank line at EOF in the handoff; fixed by `e31ca88` |
-| CI #127 Static checks + PREPARE_ONLY on `faa82e24` | **PASS**: source preflight and ordered ECM patch queue passed |
-| CI #127 full-build | **CANCELLED / interrupted**: runner shutdown, exit code 143 during `./build.sh`; no compile or final verifier result |
-| CI #128–#129 | **CANCELLED before jobs were created** |
-| Watchdog absolute-stub dispatch (`f372d519`, `0d2aeadb`) | Static checks **PASS** in #127; watchdog runtime suite **NOT CI-VALIDATED** |
-| ECM AUTOREMOVE fallback and explicit config guard (`e7846a1`, `49d3579`) | **NOT CI-VALIDATED** on current code/test HEAD |
-| ECM source patch `fb88ba4` + latest test revision `02ee20e` | Route/FIB notifier transactional rollback and per-family guards committed; exact source apply/build **NOT TESTED** after update |
-| GitHub Actions after #129 | **PAUSED**: Actions page says workflows are not currently being run on this fork due to Actions usage scale |
-| Manual `workflow_dispatch` false/true | Workflow implementation added; real UI dispatch **NOT TESTED** until Actions are re-enabled |
-| Route/FIB notifier rollback | Source guards added for first-error preservation and per-family cleanup; fault injection and runtime teardown **NOT TESTED** |
-| Completed CI on source/test revisions `fb88ba4` / `02ee20e` | **NO RUN visible**; GitHub Actions paused on fork |
-| Runtime module load on RD03v2 | **NOT TESTED** |
-| Hardware Dual-WAN/NSS failover and stress | **NOT TESTED** |
+| Унаследованная платформа RD03v2/NSS | Подтверждалась upstream-релизом v2.1.3; это не проверяет новые Dual-WAN изменения |
+| mwan3 2.12.5 / LuCI / nft-backed xtables | Выбраны в конфигурации и manifest; пакетная сборка текущей ревизии **NOT CI-VALIDATED** |
+| ECM patch 9002 transactional rollback | Код и source-level regression guards закоммичены; повторный exact apply, compile и fault injection **NOT TESTED** |
+| CI #123/#124 | Проходили source apply/lifecycle guards для более ранней реализации patch 9002 |
+| CI #124 qca-nss-ecm compilation / module packaging | **PASS для более ранней версии patch**; нельзя переносить на `fb88ba4` |
+| CI #124 image generation | **PASS для более ранней версии**; sysupgrade и initramfs-factory созданы |
+| CI #124 final `verify-v2` | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
+| CI #127 | Static + PREPARE_ONLY **PASS**; full-build прерван runner shutdown, exit 143; compile/final verifier не получены |
+| CI #128–#129 | **CANCELLED** до создания jobs |
+| Текущая тестовая ревизия `02ee20e` и branch HEAD `07a4063` | Нового CI run и успешных commit status нет |
+| Manual `workflow_dispatch` | Workflow реализован; реальные dispatch `false` и `true` **NOT TESTED** |
+| Runtime FIB notifier / ECM module lifecycle | **NOT TESTED** |
+| Hardware Dual-WAN/NSS, WAN failover, RTT/loss/throughput | **NOT TESTED** |
+
+Actions API на момент ревизии показывает #129 последним запуском. Последняя UI-проверка фиксировала паузу workflow на fork. CI-образ с временным ключом и `example.invalid` не является релизом и не должен прошиваться.
 
 ### Исторические результаты preflight #106–#108
 
