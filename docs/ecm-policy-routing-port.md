@@ -121,16 +121,18 @@ v1 reference in a critical API detail:
 
 - v2 exports `ecm_front_end_ipv4_stop_temp(int)` and
   `ecm_front_end_ipv6_stop_temp(int)`. In the **pinned QSDK 14.0 source**,
-  these helpers originally assign a plain integer 0/1 flag; they are **not**
-  atomic nesting counters. That is unsafe when the route-table notifier,
-  interface notifier and the new FIB-rule worker overlap: one caller can
-  clear the flag while another caller is still defuncting connections.
-- Candidate patch 9002 now converts each flag to `atomic_t`. A non-zero
-  argument uses `atomic_inc()`; zero uses `atomic_dec_if_positive()`, and
-  all six IPv4/IPv6 packet-hook checks use `atomic_read()`. This makes the
-  temporary stop a balanced nesting gate across concurrent users and guards
-  against a negative count. The preflight checks both the raw pinned source
-  and the result after the complete feed patch series.
+  both temporary-stop states are already `atomic_t`; packet hooks read them
+  with `atomic_read()`. The defect was narrower: the original helper used a
+  check-then-`atomic_dec()` release without taking the family lock, while
+  packet-hook reads were protected by that lock. The update and read paths
+  therefore did not share one synchronization domain, and overlapping stop
+  callers could race while releasing the gate.
+- Patch 9002 moves each existing atomic counter and helper into the matching
+  common frontend source beside its family lock. The helper takes that lock,
+  uses `atomic_inc()` for stop and `atomic_dec_if_positive()` for release,
+  then unlocks. The six packet-hook `atomic_read()` checks remain in place
+  because they were already protected by the same locks. The preflight checks
+  the raw pinned source and the result after the complete feed patch series.
 - The helper still is **not a quiescence barrier**: it prevents new processing
   only at the call sites that check the flag and does not wait for already
   executing packet hooks to exit. It is not the old v1
@@ -185,26 +187,39 @@ Evidence:
 
 
 
-### Текущая ревизия после route/FIB rollback — 2026-11-16
+### Current source revision and validation state — 2026-11-16
 
-Functional source patch: `fb88ba491df72d6d37e974a44f739d296c87ee0d`. Latest source-level test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Patch preface was clarified later in `f72db08`; the C hunk bodies were not changed by that documentation-only patch update.
+Functional source patch commit: `fb88ba491df72d6d37e974a44f739d296c87ee0d`. Latest source-level
+regression test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Current branch HEAD:
+`07a4063eb59555ce883970546b5c97f047d65435`. Compare from test revision to branch HEAD is 19 commits ahead,
+0 behind; executable C-hunks, preflight script, workflow and firmware config
+are unchanged after the test revision. The later patch edit changes only
+explanatory header text.
 
-The latest patch additionally tracks successful IPv4/IPv6 route notifier registration independently and preserves the first route-registration error. Route init failure invokes `ecm_db_exit()` before returning; FIB notifier registration happens only after route init succeeds, and its failure also rolls back the DB. The per-family route flags prevent unregistering a family that never registered.
+The patch tracks IPv4/IPv6 route notifier registration independently and
+preserves the first route-registration error. A route notifier failure calls
+`ecm_db_exit()` before returning; FIB notifier registration occurs only
+after route notifier success, and its failure rolls back the DB and returns
+`fib_ret`. Per-family flags prevent unregistering a notifier that never
+registered.
 
-This revision has **not** yet been applied to the exact pinned QSDK archive after the complete 32-patch feed series and has **not** been compiled. GitHub Actions is paused on this fork; the current branch HEAD has no commit status or workflow run. The PASS evidence above belongs to the older CI #123/#124 source revision, not to `fb88ba4`/`02ee20e`.
+**Current revision validation:** exact pinned QSDK archive apply, complete
+32-patch feed series, C compilation and fault injection after this rollback
+change are **NOT TESTED**. CI #123/#124 apply/source guards and #124 compile
+refer to the earlier implementation, not this source revision. #127 passed
+Static/PREPARE_ONLY but was interrupted during full build (exit 143); #128/#129
+were cancelled before jobs. No CI run/status is associated with current HEAD.
 
 The current preflight script is `tools/test-ecm-fib-rule-patch.sh`. It reads
-the source version/commit/archive URL/SHA from the pinned feed Makefile,
-hash-verifies the QSDK archive, applies 9002 with the same `patch -f -p1`
-semantics as OpenWrt, and checks the full ordered feed series and lifecycle
-invariants. The `verify-v2.sh` marker check proves that the registration
-string is present in the built image module; it does not prove runtime
-registration on a router.
+source version, commit, archive URL and SHA from the pinned feed Makefile,
+hash-verifies the QSDK archive, applies 9002 with OpenWrt's `patch -f -p1`
+semantics, and checks the ordered feed series and lifecycle invariants. The
+image marker check proves only that the registration string is present in
+`ecm.ko`; it does not prove runtime notifier registration.
 
-Patch 9002 is therefore **source-preflight PASS and compile/image PASS on
-CI #124's older code/test revision; latest verifier fixes NOT CI-VALIDATED;
-runtime/hardware NOT TESTED**. Do not call the feature production-ready or
-NSS-safe yet.
+Runtime notifier behavior, module lifecycle and hardware Dual-WAN/NSS
+acceptance remain **NOT TESTED**. Do not describe this patch as compiled at
+its current revision, production-ready or NSS-safe.
 
 ## Remaining v2 validation checklist
 
@@ -231,8 +246,9 @@ a policy rule changes. This is deliberately broad and may cause a short
 slow-path/re-acceleration interval. It must be measured on the current v2
 source and hardware before inclusion in a flashable image.
 
-No v2 ECM patch is implemented by this document. It records the next
-engineering step and the evidence required to accept it.
+The v2 ECM patch is implemented in the active feed overlay. This document
+records its rationale, source review and acceptance criteria; it does not
+constitute runtime validation or a release approval.
 
 
 ## Linux 6.18: initial FIB dump and replay
@@ -291,7 +307,7 @@ Primary Linux 6.18 source references:
 - [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
 - [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
 
-## Current preflight/build status — 2026-11-16
+## Historical preflight/build evidence — CI #123/#124 and #127 (2026-11-16)
 
 Pinned QSDK 14.0 source:
 - source commit: `7894b769eeb64f1c44fde547a107a8b866997590`;
@@ -302,9 +318,9 @@ Pinned QSDK 14.0 source:
 - CI #124: the same preflight/source guards PASS; `qca-nss-ecm` compiled, `kmod-qca-nss-ecm` entered rootfs, image marker found, sysupgrade and initramfs-factory images created.
 - CI #124 final `verify-v2`: FAIL on watchdog 20/46 and source-fingerprint checks for 9001/9002 after AUTOREMOVE.
 - CI #127: Static and PREPARE_ONLY PASS; full build interrupted by runner shutdown (exit 143). #128/#129 cancelled before jobs.
-- Current code/test HEAD `49d3579`: no separate workflow run or commit status. Runtime/module/hardware verification remains NOT TESTED.
+- The source/test revisions after CI #124, including current patch `fb88ba4` and tests `02ee20e`, have no completed CI run. Runtime/module/hardware verification remains NOT TESTED.
 
-A successful source-preflight and the older CI #124 compile/image result do not validate the later verifier fixes or runtime notifier behavior. The exact current CI status and all remaining tasks are maintained in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
+The historical source-preflight and CI #124 compile/image result do not validate the current transactional rollback patch or runtime notifier behavior. The exact current CI status and all remaining tasks are maintained in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
 ## Concurrent temporary-stop accounting — corrected source audit, 2026-11-15
 
