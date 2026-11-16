@@ -28,18 +28,29 @@ from this branch has passed hardware tests.
 ## Latest validation snapshot — 2026-11-16
 
 - Working branch: `work/rd03v2-dualwan-mwan3-baseline`.
-- Current code/test HEAD: `bb3d25b8d80844cd32d5bb71ec1bb090f286bc10`
-  (test-only assertion for exact worker-drain position in `ecm_exit()`).
+- Current code/test HEAD: `49d3579437389e2ffc111b94a08839ef7bd29ae7`.
+  Documentation-only commits after it update the handoff and CI record.
 - Functional ECM patch 9002 revision: `c875a7f71c28209118f5668ae823d78e4e1433d5`.
 - [CI #124](https://github.com/ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2/actions/runs/43762944141):
-  Static checks **PASS**; PREPARE_ONLY **PASS**; raw QSDK patch application,
-  all 32 ordered ECM feed patches and notifier/lifecycle guards **PASS**.
-- The Full signed-image build and `verify-v2` job in #124 remains **IN PROGRESS**.
-  Compilation of `qca-nss-ecm`, the notifier marker inside the built `ecm.ko`,
-  final image checks and `verify-v2` are **NOT CONFIRMED** yet.
-- PREPARE_ONLY artifact ID `14181217573` confirms the RD03v2
+  Static **PASS**; PREPARE_ONLY **PASS**; raw QSDK application, all 32 ordered ECM
+  feed patches, notifier/lifecycle guards and atomic-callback guards **PASS**.
+- The full build **completed image generation**: `qca-nss-ecm` compiled,
+  `kmod-qca-nss-ecm` is in the rootfs, and the FIB notifier marker is present
+  in the image's `ecm.ko`. Both sysupgrade and initramfs-factory images were
+  created; the verifier counted 223 installed packages.
+- Final workflow #124 is **FAIL**, not IN PROGRESS. `verify-v2` reported
+  three failures: 26 watchdog scenarios, and false-negative source fingerprints
+  for ECM patch 9001 and 9002 after `CONFIG_AUTOREMOVE=y` removed the package
+  source tree. Detailed logs: build artifact `14184373198`.
+- Follow-up commits fixed BusyBox applet dispatch in watchdog tests
+  (`f372d519`, `0d2aeadb`), added an AUTOREMOVE-aware ECM source-presence
+  check (`e7846a1`) and require `CONFIG_AUTOREMOVE=y` before accepting its
+  feed-copy fallback (`49d3579`). Those changes are **NOT CI-VALIDATED**:
+  runs #127–#129 were cancelled and no run/status is associated with HEAD
+  `49d3579` at the latest live check.
+- PREPARE_ONLY artifact `14181217573` confirms the RD03v2
   `qualcommax/ipq50xx` target and selection of mwan3, LuCI mwan3,
-  `kmod-qca-nss-ecm`, NSS DWMAC helper, and nft-compatible xtables packages.
+  `kmod-qca-nss-ecm`, NSS DWMAC helper and nft-compatible xtables packages.
   Three unrelated Kconfig recursive-dependency diagnostics remain (Qt5 GUI,
   fwknopd/LuCI fwknopd and squeezelite-custom); these packages are not selected
   in the resulting `.config`. The previously selected NSS dependency cycle is
@@ -48,10 +59,6 @@ from this branch has passed hardware tests.
   `iptables-mod-conntrack-extra` package is not that CLI; selective
   WAN-mark-based conntrack cleanup is a separate future feature and is not
   implemented.
-- Earlier failures in #107–#122 were patch-application or lifecycle-preflight
-  iterations. The current pinned-source and full-series gates are superseded
-  by the passing #123/#124 checks; retain the older runs as debugging history,
-  not as the current status.
 - The full-build workflow uses a disposable CI signing key and
   `example.invalid`; it uploads logs/configuration only and does not publish
   installable firmware or a usable package repository. **Do not flash any CI
