@@ -7,12 +7,15 @@ Defunct accelerated connections of the affected address family so their next
 packets are routed using the current policy rules.
 
 The FIB notifier callback is atomic, so it only sets a pending family bit and
-queues work. The worker closes the affected v2 frontend stop gate, waits for
-pre-existing Netfilter hook readers with `synchronize_net()`, and then runs
-the existing process-context connection defunct routine. The pinned QSDK
-source's temporary-stop counters are moved beside the common frontend locks
-and updated with a guarded decrement, so stop updates share synchronization
-with packet-hook stop-state checks.
+queues work after the initial FIB dump/replay has completed. The worker drains
+all coalesced rule changes in a loop and keeps each affected v2 frontend stop
+gate closed across passes. It opens the gates only after an empty-pending check
+serialized under RTNL with live rule ADD/DEL callbacks. Each pass waits for
+pre-existing Netfilter hook readers with `synchronize_net()` before running
+the process-context connection defunct routine. The pinned QSDK source's
+temporary-stop counters are moved beside the common frontend locks and
+updated with a guarded decrement, so stop updates share synchronization with
+packet-hook stop-state checks.
 
 Route notifier registration is also made transactional. IPv4 and IPv6 results
 are kept separate, the first error is preserved, and each successful
