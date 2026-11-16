@@ -5,15 +5,15 @@
 **Дата ревизии:** 2026-11-16
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`
-**Current source/test candidate:** ECM patch code commit 16193bfb29eecca103a370270458a779403ac619; test-harness commit 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Patch blob 7807d27f592dca0585267285a7adb487e47b6b2c; test blob 9dc9a29bb93459cc42f0c16155475bf88950ce44. Gate-first callback and drain-loop implementation is committed but has not passed exact QSDK archive apply or C compilation.
+**Current source/test candidate:** ECM implementation commit 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair commit f9f33b314ef11ad42037ad81de18e05f6e0e11f3; test-harness commit 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Current patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob 9dc9a29bb93459cc42f0c16155475bf88950ce44. Gate-first callback and drain-loop implementation is committed but has not passed exact QSDK archive apply or C compilation.
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
 
 ## Текущая контрольная точка — 2026-11-16
 
 - Рабочая ветка: work/rd03v2-dualwan-mwan3-baseline.
-- Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
-- Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+- Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-file envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 - Candidate 9002 закрывает per-family gate непосредственно в atomic callback на первом ADD/DEL событии, использует readiness barrier для initial FIB replay, drain-loop worker, RTNL-serialized final gate release и teardown cleanup.
 - Callback закрывает gate до публикации pending bit. Повторные события coalesce и не увеличивают temporary-stop counter повторно. Во время initial register_fib_notifier replay callback не queue-ит worker; после успешного return caller выставляет ready и ставит один worker.
 - Worker обрабатывает pending IPv4/IPv6 bits циклом и открывает gates только после пустого pending snapshot под per-net RTNL. Teardown disarm-ит queueing, unregister-ит notifier, drain/cancel-ит work и очищает остаточные gated/pending state.
@@ -188,7 +188,7 @@ Pinned QSDK 14.0 инициализирует ECM DB до IPv4/IPv6 packet front
 
 **Что ещё требуется:** на точном QSDK archive проверить применение patch 9002 после полной сортированной ECM patch series; проверить raw `patch -f -p1` и offsets; собрать `qca-nss-ecm`; добавить/выполнить fault injection отдельно для IPv4 route notifier, IPv6 route notifier и FIB notifier; подтвердить first-error propagation, rollback только успешных notifier, drain worker, освобождение DB без leak/oops/deadlock и нормальную повторную загрузку модуля.
 
-**Текущий статус:** transactional registration rollback дополнен gate-first callback/drain-loop в patch code commit 16193bfb29eecca103a370270458a779403ac619; source guards обновлены в test commit 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Unified-diff structure checks passed during authoring, но exact archive apply/full-series preflight, C compilation, runtime fault injection и module load/unload — **NOT TESTED**. ECM-05 остаётся открытым до CI и fault-injection evidence.
+**Текущий статус:** transactional registration rollback дополнен gate-first callback/drain-loop в patch code commit 16193bfb29eecca103a370270458a779403ac619; source guards обновлены в test commit 6062e9086f2fa05c1f4c3aff4a925068b47f399a. Self-audit выявил повреждённую metadata envelope (дублированный stat-блок) и stray NaN/0 перед DECLARE_WORK; исправлено в f9f33b314ef11ad42037ad81de18e05f6e0e11f3. Строгая проверка envelope/hunk counts после исправления PASS (9 sections, 22 hunks); exact archive apply/full-series preflight, C compilation, runtime fault injection и module load/unload — **NOT TESTED**. ECM-05 остаётся открытым до CI и fault-injection evidence.
 
 ### ECM-06 — Gate-first FIB callback и drain всех pending worker passes
 
