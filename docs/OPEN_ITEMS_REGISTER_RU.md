@@ -5,20 +5,22 @@
 **Дата полной ревизии:** 2026-11-16  
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`  
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`  
-**Code/test baseline:** `f00d6c68a9f5b6962c88f1ebc2cf22625d4be211` (test-only IPv6 fail-closed and route-notifier return guards; source patch at `c586d83e02537d17b1595f5026944e088d7e6f6e`) (fail-closed ECM FIB notifier handling + corrected per-file patch hunk offsets)  
+**Code/test baseline:** ECM source patch `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791` (per-family route notifier state, first-error preservation, rollback guards and exact `ret` identifier checks)  
 **Branch HEAD в начале исходной ревизии:** `e81dbad389ad558e72aab6c23295c72299a6d7fe` (исторический снимок до документальных коммитов, добавивших этот реестр).  
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
 
-## Live checkpoint после ECM fail-closed и CI dispatch updates — 2026-11-16
+## Live checkpoint после транзакционного ECM notifier rollback — 2026-11-16
 
-- ECM source patch commit: `c586d83e02537d17b1595f5026944e088d7e6f6e`; latest test commit: `f00d6c68a9f5b6962c88f1ebc2cf22625d4be211` (тестовый guard добавил обязательную IPv6 gate/pending/defunct sequence и сохранение `return ret`). Source/config changes не было после patch commit.
-- В patch 9002 результат `register_fib_notifier()` сохраняется в отдельном `fib_ret`, не меняя `ret` от IPv4/IPv6 route-notifier init. При ошибке вызывается fail-closed helper: он удерживает IPv4/IPv6 ECM stop gates закрытыми, дожидается/отменяет worker, очищает pending bits, вызывает `synchronize_net()`, defunct-ит существующие IPv4/IPv6 ECM connections и оставляет трафик на штатном Linux datapath. Это деградация без NSS ECM acceleration, а не попытка продолжать небезопасный offload.
-- `tools/test-ecm-fib-rule-patch.sh` проверяет отдельный `fib_ret`, сохранение `return ret`, fail-closed sequence IPv4 и IPv6. Сам preflight, compile и fault injection после изменения **не запускались**.
-- Workflow теперь имеет `workflow_dispatch` с boolean `full_build`: `false` — Static + PREPARE_ONLY; `true` — дополнительно full-build + `verify-v2`. Manual dispatch ограничен рабочей веткой. Push с `[full-build]` сохраняет прежнюю семантику.
-- Live Actions page показывает: “Workflows are not currently being run on this fork due to the scale of GitHub Actions usage.” На момент этой проверки новых запусков после #129 нет. GitHub сообщает, что maintainer может повторно включить workflows; без этого автоматический/ручной CI запуск не подтверждается.
-- CI-образы остаются временными: ephemeral P-256 signing key, `example.invalid` package URL, публикация образов отключена. Ни одна новая сборка не считается PASS.
-- Runtime FIB registration/failure injection, реальный ECM/NSS datapath и Dual-WAN на RD03v2 — **NOT TESTED**. Основной домашний роутер остаётся на stock MiWiFi.
+- ECM source patch commit: `fb88ba491df72d6d37e974a44f739d296c87ee0d`; latest test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Последний patch header sync — documentation-only.
+- Patch 9002 хранит результат регистрации FIB notifier отдельно в `fib_ret`. Но исправление шире: IPv4 и IPv6 route notifier получают отдельные `route_ret` и флаги `*_route_registered`; первая ошибка сохраняется, поздняя успешная регистрация другого семейства её не затирает. При ошибке route notifier `ecm_db_init()` вызывает `ecm_db_exit()` и возвращает ошибку до регистрации FIB notifier. При ошибке FIB notifier выполняется такой же DB rollback и возвращается `fib_ret`.
+- `ecm_db_exit()` unregister-ит только те IPv4/IPv6 route notifier, для которых зарегистрирован соответствующий флаг, вызывает FIB notifier stop/drain до DB termination и затем освобождает DB.
+- Причина выбора rollback: pinned QSDK 14.0 `ecm_init()` вызывает `ecm_db_init()` до `ecm_front_end_ipv4/ipv6_init()` и до conntrack notifier init. Ошибка notifier на этой стадии может сорвать module init до того, как данный ECM instance установит packet hooks и начнёт ускорять flows. Предыдущий вариант с постоянно закрытыми frontend stop gates удалён.
+- `tools/test-ecm-fib-rule-patch.sh` теперь проверяет per-family route result, first-error order, actual-registration flags, rollback ordering, FIB notifier cleanup и non-overlapping unified-diff hunks. В отдельной структурной ревизии patch содержит 9 file sections и 22 hunks с корректными line counts/offsets и без перекрытия. Сам script, exact QSDK archive apply, full 32-patch series, C compile и fault injection после правки **не запускались**.
+- Workflow имеет `workflow_dispatch` с boolean `full_build`: `false` — Static + PREPARE_ONLY; `true` — дополнительно full-build + `verify-v2`. Manual dispatch ограничен рабочей веткой; push с `[full-build]` сохранён.
+- Live Actions page показывает: “Workflows are not currently being run on this fork due to the scale of GitHub Actions usage.” Новых запусков после #129 нет; maintainer должен повторно включить Actions. Поэтому workflow и новые source/test commits не получили CI результата.
+- CI-образы остаются временными: ephemeral P-256 key, `example.invalid` package URL, публикация образов отключена. Никакая новая сборка не считается PASS и CI-образы не прошивать.
+- Runtime notifier registration/failure, ECM/NSS datapath, Dual-WAN на RD03v2 и измерения latency/loss/throughput — **NOT TESTED**. Основной домашний роутер остаётся на stock MiWiFi.
 
 ## Актуальная live-перепроверка ветки и CI — 2026-11-16
 
@@ -177,15 +179,17 @@ Pinned qca-nss-ecm Makefile включает `ECM_CLASSIFIER_MARK_ENABLE=y` дл
 
 **Критерий закрытия:** conntrack mark, policy rule, физический WAN egress и ECM/NSS counters совпадают для flows через WAN1 и WAN2; отдельно проверены flows, которые не должны ускоряться.
 
-### ECM-05 — Определить fail-safe поведение при ошибке FIB notifier registration
+### ECM-05 — Подтвердить транзакционный rollback при ошибках route/FIB notifier registration
 
 **Приоритет:** P1; решение обязательно до аппаратного Dual-WAN acceptance.
 
-В source revision `c586d83` fail-open поведение заменено на fail-closed fallback. Результат регистрации теперь записывается в отдельный `fib_ret`, поэтому сохранён `ret` от route-notifier init. При ошибке helper удерживает frontend stop gates закрытыми для IPv4/IPv6, завершает/отменяет queued worker, очищает pending bits, ждёт `synchronize_net()`, defunct-ит существующие ECM connections и не открывает ECM frontends повторно. Ожидаемое состояние — обычная Linux forwarding path без ECM/NSS acceleration, пока модуль не будет выгружен. Source-level guard добавлен в preflight test.
+Source revision `fb88ba4` исправляет fail-open и partial-init пути транзакционно. В `ecm_db_init()` результаты IPv4/IPv6 route notifier хранятся раздельно в `route_ret`; первая ошибка переносится в `ret` и не перезаписывается последующим вызовом. Флаги `ecm_db_ipv4_route_registered` и `ecm_db_ipv6_route_registered` устанавливаются только после успешной регистрации. Если одно семейство не регистрируется, `ecm_db_init()` вызывает `ecm_db_exit()`, который снимает только фактически зарегистрированное семейство, останавливает FIB worker и освобождает DB до возврата ошибки. FIB notifier регистрируется только после успешных route notifier; если он завершается ошибкой, DB также откатывается и `fib_ret` возвращается вызывающему коду.
 
-**Что ещё требуется:** проверить на точном QSDK archive, что patch применяется после всей pinned ECM series без fuzz/offset regressions; собрать `qca-nss-ecm`; провести fault injection возврата ошибки из `register_fib_notifier()`; подтвердить, что frontend gates остаются закрыты, нет worker race, leak/oops/deadlock, а host datapath продолжает передавать трафик. Проверить unload/reload. Тесты на стенде второго RD03v2 обязательны до аппаратной приёмки.
+Pinned QSDK 14.0 инициализирует ECM DB до IPv4/IPv6 packet frontends и conntrack notifier. Поэтому отказ notifier на этом этапе приводит к отказу загрузки ECM-модуля до включения его packet hooks, а не к оставлению частично работающего ECM/NSS datapath. Предыдущая схема с постоянно закрытыми frontend stop gates удалена.
 
-**Текущий статус:** source implementation + IPv4/IPv6 source guards есть; compile/preflight/fault injection — **NOT TESTED** после этой правки; runtime notifier — **NOT TESTED**. ECM-05 не закрывать до воспроизводимого fault-injection evidence.
+**Что ещё требуется:** на точном QSDK archive проверить применение patch 9002 после полной сортированной ECM patch series; проверить raw `patch -f -p1` и offsets; собрать `qca-nss-ecm`; добавить/выполнить fault injection отдельно для IPv4 route notifier, IPv6 route notifier и FIB notifier; подтвердить first-error propagation, rollback только успешных notifier, drain worker, освобождение DB без leak/oops/deadlock и нормальную повторную загрузку модуля.
+
+**Текущий статус:** source implementation и source-level assertions закоммичены; структурная проверка unified diff (9 sections, 22 hunks, без пересечений) пройдена в рамках ревизии. Exact archive apply/full-series preflight, C compilation, runtime fault injection и module load/unload — **NOT TESTED**. ECM-05 остаётся открытым до CI и fault-injection evidence.
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
