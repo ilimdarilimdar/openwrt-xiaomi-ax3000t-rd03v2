@@ -243,7 +243,7 @@ echo "PASS: patch structure is valid before source preflight"
 # This avoids missing alternate if/else unlock branches with a textual
 # lock-to-next-unlock scan. It is still not a whole-program call-graph proof:
 # indirect helpers must be reviewed and runtime lockdep remains mandatory.
-check_no_rtnl_inside_family_lock() {
+check_no_rtnl_in_family_lock_translation_unit() {
   local ecm_root=$1
   python3 - "$ecm_root" <<'PY'
 from pathlib import Path
@@ -591,7 +591,7 @@ grep -qF 'register_fib_notifier(&init_net, &ecm_db_fib_rule_nb, NULL, NULL)' "$S
 grep -qF 'ECM: policy routing rule changes defunct accelerated connections' "$SERIES_ECM_DB" ||
   die "runtime registration diagnostic is missing after applying the complete feed series"
 check_stop_temp_refcount "$SERIES_ROOT"
-check_no_rtnl_inside_family_lock "$SERIES_ROOT"
+check_no_rtnl_in_family_lock_translation_unit "$SERIES_ROOT"
 echo "PASS: complete patch queue ($series_count patches, including 9001 and 9002) applies with OpenWrt patch-kernel.sh semantics"
 
 # ecm_db_init() must not register the FIB notifier if an existing route-notifier
