@@ -471,13 +471,14 @@ grep -qF 'ecm_db_ipv4_route_registered = true;' "$ECM_DB" ||
   die "IPv4 route notifier registration state is not recorded"
 grep -qF 'ecm_db_ipv6_route_registered = true;' "$ECM_DB" ||
   die "IPv6 route notifier registration state is not recorded"
-if grep -qF 'ret = ip_rt_register_notifier(' "$ECM_DB" || grep -qF 'ret = rt6_register_notifier(' "$ECM_DB"; then
+if grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*ip_rt_register_notifier\\(' "$ECM_DB" ||
+   grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*rt6_register_notifier\\(' "$ECM_DB"; then
   die "route notifier registration may overwrite the other family's failure status"
 fi
 if grep -qF 'if (ecm_db_ipv4_route_enable) {' "$ECM_DB" || grep -qF 'if (ecm_db_ipv6_route_enable) {' "$ECM_DB"; then
   die "route notifier teardown is still keyed to enable flags instead of actual registration state"
 fi
-if grep -qF 'ret = register_fib_notifier(' "$ECM_DB"; then
+if grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*register_fib_notifier\\(' "$ECM_DB"; then
   die "notifier registration return must not overwrite ecm_db_init route status"
 fi
 if grep -qF 'ecm_front_end_ipv4_stop(' "$ECM_DB" || grep -qF 'ecm_front_end_ipv6_stop(' "$ECM_DB"; then
@@ -569,7 +570,7 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: IPv4 notifier result is not captured in {db_path}")
     if "route_ret = rt6_register_notifier(&ecm_db_ip6route_table_update_nb)" not in db_init:
         sys.exit(f"FAIL: IPv6 notifier result is not captured in {db_path}")
-    if "ret = ip_rt_register_notifier(" in db_init or "ret = rt6_register_notifier(" in db_init:
+    if re.search(r"(?m)^\\s*ret\\s*=\\s*(?:ip_rt_register_notifier|rt6_register_notifier)\\(", db_init):
         sys.exit(f"FAIL: one route notifier can overwrite the shared error state in {db_path}")
     v4_register = db_init.find("route_ret = ip_rt_register_notifier(&ecm_db_iproute_table_update_nb)")
     v4_error = db_init.find("ret = route_ret;", v4_register)
@@ -589,7 +590,7 @@ def check_source(db_path, init_path, header_path):
     # tear down the fully initialized DB and preserve the route-notifier ret.
     if "fib_ret = " + registration not in db_init:
         sys.exit(f"FAIL: FIB notifier result is not stored separately in {db_path}")
-    if "ret = " + registration in db_init:
+    if re.search(r"(?m)^\\s*ret\\s*=\\s*" + re.escape(registration), db_init):
         sys.exit(f"FAIL: FIB registration overwrites the IPv4/IPv6 route-notifier result in {db_path}")
     if "return ret;" not in db_init[reg_pos:]:
         sys.exit(f"FAIL: successful FIB registration path does not preserve route-notifier return in {db_path}")
