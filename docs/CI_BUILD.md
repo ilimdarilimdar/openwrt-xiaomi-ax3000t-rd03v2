@@ -124,10 +124,10 @@ Hardware validation remains **NOT TESTED**. A successful source preflight, build
 
 ## Current branch status — 2026-11-16
 
-- Source patch code commit: 16193bfb29eecca103a370270458a779403ac619; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
-- Patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
+- Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; latest patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; latest test-harness commit: 6062e9086f2fa05c1f4c3aff4a925068b47f399a.
+- Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 - Candidate 9002 closes per-family frontend gates in the atomic callback on the first event, defers queueing during initial FIB replay, drains pending bits in a worker loop, serializes final empty-check/gate release under per-net RTNL and cleans residual gate refs during teardown.
-- Test harness has source guards for callback gate-before-pending order, readiness barrier, drain-loop, final gate release and teardown cleanup. These checks are committed but have not yet been executed on the exact pinned archive.
+- Test harness has source guards for callback gate-before-pending order, readiness barrier, drain-loop, final gate release and teardown cleanup. A self-audit repaired malformed patch metadata and stray NaN/0 text in f9f33b314ef11ad42037ad81de18e05f6e0e11f3; strict envelope/hunk checks now pass (9 sections, 22 hunks). The harness itself has not yet been executed on the exact pinned archive.
 - Exact QSDK apply, full 32-patch ECM queue, current C compilation, current full verify-v2, fault injection and lockdep/KASAN are **NOT TESTED**. RTNL → frontend spinlock ordering requires lockdep confirmation.
 - Last run is #129 (cancelled before jobs); #128 cancelled before jobs; #127 passed Static/PREPARE_ONLY but full build ended with runner shutdown (exit 143). #124 remains the last image-generating full build and final verify-v2 failed on an earlier ECM revision.
 - Workflow has boolean-gated workflow_dispatch; actual full_build=false/true dispatches have not run. No Actions run/status exists for this candidate. Last UI checkpoint reported Actions paused for this fork.
