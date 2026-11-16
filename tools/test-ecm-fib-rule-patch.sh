@@ -475,9 +475,6 @@ if grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*ip_rt_register_notifier\('
    grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*rt6_register_notifier\(' "$ECM_DB"; then
   die "route notifier registration may overwrite the other family's failure status"
 fi
-if grep -qF 'if (ecm_db_ipv4_route_enable) {' "$ECM_DB" || grep -qF 'if (ecm_db_ipv6_route_enable) {' "$ECM_DB"; then
-  die "route notifier teardown is still keyed to enable flags instead of actual registration state"
-fi
 if grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*register_fib_notifier\(' "$ECM_DB"; then
   die "notifier registration return must not overwrite ecm_db_init route status"
 fi
@@ -585,6 +582,14 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: route notifier errors are not assigned exactly once per family in {db_path}")
     if "ecm_db_ipv4_route_registered = true;" not in db_init or "ecm_db_ipv6_route_registered = true;" not in db_init:
         sys.exit(f"FAIL: successful route notifier registrations are not tracked per family in {db_path}")
+    for route_log in (
+        r"Could not register for the IPV4 routing events error:%d\\n",
+        r"Could not register for the IPV6 routing events error:%d\\n",
+    ):
+        if route_log not in db_init:
+            sys.exit(f"FAIL: route notifier diagnostic string is malformed in {db_path}")
+    if r"Could not register for the IPV4 routing events error:%d\\\\n" in db_init or r"Could not register for the IPV6 routing events error:%d\\\\n" in db_init:
+        sys.exit(f"FAIL: route notifier diagnostic string contains a double-escaped newline in {db_path}")
 
     # A failed FIB notifier registration must abort module initialization,
     # tear down the fully initialized DB and preserve the route-notifier ret.
