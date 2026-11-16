@@ -189,71 +189,68 @@ Evidence:
 
 ### Current source revision and validation state — 2026-11-16
 
-Functional source patch commit: `fb88ba491df72d6d37e974a44f739d296c87ee0d`. Latest source-level
-regression test revision: `02ee20ec2fe3d8e08fe146360f1bf7ab18eb9791`. Current branch HEAD:
-`07a4063eb59555ce883970546b5c97f047d65435`. Compare from test revision to branch HEAD is 19 commits ahead,
-0 behind; executable C-hunks, preflight script, workflow and firmware config
-are unchanged after the test revision. The later patch edit changes only
-explanatory header text.
+Source patch code commit: 16193bfb29eecca103a370270458a779403ac619. Latest test-harness commit:
+6062e9086f2fa05c1f4c3aff4a925068b47f399a. Current patch blob: 7807d27f592dca0585267285a7adb487e47b6b2c; test blob: 9dc9a29bb93459cc42f0c16155475bf88950ce44.
 
-The patch tracks IPv4/IPv6 route notifier registration independently and
-preserves the first route-registration error. A route notifier failure calls
-`ecm_db_exit()` before returning; FIB notifier registration occurs only
-after route notifier success, and its failure rolls back the DB and returns
-`fib_ret`. Per-family flags prevent unregistering a notifier that never
-registered.
+The candidate closes the affected IPv4/IPv6 frontend gate directly from the
+atomic notifier callback on the first event, using a gated-state bit to avoid
+double-incrementing the temporary-stop counter. The callback records the family
+pending bit and queues work only after register_fib_notifier() initial
+dump/replay has completed. The worker loops until both pending-family bits are
+empty and opens gates only under per-net RTNL after the final empty check.
+Teardown disarms queueing, unregisters the notifier, drains work and cleans
+residual gated/pending state.
 
-**Current revision validation:** exact pinned QSDK archive apply, complete
-32-patch feed series, C compilation and fault injection after this rollback
-change are **NOT TESTED**. CI #123/#124 apply/source guards and #124 compile
-refer to the earlier implementation, not this source revision. #127 passed
-Static/PREPARE_ONLY but was interrupted during full build (exit 143); #128/#129
-were cancelled before jobs. No CI run/status is associated with current HEAD.
+The test harness has source guards for callback gate-before-pending order,
+initial-replay readiness, drain-loop and RTNL-serialized gate release. These
+guards are committed but have not been executed against the exact QSDK archive.
 
-The current preflight script is `tools/test-ecm-fib-rule-patch.sh`. It reads
-source version, commit, archive URL and SHA from the pinned feed Makefile,
-hash-verifies the QSDK archive, applies 9002 with OpenWrt's `patch -f -p1`
-semantics, and checks the ordered feed series and lifecycle invariants. The
-image marker check proves only that the registration string is present in
-`ecm.ko`; it does not prove runtime notifier registration.
+**Validation status:** exact pinned QSDK apply, complete 32-patch feed series,
+current C compilation, full verify-v2, fault injection, lockdep/KASAN and
+hardware runtime remain **NOT TESTED**. The code changes RTNL → ECM frontend
+spinlock ordering and requires lockdep confirmation. CI #123/#124 results
+apply to an earlier implementation, not to this candidate. No CI run/status
+exists for the current patch/test candidate.
 
-Runtime notifier behavior, module lifecycle and hardware Dual-WAN/NSS
-acceptance remain **NOT TESTED**. Do not describe this patch as compiled at
-its current revision, production-ready or NSS-safe.
+The marker check in ecm.ko proves only that a registration string was
+compiled into the module; it does not prove runtime notifier registration.
 
-## Worker requeue window — resolution candidate (2026-11-16)
 
-The previous one-pass worker could release the temporary stop gate after
-processing one pending-bit snapshot even if a second FIB event had requeued
-the same work item while the defunct pass was running. The candidate patch
-revision addresses both the inter-pass gap and the callback-to-worker gap:
+## Worker requeue window — gate-first candidate implementation
 
-1. The atomic notifier callback acquires the affected family's frontend stop
-   gate synchronously on the first event by using a dedicated gated-state bit.
-   Further events coalesce into the pending-family bit without incrementing
-   the temporary stop counter again.
-2. During initial `register_fib_notifier()` replay, the callback records and
-   gates events but does not queue work until registration has completed.
-   `ecm_db_fib_rule_ready` is armed with `WRITE_ONCE`, then one worker is
-   queued to process the replayed events. This avoids running the worker in
-   parallel with the initial RCU dump.
-3. The worker drains pending IPv4/IPv6 bits in a loop. It keeps callback-owned
-   gates closed across every pass and releases them only after an empty-pending
-   check under per-net RTNL. Live FIB rule ADD/DEL callbacks run under that same
-   RTNL, so they cannot be interleaved between the final check and gate release.
-4. Teardown disables new queueing, unregisters the notifier, drains/cancels
-   the worker, and then clears any residual pending/gated state under RTNL.
+The former one-pass worker could open its gate after one pending-bit snapshot
+while another FIB update had already requeued the same work item. The current
+candidate addresses both the inter-pass gap and the callback-to-worker gap:
 
-The exact Linux 6.18.55 sources supporting the context are:
-- [Initial FIB dump and registration sequence](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c#L40-L100): initial dump executes under RCU; notifier registration compares the sequence and retries.
-- [Live FIB rule notifications](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_rules.c#L388-L424): `call_fib_rule_notifiers()` asserts per-net RTNL; `fib_rules_dump()` is explicitly called under RCU.
-- [Workqueue pending/requeue behavior](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L2413-L2425) and [worker pending-bit clear](https://github.com/gregkh/linux/blob/v6.18.55/kernel/workqueue.c#L3255-L3263).
+1. The first IPv4/IPv6 FIB callback atomically sets a gated-state bit and closes
+   the corresponding frontend gate before publishing the pending bit.
+   Additional events coalesce and do not increment the temporary stop counter
+   a second time.
+2. Initial register_fib_notifier() dump/replay can call the notifier under RCU
+   without RTNL. The callback records/gates those events but does not queue
+   work while ecm_db_fib_rule_ready is false. After registration succeeds,
+   the caller arms readiness with WRITE_ONCE and schedules one worker.
+3. The worker takes the same per-net RTNL used by live FIB rule ADD/DEL
+   callbacks, snapshots/clears pending-family bits, releases RTNL for
+   synchronize_net() and the ECM DB defunct walk, then loops. Gates stay
+   closed across passes. The final empty check and gate release occur under
+   RTNL, preventing a live rule update from slipping between them.
+4. Teardown sets readiness false, unregisters the notifier, cancels/drains the
+   worker, and under RTNL clears leftover pending bits and releases any
+   callback-owned gate left by a cancelled worker.
 
-**Status:** candidate source and static regression guards have been updated in the
-repository, but exact QSDK patch application, full feed-series application,
-C compilation, KASAN/lockdep, fault injection and runtime stress are still
-**NOT TESTED**. The lock order RTNL → ECM frontend spinlock must be confirmed
-by the pinned-source build and lockdep run. Do not mark ECM-06 closed yet.
+The RTNL serialization is supported by Linux 6.18.55
+[call_fib_rule_notifiers()](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_rules.c#L388-L399),
+which asserts per-net RTNL for live changes, while
+[fib_rules_dump()](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_rules.c#L401-L424)
+runs under RCU for initial replay. This source-level rationale does not prove
+the lock order against every pinned QSDK callsite; the new RTNL →
+frontend-spinlock order must be exercised with lockdep.
+
+**Status:** implementation and static guards are committed. Exact archive
+apply, C compilation, fault/stress injection, lockdep/KASAN and runtime remain
+**NOT TESTED**. ECM-06 stays open until those checks pass.
+
 
 ## Remaining v2 validation checklist
 
