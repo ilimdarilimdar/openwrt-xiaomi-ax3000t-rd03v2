@@ -337,7 +337,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
  {
 +	ecm_db_fib_rule_notifier_stop();
  	DEBUG_INFO("ECM DB Module exit\n");
-@@ -795,19 +1013,23 @@
+@@ -795,19 +1022,23 @@
  	/*
  	 * unregister for route table update events only if registered.
  	 */
