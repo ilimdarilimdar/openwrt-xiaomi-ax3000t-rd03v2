@@ -870,12 +870,12 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: registered-state flag is not cleared for success/-ENOENT in {db_path}")
     if stop_fn.count(registered_clear) != 1:
         sys.exit(f"FAIL: registered-state flag clear must occur exactly once in stop hook in {db_path}")
-    absent_check = stop_fn.find("if (ret == -ENOENT) {", accepted_result)
-    if absent_check < 0 or absent_check >= clear_pos:
-        sys.exit(f"FAIL: -ENOENT must have an explicit already-absent diagnostic in {db_path}")
     unexpected_error = stop_fn.find("else {", clear_pos)
     if unexpected_error < 0 or unexpected_error >= guard_end:
         sys.exit(f"FAIL: unexpected unregister errors must retain the registered flag in {db_path}")
+    absent_check = stop_fn.find("if (ret == -ENOENT) {", accepted_result)
+    if absent_check < 0 or absent_check >= unexpected_error:
+        sys.exit(f"FAIL: -ENOENT must have an explicit already-absent diagnostic in {db_path}")
     error_open = stop_fn.find("{", unexpected_error)
     error_end = stop_fn.find("}", error_open)
     if error_end < 0 or registered_clear in stop_fn[error_open:error_end]:
