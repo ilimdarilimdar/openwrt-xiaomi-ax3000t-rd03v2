@@ -634,13 +634,37 @@ grep -qF 'ecm_db_ipv4_route_registered = true;' "$ECM_DB" ||
   die "IPv4 route notifier registration state is not recorded"
 grep -qF 'ecm_db_ipv6_route_registered = true;' "$ECM_DB" ||
   die "IPv6 route notifier registration state is not recorded"
-if grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*ip_rt_register_notifier\(' "$ECM_DB" ||
-   grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*rt6_register_notifier\(' "$ECM_DB"; then
-  die "route notifier registration may overwrite the other family's failure status"
-fi
-if grep -Eq '^[[:space:]]*ret[[:space:]]*=[[:space:]]*register_fib_notifier\(' "$ECM_DB"; then
-  die "notifier registration return must not overwrite ecm_db_init route status"
-fi
+# Restrict the return-variable guard to ecm_db_init(). The same source file
+# has independent proc handlers that intentionally use a local `ret` for
+# runtime route-notifier toggles; matching those handlers is a false positive.
+python3 - "$ECM_DB" <<'PY_GUARD'
+from pathlib import Path
+import re
+import sys
+
+source = Path(sys.argv[1]).read_text()
+start = source.find("int ecm_db_init(")
+end = source.find("\nvoid ecm_db_exit(", start)
+if start < 0 or end < 0:
+    sys.exit("FAIL: cannot isolate ecm_db_init() for notifier return-status checks")
+init_body = source[start:end]
+checks = {
+    "IPv4 route": r"^[\t ]*ret[\t ]*=[\t ]*ip_rt_register_notifier\(",
+    "IPv6 route": r"^[\t ]*ret[\t ]*=[\t ]*rt6_register_notifier\(",
+    "FIB rule": r"^[\t ]*ret[\t ]*=[\t ]*register_fib_notifier\(",
+}
+for label, pattern in checks.items():
+    if re.search(pattern, init_body, re.MULTILINE):
+        sys.exit(f"FAIL: {label} notifier registration overwrites ecm_db_init() status")
+
+# Negative control: the independent proc-handler assignment must not be
+# mistaken for an init-path assignment merely because it shares ecm_db.c.
+handler = "static int ecm_db_ipv4_route_handler"
+handler_start = source.find(handler)
+if handler_start >= 0 and not re.search(checks["IPv4 route"], source[handler_start:], re.MULTILINE):
+    sys.exit("FAIL: guard negative control did not see the runtime route-handler assignment")
+print("PASS: notifier return-status guards are scoped to ecm_db_init(); runtime proc handlers are excluded")
+PY_GUARD
 if grep -qF 'ecm_front_end_ipv4_stop(' "$ECM_DB" || grep -qF 'ecm_front_end_ipv6_stop(' "$ECM_DB"; then
   die "legacy v1 frontend stop helper was introduced"
 fi
