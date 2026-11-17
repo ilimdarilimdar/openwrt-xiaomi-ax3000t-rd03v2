@@ -97,7 +97,7 @@
 
 Workflow уже обновлён: добавлен `workflow_dispatch` с boolean input `full_build`. Значение `false` (default) должно запускать только Static + PREPARE_ONLY; `true` — также full-build + `verify-v2`. Ручной запуск из любого ref, кроме `work/rd03v2-dualwan-mwan3-baseline`, отклоняется. Обычный push-trigger с `[full-build]` сохранён.
 
-**Ограничение на текущей проверке (API snapshot 2026-11-17):** зарегистрировано 129 Actions runs; последний — #129, отменён до создания jobs. Запуск для code/test HEAD отсутствует, несмотря на `[full-build]` в commit message `5b3328e`; API не раскрывает причину. Последняя UI-проверка 2026-11-16 сообщала об ограничении использования Actions, но текущее состояние UI не перепроверено. Перед manual dispatch `full_build=false` и `true` maintainer должен проверить страницу Actions и repository/workflow settings.
+**Ограничение на текущей проверке (API snapshot 2026-11-17):** зарегистрировано 129 Actions runs; последний — #129, отменён до создания jobs. Запуск для текущего code/test HEAD отсутствует; combined commit-status list пуст. API не раскрывает причину отсутствия запуска. Последняя UI-проверка 2026-11-16 сообщала об ограничении использования Actions, но текущее состояние UI не перепроверено. Перед ручными dispatch `full_build=false` и `true` maintainer должен проверить страницу Actions и repository/workflow settings.
 
 **Критерий закрытия:** после повторного включения Actions выполнить реальный manual dispatch с `full_build=false` и подтвердить, что full-build job пропущен; затем выполнить `true` и подтвердить full-build + final `verify-v2`. Сохранить run IDs и результаты. Существующие safeguards — ephemeral P-256 key, `example.invalid`, отсутствие публикации образов — должны остаться.
 
