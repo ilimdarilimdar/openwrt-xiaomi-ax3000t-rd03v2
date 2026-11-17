@@ -33,7 +33,7 @@ The source-level dispatch gate is checked by Static validation. A real Actions U
 
 ### Current GitHub Actions availability — 2026-11-17
 
-The read-only Actions API snapshot on 2026-11-17 returns 129 total runs; #129 (SHA `e398b3f`) remains the latest and was cancelled before jobs. No workflow run exists for code/test HEAD `ca75381492a743afba382a1d205c922913ef66e6`; its combined commit-status list is empty. The new preflight cleanup guard was committed after #129, but no #130 run is visible. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but the current UI state has not been rechecked. A maintainer must inspect the Actions page and, if needed, repository settings before manual dispatch. Treat this source/test update as **NOT CI-VALIDATED** until a new run ID and artifacts exist.
+The read-only Actions API snapshot on 2026-11-17 returns 129 total runs; #129 (SHA `e398b3f`) remains the latest and was cancelled before jobs. No workflow run exists for code/test HEAD `325ac7afd406fcf5a79207a1a1efaeeaad937d60`; its combined commit-status list is empty. The latest preflight update adds exact NSS feed/source pin checks and IPSECMGR/XFRM/KLIPS package/configuration guards, but no #130 run is visible. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but the current UI state has not been rechecked. A maintainer must inspect the Actions page and, if needed, repository settings before manual dispatch. Treat this source/test update as **NOT CI-VALIDATED** until a new run ID and artifacts exist.
 
 ## Automatic PREPARE_ONLY job
 
