@@ -183,7 +183,9 @@ Evidence:
 - The watchdog/AUTOREMOVE fixes were committed later, but #127's full build
   was interrupted by runner shutdown (exit 143), #128/#129 were cancelled.
   Later notifier rollback source/test commits are newer than #129 and have no
-  CI run because GitHub Actions is currently paused on this fork.
+  CI run. The read-only Actions API does not expose why no run was created; the
+  last UI observation (2026-11-16) reported a usage-related pause, but current
+  UI/settings state has not been rechecked.
 
 
 
@@ -321,6 +323,39 @@ Nevertheless, repeated rule churn during ECM module registration must be
 tested. A registration warning means this feature is unavailable and is a
 test failure for the Dual-WAN/ECM acceptance criteria.
 
+The exact Linux v6.18.55 registration/error path adds an important
+lifecycle distinction:
+
+- `fib_net_dump()` runs the per-family dump callbacks under RCU before the
+  notifier is attached to the live atomic chain. Existing rules are replayed
+  to the supplied callback as `FIB_EVENT_RULE_ADD`.
+- A dump callback error is returned immediately by
+  `register_fib_notifier()`; the live notifier has not yet been registered.
+  The ECM callback may nevertheless have recorded gated/pending state during
+  the partial replay, so the caller must still unwind that state.
+- After a successful dump, Linux attaches the atomic notifier and compares
+  the FIB sequence with the pre-dump snapshot. If it changed, Linux removes
+  the just-attached notifier and retries. The maximum is five attempts; after
+  repeated inconsistency registration returns `-EBUSY`.
+- Removing an atomic notifier calls `synchronize_rcu()`. Thus a successful
+  `unregister_fib_notifier()` return is the callback-quiescence boundary;
+  `cancel_work_sync()` then drains deferred ECM work. The patch's
+  `registered` flag, readiness barrier, and unregister-before-cancel order
+  match this sequence at source level.
+
+This is a static review of the pinned kernel source, not evidence that the
+current ECM patch compiles or that fault injection/runtime teardown is safe.
+The current preflight harness checks ECM source ordering and cleanup markers;
+it does not execute the kernel's registration retry/error state machine.
+That behavior must still be exercised by fault injection or a focused test
+once the full CI and build environment are available.
+
+Pinned Linux v6.18.55 source references:
+
+- [FIB notifier registration/dump/retry](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c#L58-L125)
+- [Atomic notifier unregister and synchronize_rcu](https://github.com/gregkh/linux/blob/v6.18.55/kernel/notifier.c#L177-L198)
+- [FIB rule dump and live ADD/DEL notification under per-net RTNL](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_rules.c#L390-L425)
+
 Required bench cases added by this finding:
 
 1. Load ECM with the normal local/main/default IPv4 and IPv6 rules already
@@ -335,11 +370,11 @@ Required bench cases added by this finding:
 
 Primary Linux 6.18 source references:
 
-- [FIB notifier API](https://raw.githubusercontent.com/torvalds/linux/v6.18/include/net/fib_notifier.h)
-- [FIB notifier registration and consistency retries](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_notifier.c)
-- [IPv4 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv4/fib_notifier.c)
-- [IPv6 FIB dump and rule replay](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/ipv6/fib6_notifier.c)
-- [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://raw.githubusercontent.com/torvalds/linux/v6.18/net/core/fib_rules.c)
+- [FIB notifier API](https://github.com/gregkh/linux/blob/v6.18.55/include/net/fib_notifier.h)
+- [FIB notifier registration and consistency retries](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_notifier.c)
+- [IPv4 FIB dump and rule replay](https://github.com/gregkh/linux/blob/v6.18.55/net/ipv4/fib_notifier.c)
+- [IPv6 FIB dump and rule replay](https://github.com/gregkh/linux/blob/v6.18.55/net/ipv6/fib6_notifier.c)
+- [Generic FIB rule dump and FIB_EVENT_RULE_ADD](https://github.com/gregkh/linux/blob/v6.18.55/net/core/fib_rules.c)
 
 ## Historical preflight/build evidence — CI #123/#124 and #127 (2026-11-16)
 
