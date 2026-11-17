@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Verify the RD03v2 ECM FIB-rule notifier patch against the exact pinned QSDK archive.
 # Includes source guards for initial-dump arming and the FIB worker drain-loop.
-# CI trigger commit: no functional source, patch, or test behavior change.
+# Includes unconditional failed-registration cleanup guards for replay-created family gates.
 set -euo pipefail
 
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
