@@ -24,7 +24,7 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Snapshot: 2026-11-17. Source implementation 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness/code-test commit ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8; patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob 35c7de976058ecdaf0c287a14c230e5fd247b378; code/test HEAD ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8. NSS feed pin 57c0fa18f847f6cb23992ff3493c6a9131246f4c; qca-nss-clients source version 51be82d. The harness checks both NSS package Makefiles for manager packages and direct/derived IPsec selectors; the selected code has not passed full preflight or CI.
+Snapshot: 2026-11-17. Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`; current test-harness/code-test HEAD `7a7df3c6228864ccc8f0a5245a637ebacee5b73e`; patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`; current test-harness blob `6c25f32b9b38a3b3e92e0d01d227e34b73fa2e8b`. NSS feed pin `57c0fa18f847f6cb23992ff3493c6a9131246f4c`; qca-nss-clients source version `51be82d`. The harness no longer contains duplicated preflight blocks; full-script Bash syntax passes. Full exact-source preflight and CI remain NOT TESTED.
 
 | Этап | Текущий подтверждённый результат |
 |---|---|
@@ -38,11 +38,18 @@ Snapshot: 2026-11-17. Source implementation 16193bfb29eecca103a370270458a779403a
 | CI #124 final verify-v2 | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
 | CI #127 | Static + PREPARE_ONLY **PASS**; full-build прерван runner shutdown, exit 143 |
 | CI #128–#129 | **CANCELLED** до создания jobs |
-| Current candidate | Для code/test HEAD ee3b9cd нет нового run/commit status; API по-прежнему показывает #129 последним. Manual dispatch false/true не запускались; причина отсутствия нового run API не раскрывает |
+| Current candidate | Для code/test HEAD `7a7df3c` нет нового run/commit status; API по-прежнему показывает #129 последним. Manual dispatch false/true не запускались; причина отсутствия нового run API не раскрывает |
 | Runtime FIB notifier / ECM module lifecycle | **NOT TESTED** |
 | Hardware Dual-WAN/NSS, WAN failover, RTT/loss/throughput | **NOT TESTED** |
 
 ### ECM lock-order source audit — 2026-11-16
+### Harness duplication defect and correction — 2026-11-17
+
+The harness at commit `325ac7a` had a second source-preflight block exactly matching 759/759 lines of the first block. It repeated the source archive download, raw patch application, complete 32-patch queue and source assertions. This was removed (760 lines) in `d81ab86289ccb0f917aacdf553264554208cc7f3`. A separate repeated 27-line IPsec self-test was removed in `7a7df3c6228864ccc8f0a5245a637ebacee5b73e`. The final script has 1,151 newline-terminated lines, one occurrence of each major function/download/apply/check stage, and full-script Bash syntax PASS.
+
+Historical caution: run #127 reports 19 patch hunks for an older 9002 revision. Current patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` has 22 hunks. #127 therefore does not validate the current patch. A fresh exact QSDK 14.0 archive apply, the full 32-patch series on this patch revision and C compilation are still required.
+
+
 ### Exact NSS feed IPsec/XFRM notifier exclusion — 2026-11-17
 
 The project pins `ADCDS/nss-packages` at `57c0fa18f847f6cb23992ff3493c6a9131246f4c`. At this exact feed commit, `qca-nss-clients/Makefile` pins client source version `51be82d` and defines no IPSECMGR, XFRM or KLIPS KernelPackage. `qca-nss-clients/Config.in` does define `NSS_NLIPSEC_ENABLE`, but only as `default y if NSS_DRV_IPSEC_ENABLE`; `qca-nss-drv/Config.in` sets `NSS_DRV_IPSEC_ENABLE` default n. The driver Makefile also forces the option off when neither it nor `kmod-ipsec` is selected.
@@ -53,9 +60,9 @@ The harness now checks that feed pin and source version, fails if IPSECMGR/XFRM/
 
 Косвенный путь через DB listener изучен: `ecm_db_connection_add()` синхронно вызывает connection listener, пока вызывающий ECM packet path ещё держит family lock. Listener идёт в `ecm_notifier_connection_added()`, который возвращается до atomic notifier chain при `ecm_notifier_count == 0`. PREPARE_ONLY artifact #127 `14185375390` (ZIP SHA-256 `5f29e8a7554d2dc035410eedd1fd92c0da615bed348e78ead910ace23c11e0d7`) показывает, что `CONFIG_PACKAGE_kmod-ipsec`, `CONFIG_PACKAGE_kmod-ipt-ipsec` и `NSS_DRV_IPSEC_ENABLE` не выбраны; известный XFRM/IPsec notifier client не входит в текущий образ. При включении IPsec/XFRM или другого notifier subscriber call graph надо проверить повторно.
 
-Harness guard проверяет весь translation unit с family lock и запрещает прямые RTNL acquisition/assertions. Дополнительно он требует unconditional cancel/cleanup после failed initial replay, фиксирует exact NSS feed pin 57c0fa18f847f6cb23992ff3493c6a9131246f4c и qca-nss-clients source 51be82d, проверяет оба NSS package Makefiles на отсутствие IPSECMGR/XFRM/KLIPS KernelPackage declarations и отклоняет семь прямых/производных IPsec Kconfig/package selectors в y/m. Это fail-closed source/config guard. Bash syntax и 21 синтетический случай выделенного guard-блока проверены локально; полный harness, exact archive apply, compile и lockdep на текущем code/test HEAD не запускались.
+Harness guard проверяет весь translation unit с family lock и запрещает прямые RTNL acquisition/assertions. Он требует unconditional cancel/cleanup после failed initial replay, фиксирует exact NSS feed pin `57c0fa18f847f6cb23992ff3493c6a9131246f4c` и qca-nss-clients source `51be82d`, проверяет оба NSS package Makefiles на отсутствие IPSECMGR/XFRM/KLIPS KernelPackage declarations и отклоняет семь прямых/производных IPsec Kconfig/package selectors в y/m. Full-script Bash syntax PASS; текущий полный harness, exact archive apply, compile и lockdep на актуальном code/test HEAD не запускались.
 
-The gate-first implementation, unconditional failed-registration cleanup guard and exact NSS IPsec/XFRM/KLIPS metadata guard remain source candidates only. The read-only Actions API still shows 129 runs, with #129 as the latest; there is no run/status for code/test HEAD ee3b9cd. The API does not expose why no new run was created. The last UI checkpoint (2026-11-16) reported a usage-related pause, but current UI state was not rechecked. CI artifacts use a temporary key and example.invalid; they are not releases and must not be flashed.
+The gate-first implementation, unconditional failed-registration cleanup guard and exact NSS IPsec/XFRM/KLIPS metadata guard remain source candidates only. The full harness was de-duplicated and full-script Bash syntax passes; the read-only Actions API still shows 129 runs, with #129 as the latest. There is no run/status for code/test HEAD `7a7df3c`. The API does not expose why no new run was created. The last UI checkpoint (2026-11-16) reported a usage-related pause, but current UI state was not rechecked. CI artifacts use a temporary key and example.invalid; they are not releases and must not be flashed.
 
 ### Исторические результаты preflight #106–#108
 
