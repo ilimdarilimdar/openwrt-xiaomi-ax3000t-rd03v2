@@ -191,7 +191,7 @@ Evidence:
 
 ### Current source revision and validation state — 2026-11-17
 
-Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit: 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit: `5b3328e23d36b2b1089e4b2342e0a5255578e022` (no test or firmware behavior change). Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob: dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD: `5b3328e23d36b2b1089e4b2342e0a5255578e022`; later branch changes after this checkpoint are documentation-only.
+Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`; functional test-harness commit `bfaae52f6714ec93d25dc3537bf392fa3f374f53`; latest comment-only test-script commit `ca75381492a743afba382a1d205c922913ef66e6`. Patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`; test-harness blob `fd27275abff514c8578c30963eb380c551023fc0`; code/test HEAD `ca75381492a743afba382a1d205c922913ef66e6`. Subsequent branch revisions are documentation-only.
 
 The candidate closes the affected IPv4/IPv6 frontend gate directly from the
 atomic notifier callback on the first event, using a gated-state bit to avoid
@@ -387,7 +387,7 @@ Pinned QSDK 14.0 source:
 - CI #124: the same preflight/source guards PASS; `qca-nss-ecm` compiled, `kmod-qca-nss-ecm` entered rootfs, image marker found, sysupgrade and initramfs-factory images created.
 - CI #124 final `verify-v2`: FAIL on watchdog 20/46 and source-fingerprint checks for 9001/9002 after AUTOREMOVE.
 - CI #127: Static and PREPARE_ONLY PASS; full build interrupted by runner shutdown (exit 143). #128/#129 cancelled before jobs.
-- The active source candidate is patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` (implementation `16193bfb29eecca103a370270458a779403ac619`, envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`); the current preflight harness blob is `dbb7859aed90d1b125de28801dd44d6826d3a2fe` (functional commit `0ca5b790cded21107f4ca72b987d3129790a9b18`, latest comment-only CI-trigger commit `5b3328e23d36b2b1089e4b2342e0a5255578e022`). No workflow run or commit status exists for code/test HEAD `5b3328e23d36b2b1089e4b2342e0a5255578e022` after #129. The current candidate has no completed CI. Runtime/module/hardware verification remains NOT TESTED.
+- The active source candidate is patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` (implementation `16193bfb29eecca103a370270458a779403ac619`, envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`); current preflight harness blob is `fd27275abff514c8578c30963eb380c551023fc0` (functional commit `bfaae52f6714ec93d25dc3537bf392fa3f374f53`, latest comment-only commit `ca75381492a743afba382a1d205c922913ef66e6`). The expanded cleanup guard verifies source-level unconditional work drain and per-family gate cleanup after failed initial registration; it does not execute real kernel failure/retry paths. No workflow run or commit status exists for code/test HEAD `ca75381492a743afba382a1d205c922913ef66e6` after #129. The current candidate has no completed CI. Runtime/module/hardware verification remains NOT TESTED.
 
 The historical source-preflight and CI #124 compile/image result do not validate the current transactional rollback patch or runtime notifier behavior. The exact current CI status and all remaining tasks are maintained in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
