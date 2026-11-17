@@ -1,4 +1,5 @@
 name: RD03v2 validation
+# A [full-build] source/test checkpoint push runs PREPARE_ONLY and the gated full build.
 
 on:
   push:
