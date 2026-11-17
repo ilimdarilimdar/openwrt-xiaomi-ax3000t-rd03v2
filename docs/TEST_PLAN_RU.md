@@ -24,7 +24,7 @@
 
 ## 2. Текущий подтверждённый baseline
 
-Snapshot: 2026-11-17. Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit: 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit: 5b3328e23d36b2b1089e4b2342e0a5255578e022 (no test or firmware behavior change). Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob: dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD: 5b3328e23d36b2b1089e4b2342e0a5255578e022; branch HEAD: ffb68d29abd777bed44cb113887649fe88557698; the two commits after code/test HEAD only update documentation.
+Snapshot: 2026-11-17. Source implementation commit: 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair: f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit: 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit: `5b3328e23d36b2b1089e4b2342e0a5255578e022` (no test or firmware behavior change). Current patch blob: 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob: dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD: `5b3328e23d36b2b1089e4b2342e0a5255578e022`. All subsequent branch revisions in this audit are documentation-only.
 
 | Этап | Текущий подтверждённый результат |
 |---|---|
@@ -38,7 +38,7 @@ Snapshot: 2026-11-17. Source implementation commit: 16193bfb29eecca103a370270458
 | CI #124 final verify-v2 | **FAIL**: watchdog 20 PASS / 26 FAIL и два ECM source-fingerprint false negative после AUTOREMOVE |
 | CI #127 | Static + PREPARE_ONLY **PASS**; full-build прерван runner shutdown, exit 143 |
 | CI #128–#129 | **CANCELLED** до создания jobs |
-| Current candidate | Для code/test HEAD `5b3328e` и branch HEAD `ffb68d2` нет нового run/commit status; API по-прежнему показывает #129 последним. Manual dispatch false/true не запускались; причина отсутствия нового run API не раскрывает |
+| Current candidate | Для code/test HEAD `5b3328e` нет нового run/commit status; API по-прежнему показывает #129 последним. Manual dispatch false/true не запускались; причина отсутствия нового run API не раскрывает |
 | Runtime FIB notifier / ECM module lifecycle | **NOT TESTED** |
 | Hardware Dual-WAN/NSS, WAN failover, RTT/loss/throughput | **NOT TESTED** |
 
@@ -50,7 +50,7 @@ Snapshot: 2026-11-17. Source implementation commit: 16193bfb29eecca103a370270458
 
 Harness guard теперь проверяет весь translation unit с family lock и запрещает прямые RTNL acquisition/assertions. Встроенные parser self-tests проверяют comments/string/character literals, alternate unlock branch, `ASSERT_RTNL`, другой function в том же translation unit и clean case. Дополнительно preflight отклоняет итоговый `.config`, если включены `kmod-ipsec`, `kmod-ipt-ipsec` или `NSS_DRV_IPSEC_ENABLE`; regex самотестируется на трёх synthetic `=m` и на explicit `not set`. Локально прогнан точный Python guard block: parser tests PASS, clean fixture PASS, synthetic inversion обнаруживается. `bash -n` фрагмента и config tests PASS на фактическом `config.final.txt` run #127, на каждом synthetic `=m` и на disabled config. Непрямые helper paths, полный C compile, lockdep/KASAN, fault injection и hardware runtime остаются **NOT TESTED**.
 
-The new gate-first implementation is a source candidate only. The read-only Actions API still shows 129 runs, with #129 as the latest; there is no run/status for code/test HEAD `5b3328e` or branch HEAD `ffb68d2`. The API does not expose why no new run was created. The last UI checkpoint (2026-11-16) reported a pause, but current UI state was not rechecked. CI artifacts use a temporary key and example.invalid; they are not releases and must not be flashed.
+The new gate-first implementation is a source candidate only. The read-only Actions API still shows 129 runs, with #129 as the latest; there is no run/status for code/test HEAD `5b3328e`. The API does not expose why no new run was created. The last UI checkpoint (2026-11-16) reported a usage-related pause, but current UI state was not rechecked. CI artifacts use a temporary key and example.invalid; they are not releases and must not be flashed.
 
 ### Исторические результаты preflight #106–#108
 
