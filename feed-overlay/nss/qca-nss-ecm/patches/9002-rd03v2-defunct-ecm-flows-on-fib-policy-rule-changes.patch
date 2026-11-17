@@ -35,7 +35,7 @@ promise preservation of conntrack/NAT sessions across a public-WAN change.
 ---
 
 
-ecm_db/ecm_db.c | +230 -8
+ecm_db/ecm_db.c | +239 -8
 ecm_db/ecm_db.h | +1 -0
 ecm_init.c | +4 -0
 frontends/ecm_front_end_ipv4.c | +0 -17
@@ -44,7 +44,7 @@ frontends/include/ecm_front_end_ipv4.h | +1 -1
 frontends/include/ecm_front_end_ipv6.h | +1 -1
 frontends/cmn/ecm_ipv4.c | +14 -0
 frontends/cmn/ecm_ipv6.c | +14 -0
-9 files changed, 265 insertions(+), 44 deletions(-)
+9 files changed, 274 insertions(+), 44 deletions(-)
 diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 --- a/ecm_db/ecm_db.c
 +++ b/ecm_db/ecm_db.c
@@ -72,7 +72,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +static bool ecm_db_ipv6_route_registered;
  #endif
  
-@@ -469,9 +477,178 @@
+@@ -469,9 +477,187 @@
  static struct notifier_block ecm_db_ip6route_table_update_nb = {
  	.notifier_call = ecm_db_ipv6_route_table_update_event,
  };
@@ -231,7 +231,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +			 */
 +			ecm_db_fib_rule_registered = false;
 +			if (ret == -ENOENT) {
-+				DEBUG_ERROR("FIB rule notifier was already absent during unregister\n");
++				printk(KERN_WARNING "ECM: FIB rule notifier was already absent during unregister\n");
 +			}
 +		} else {
 +			/* Keep the flag set for unexpected errors; teardown may need retry. */
@@ -260,13 +260,13 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
   * ecm_db_defunct_all_handler()
   * 	Proc handler to defunct ecm db
   */
-@@ -675,4 +852,5 @@
+@@ -675,4 +861,5 @@
  int ecm_db_init(struct dentry *dentry)
  {
  	int ret = 0;
 +	int route_ret = 0;
  
-@@ -747,20 +925,59 @@
+@@ -747,20 +934,59 @@
  	/*
  	 * register for route table modification events
  	 */
@@ -332,7 +332,7 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +
  	return ret;
  
-@@ -785,3 +1002,4 @@
+@@ -785,3 +1011,4 @@
  void ecm_db_exit(void)
  {
 +	ecm_db_fib_rule_notifier_stop();
