@@ -81,7 +81,7 @@ Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope
 
 **Приоритет:** P0 — блокирует любые заявления о завершённой сборке и переход к прошивке.
 
-**Текущий статус:** active patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659 (implementation 16193bfb29eecca103a370270458a779403ac619, envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3); current test harness blob 35c7de976058ecdaf0c287a14c230e5fd247b378 (test-harness commit/code-test HEAD ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8). The harness statically guards unconditional failed-registration cleanup and exact NSS IPsec metadata in both package Makefiles. Synthetic tests of the guard block pass, but the complete project preflight has not run.
+**Текущий статус:** active patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` (implementation `16193bfb29eecca103a370270458a779403ac619`, envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`); current test harness blob `6c25f32b9b38a3b3e92e0d01d227e34b73fa2e8b`, code/test HEAD `7a7df3c6228864ccc8f0a5245a637ebacee5b73e`. The duplicated 760-line source-preflight tail and redundant 27-line IPsec self-test have been removed. Full-script Bash syntax PASS; no firmware source or patch 9002 change. Exact current QSDK archive apply, 32-patch queue, C compilation, full CI and runtime fault injection remain **NOT TESTED**.
 
 Действия:
 1. Maintainer должен повторно включить Actions в UI репозитория. После этого запустить manual dispatch на точном branch ref: сначала `full_build=false`, затем `true`. Не создавать пустые или документационные коммиты ради запуска.
