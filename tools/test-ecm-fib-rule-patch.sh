@@ -777,15 +777,59 @@ def check_source(db_path, init_path, header_path):
     cancel = stop_fn.find("cancel_work_sync(&ecm_db_fib_rule_work)")
     if min(ready_off, unregister, cancel) < 0 or not (ready_off < unregister < cancel):
         sys.exit(f"FAIL: stop hook must disarm, unregister, then drain work in {db_path}")
-    if "void ecm_db_fib_rule_notifier_stop(void);" not in header:
-        sys.exit(f"FAIL: stop-hook prototype missing in {header_path}")
-    for cleanup in (
+
+    # unregister is conditional on successful registration, but replay may
+    # have already set family gates/pending bits before register_fib_notifier()
+    # ultimately fails. cancel + RTNL-protected gate cleanup must therefore be
+    # outside the registered-only branch and run on every stop/unwind path.
+    registered_guard = stop_fn.find("if (ecm_db_fib_rule_registered) {")
+    if registered_guard < 0:
+        sys.exit(f"FAIL: notifier stop lacks the registered-state guard in {db_path}")
+    guard_open = stop_fn.find("{", registered_guard)
+    depth = 0
+    guard_end = -1
+    for pos in range(guard_open, len(stop_fn)):
+        if stop_fn[pos] == "{":
+            depth += 1
+        elif stop_fn[pos] == "}":
+            depth -= 1
+            if depth == 0:
+                guard_end = pos + 1
+                break
+    if guard_end < 0:
+        sys.exit(f"FAIL: registered-state guard is unterminated in {db_path}")
+    if stop_fn.count("if (ecm_db_fib_rule_registered) {") != 1:
+        sys.exit(f"FAIL: unexpected duplicate registered-state guard in {db_path}")
+    if cancel < guard_end:
+        sys.exit(f"FAIL: cancel_work_sync() is conditional on successful registration in {db_path}")
+    rtnl_lock = stop_fn.find("rtnl_net_lock(&init_net);", cancel)
+    rtnl_unlock = stop_fn.find("rtnl_net_unlock(&init_net);", rtnl_lock)
+    cleanup_tokens = [
         "clear_bit(ECM_DB_FIB_RULE_PENDING_IPV4, &ecm_db_fib_rule_pending)",
         "test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV4, &ecm_db_fib_rule_gated)",
         "ecm_front_end_ipv4_stop_temp(0)",
-    ):
+    ]
+    cleanup_positions = [stop_fn.find(token) for token in cleanup_tokens]
+    if min(rtnl_lock, rtnl_unlock, *cleanup_positions) < 0:
+        sys.exit(f"FAIL: unconditional IPv4 pending/gate cleanup is incomplete in {db_path}")
+    if not (guard_end <= cancel < rtnl_lock < cleanup_positions[0] < cleanup_positions[1] < cleanup_positions[2] < rtnl_unlock):
+        sys.exit(f"FAIL: IPv4 cleanup must run after the registered-only branch, under RTNL, after work drain in {db_path}")
+    if stop_fn.find("return;") >= 0 and stop_fn.find("return;") < rtnl_unlock:
+        sys.exit(f"FAIL: notifier stop can return before unconditional gate cleanup in {db_path}")
+    if "void ecm_db_fib_rule_notifier_stop(void);" not in header:
+        sys.exit(f"FAIL: stop-hook prototype missing in {header_path}")
+    for cleanup in cleanup_tokens:
         if cleanup not in stop_fn:
             sys.exit(f"FAIL: notifier stop does not clear/release a pending gate in {db_path}: {cleanup}")
+    if "#ifdef ECM_IPV6_ENABLE" in stop_fn:
+        v6_tokens = [
+            "clear_bit(ECM_DB_FIB_RULE_PENDING_IPV6, &ecm_db_fib_rule_pending)",
+            "test_and_clear_bit(ECM_DB_FIB_RULE_GATED_IPV6, &ecm_db_fib_rule_gated)",
+            "ecm_front_end_ipv6_stop_temp(0)",
+        ]
+        v6_positions = [stop_fn.find(token) for token in v6_tokens]
+        if min(v6_positions) < 0 or not (guard_end <= cancel < rtnl_lock < v6_positions[0] < v6_positions[1] < v6_positions[2] < rtnl_unlock):
+            sys.exit(f"FAIL: IPv6 cleanup must be unconditional and RTNL-serialized in {db_path}")
 
     db_exit_start = db.find("void ecm_db_exit(void)")
     db_exit_end = db.find("EXPORT_SYMBOL(ecm_db_exit);", db_exit_start)
