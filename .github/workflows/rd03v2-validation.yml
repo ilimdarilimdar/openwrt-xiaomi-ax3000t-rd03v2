@@ -72,6 +72,52 @@ jobs:
           python3 -m compileall -q tools
           echo "PASS Python syntax: tools/"
 
+      - name: Validate streamed build logs and pipe failure propagation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          script = Path("tools/finish-build-v2.sh").read_text()
+          required = [
+              "set -euo pipefail",
+              'make download -j"$JOBS" 2>&1 | tee "$TREE/download.log"',
+              '(cd "$TREE" && nice make -j"$JOBS" BUILD_LOG=1 2>&1 | tee "$TREE/build.log")',
+              '(cd "$TREE" && make package/index 2>&1 | tee "$TREE/index.log")',
+              'V2_HEAVY_LOCK_HELD=1 JOBS=$(( JOBS < 2 ? JOBS : 2 )) "$V2/tools/wifi-initramfs-v2.sh" "$TREE" 2>&1 | tee "$TREE/wifi-initramfs.log" ||',
+          ]
+          missing = [item for item in required if item not in script]
+          if missing:
+              sys.exit(f"FAIL: streamed build-log contract missing: {missing}")
+
+          forbidden = [
+              'make download -j"$JOBS" >"$TREE/download.log"',
+              'nice make -j"$JOBS" BUILD_LOG=1 >"$TREE/build.log"',
+              'make package/index >"$TREE/index.log"',
+              '"$V2/tools/wifi-initramfs-v2.sh" "$TREE" >"$TREE/wifi-initramfs.log"',
+          ]
+          stale = [item for item in forbidden if item in script]
+          if stale:
+              sys.exit(f"FAIL: silent build-stage redirection returned: {stale}")
+
+          print("PASS: all four long build stages stream stdout/stderr through tee")
+          print("PASS: finish-build-v2 keeps errexit and pipefail enabled")
+          PY
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          set +e
+          (printf 'upstream-failure-marker\\n'; exit 23) 2>&1 | tee "$tmp/pipeline.log" >/dev/null
+          rc=$?
+          set -e
+          if [[ "$rc" -ne 23 ]]; then
+            echo "::error::pipeline lost upstream exit status (got $rc, expected 23)"
+            exit 1
+          fi
+          grep -qxF 'upstream-failure-marker' "$tmp/pipeline.log"
+          echo "PASS: tee preserves an upstream non-zero exit status under pipefail"
+
       - name: Validate manual workflow dispatch gates
         shell: bash
         run: |
