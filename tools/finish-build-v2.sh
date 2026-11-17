@@ -43,9 +43,10 @@ elif [ -e "$TREE/dl" ]; then
 	die 'preserving an existing dl directory; use the shared download cache explicitly'
 fi
 mkdir -p "$DLDIR"; ln -s "$DLDIR" "$TREE/dl"
+: > "$TREE/download.log"
 for i in 1 2 3; do
-	echo "=== make download attempt $i/3 ==="
-	(cd "$TREE" && make download -j"$JOBS" 2>&1 | tee "$TREE/download.log") && break
+	printf '=== make download attempt %s/3 ===\n' "$i" | tee -a "$TREE/download.log"
+	(cd "$TREE" && make download -j"$JOBS" 2>&1 | tee -a "$TREE/download.log") && break
 done || die "make download failed (see $TREE/download.log)"
 # A rebuild leaves an earlier -wifi installer pair in place, and wifi-initramfs.sh refuses to
 # run over one, so a release would ship the old pair (an earlier build once did). It is
