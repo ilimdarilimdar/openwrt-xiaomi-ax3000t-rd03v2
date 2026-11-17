@@ -800,6 +800,50 @@ def check_source(db_path, init_path, header_path):
         sys.exit(f"FAIL: registered-state guard is unterminated in {db_path}")
     if stop_fn.count("if (ecm_db_fib_rule_registered) {") != 1:
         sys.exit(f"FAIL: unexpected duplicate registered-state guard in {db_path}")
+    if not (registered_guard < unregister < guard_end):
+        sys.exit(f"FAIL: unregister_fib_notifier() must be inside the registered-state guard in {db_path}")
+
+    # Only clear the registered flag after unregister succeeds. On an error,
+    # retain the state for diagnosis/retry rather than claiming it was removed.
+    unregister_error = stop_fn.find("if (ret) {", unregister)
+    if unregister_error < 0 or unregister_error >= guard_end:
+        sys.exit(f"FAIL: unregister result is not checked inside the registered-state guard in {db_path}")
+    error_open = stop_fn.find("{", unregister_error)
+    depth = 0
+    error_end = -1
+    for pos in range(error_open, len(stop_fn)):
+        if stop_fn[pos] == "{":
+            depth += 1
+        elif stop_fn[pos] == "}":
+            depth -= 1
+            if depth == 0:
+                error_end = pos + 1
+                break
+    if error_end < 0:
+        sys.exit(f"FAIL: unregister error branch is unterminated in {db_path}")
+    success_else = stop_fn.find("else {", error_end)
+    if success_else < 0 or success_else >= guard_end:
+        sys.exit(f"FAIL: unregister success branch is missing in {db_path}")
+    success_open = stop_fn.find("{", success_else)
+    depth = 0
+    success_end = -1
+    for pos in range(success_open, len(stop_fn)):
+        if stop_fn[pos] == "{":
+            depth += 1
+        elif stop_fn[pos] == "}":
+            depth -= 1
+            if depth == 0:
+                success_end = pos + 1
+                break
+    if success_end < 0 or success_end > guard_end:
+        sys.exit(f"FAIL: unregister success branch is unterminated in {db_path}")
+    registered_clear = "ecm_db_fib_rule_registered = false;"
+    clear_pos = stop_fn.find(registered_clear)
+    if clear_pos < 0 or not (success_else < clear_pos < success_end):
+        sys.exit(f"FAIL: registered-state flag must be cleared only after successful unregister in {db_path}")
+    if stop_fn.count(registered_clear) != 1:
+        sys.exit(f"FAIL: registered-state flag clear must occur exactly once in stop hook in {db_path}")
+
     if cancel < guard_end:
         sys.exit(f"FAIL: cancel_work_sync() is conditional on successful registration in {db_path}")
     rtnl_lock = stop_fn.find("rtnl_net_lock(&init_net);", cancel)
