@@ -83,7 +83,8 @@ jobs:
           script = Path("tools/finish-build-v2.sh").read_text()
           required = [
               "set -euo pipefail",
-              'make download -j"$JOBS" 2>&1 | tee "$TREE/download.log"',
+              ': > "$TREE/download.log"',
+              'tee -a "$TREE/download.log"',
               '(cd "$TREE" && nice make -j"$JOBS" BUILD_LOG=1 2>&1 | tee "$TREE/build.log")',
               '(cd "$TREE" && make package/index 2>&1 | tee "$TREE/index.log")',
               'V2_HEAVY_LOCK_HELD=1 JOBS=$(( JOBS < 2 ? JOBS : 2 )) "$V2/tools/wifi-initramfs-v2.sh" "$TREE" 2>&1 | tee "$TREE/wifi-initramfs.log" ||',
@@ -94,6 +95,7 @@ jobs:
 
           forbidden = [
               'make download -j"$JOBS" >"$TREE/download.log"',
+              'make download -j"$JOBS" 2>&1 | tee "$TREE/download.log"',
               'nice make -j"$JOBS" BUILD_LOG=1 >"$TREE/build.log"',
               'make package/index >"$TREE/index.log"',
               '"$V2/tools/wifi-initramfs-v2.sh" "$TREE" >"$TREE/wifi-initramfs.log"',
@@ -101,6 +103,8 @@ jobs:
           stale = [item for item in forbidden if item in script]
           if stale:
               sys.exit(f"FAIL: silent build-stage redirection returned: {stale}")
+          if script.count('tee -a "$TREE/download.log"') != 2:
+              sys.exit("FAIL: download retries must append both attempt markers and make output")
 
           print("PASS: all four long build stages stream stdout/stderr through tee")
           print("PASS: finish-build-v2 keeps errexit and pipefail enabled")
