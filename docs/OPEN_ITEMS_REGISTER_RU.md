@@ -13,7 +13,7 @@
 ## Текущая контрольная точка — 2026-11-17
 
 - Рабочая ветка: work/rd03v2-dualwan-mwan3-baseline.
-- Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`; functional test-harness commit `325ac7afd406fcf5a79207a1a1efaeeaad937d60`; patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`; current test-harness blob `33e9ce04c1a28d7af5acc48bceaa8d3669151ea4`; code/test HEAD `325ac7afd406fcf5a79207a1a1efaeeaad937d60`.
+- Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`; functional test-harness/code-test commit `ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8`; patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`; current test-harness blob `35c7de976058ecdaf0c287a14c230e5fd247b378`; code/test HEAD `ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8`. Exact NSS feed pin `57c0fa18f847f6cb23992ff3493c6a9131246f4c`; qca-nss-clients source version `51be82d`; preflight scans both qca-nss-clients and qca-nss-drv Makefiles for IPsec manager packages.
 - Последующие документационные изменения после code/test checkpoint не меняют прошивочные исходники, конфигурацию, патчи или исполняемую логику тестов.
 - Candidate 9002 закрывает per-family gate непосредственно в atomic callback на первом ADD/DEL событии, использует readiness barrier для initial FIB replay, drain-loop worker, RTNL-serialized final gate release и teardown cleanup.
 - Callback закрывает gate до публикации pending bit. Повторные события coalesce и не увеличивают temporary-stop counter повторно. Во время initial register_fib_notifier replay callback не queue-ит worker; после успешного return caller выставляет ready и ставит один worker.
