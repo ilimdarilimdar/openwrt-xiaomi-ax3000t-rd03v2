@@ -191,7 +191,7 @@ Evidence:
 
 ### Current source revision and validation state — 2026-11-17
 
-Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`; functional test-harness/code-test commit `ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8`; patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`; current test-harness blob `35c7de976058ecdaf0c287a14c230e5fd247b378`; code/test HEAD `ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8`. NSS feed pin `57c0fa18f847f6cb23992ff3493c6a9131246f4c`; qca-nss-clients source version `51be82d`; both NSS package Makefiles are checked for manager packages.
+Source implementation `16193bfb29eecca103a370270458a779403ac619`; patch-envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`; current test-harness/code-test HEAD `7a7df3c6228864ccc8f0a5245a637ebacee5b73e`; patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659`; current test-harness blob `6c25f32b9b38a3b3e92e0d01d227e34b73fa2e8b`. NSS feed pin `57c0fa18f847f6cb23992ff3493c6a9131246f4c`; qca-nss-clients source version `51be82d`; both NSS package Makefiles are scanned for IPsec manager packages.
 
 ### Exact NSS feed IPsec/XFRM/KLIPS exclusion — 2026-11-17
 
@@ -394,7 +394,7 @@ Pinned QSDK 14.0 source:
 - CI #124: the same preflight/source guards PASS; `qca-nss-ecm` compiled, `kmod-qca-nss-ecm` entered rootfs, image marker found, sysupgrade and initramfs-factory images created.
 - CI #124 final `verify-v2`: FAIL on watchdog 20/46 and source-fingerprint checks for 9001/9002 after AUTOREMOVE.
 - CI #127: Static and PREPARE_ONLY PASS; full build interrupted by runner shutdown (exit 143). #128/#129 cancelled before jobs.
-- The active source candidate is patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659 (implementation 16193bfb29eecca103a370270458a779403ac619, envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3); current preflight harness blob is 35c7de976058ecdaf0c287a14c230e5fd247b378 (code/test commit ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8). The harness checks both NSS package Makefiles and the direct/derived IPsec selectors, alongside failed-registration cleanup. This remains static, not execution of real kernel failure/retry paths. No workflow run or commit status exists for code/test HEAD ee3b9cdeae2e6c9359b9a7afa76dc91ef4b1e7d8 after #129. Runtime/module/hardware verification remains NOT TESTED.
+- The active source candidate is patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` (implementation `16193bfb29eecca103a370270458a779403ac619`, envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`); current preflight harness blob is `6c25f32b9b38a3b3e92e0d01d227e34b73fa2e8b` (code/test HEAD `7a7df3c6228864ccc8f0a5245a637ebacee5b73e`). A duplicated 760-line source-preflight tail and repeated 27-line IPsec self-test have been removed. Full-script Bash syntax passes. The current exact QSDK archive apply/32-patch queue, C build, failure injection and lockdep remain NOT TESTED. No workflow run or commit status exists for code/test HEAD `7a7df3c6228864ccc8f0a5245a637ebacee5b73e` after #129. Runtime/module/hardware verification remains NOT TESTED.
 
 The historical source-preflight and CI #124 compile/image result do not validate the current transactional rollback patch or runtime notifier behavior. The exact current CI status and all remaining tasks are maintained in [OPEN_ITEMS_REGISTER_RU.md](OPEN_ITEMS_REGISTER_RU.md).
 
