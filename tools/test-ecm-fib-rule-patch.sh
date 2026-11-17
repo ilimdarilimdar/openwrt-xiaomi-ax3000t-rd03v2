@@ -856,46 +856,32 @@ def check_source(db_path, init_path, header_path):
     if not (registered_guard < unregister < guard_end):
         sys.exit(f"FAIL: unregister_fib_notifier() must be inside the registered-state guard in {db_path}")
 
-    # Only clear the registered flag after unregister succeeds. On an error,
-    # retain the state for diagnosis/retry rather than claiming it was removed.
-    unregister_error = stop_fn.find("if (ret) {", unregister)
-    if unregister_error < 0 or unregister_error >= guard_end:
-        sys.exit(f"FAIL: unregister result is not checked inside the registered-state guard in {db_path}")
-    error_open = stop_fn.find("{", unregister_error)
-    depth = 0
-    error_end = -1
-    for pos in range(error_open, len(stop_fn)):
-        if stop_fn[pos] == "{":
-            depth += 1
-        elif stop_fn[pos] == "}":
-            depth -= 1
-            if depth == 0:
-                error_end = pos + 1
-                break
-    if error_end < 0:
-        sys.exit(f"FAIL: unregister error branch is unterminated in {db_path}")
-    success_else = stop_fn.find("else {", error_end)
-    if success_else < 0 or success_else >= guard_end:
-        sys.exit(f"FAIL: unregister success branch is missing in {db_path}")
-    success_open = stop_fn.find("{", success_else)
-    depth = 0
-    success_end = -1
-    for pos in range(success_open, len(stop_fn)):
-        if stop_fn[pos] == "{":
-            depth += 1
-        elif stop_fn[pos] == "}":
-            depth -= 1
-            if depth == 0:
-                success_end = pos + 1
-                break
-    if success_end < 0 or success_end > guard_end:
-        sys.exit(f"FAIL: unregister success branch is unterminated in {db_path}")
+    # Linux 6.18 atomic_notifier_chain_unregister() returns -ENOENT when
+    # the notifier is already absent, but still calls synchronize_rcu().
+    # Both success and -ENOENT therefore mean no callback remains registered:
+    # clear the bookkeeping flag for either result, and retain it only for
+    # unexpected errors so teardown can diagnose/retry.
+    accepted_result = stop_fn.find("if (!ret || ret == -ENOENT) {", unregister)
+    if accepted_result < 0 or accepted_result >= guard_end:
+        sys.exit(f"FAIL: unregister must accept success and -ENOENT as absent in {db_path}")
     registered_clear = "ecm_db_fib_rule_registered = false;"
-    clear_pos = stop_fn.find(registered_clear)
-    if clear_pos < 0 or not (success_else < clear_pos < success_end):
-        sys.exit(f"FAIL: registered-state flag must be cleared only after successful unregister in {db_path}")
+    clear_pos = stop_fn.find(registered_clear, accepted_result)
+    if clear_pos < 0 or clear_pos >= guard_end:
+        sys.exit(f"FAIL: registered-state flag is not cleared for success/-ENOENT in {db_path}")
     if stop_fn.count(registered_clear) != 1:
         sys.exit(f"FAIL: registered-state flag clear must occur exactly once in stop hook in {db_path}")
+    absent_check = stop_fn.find("if (ret == -ENOENT) {", accepted_result)
+    if absent_check < 0 or absent_check >= clear_pos:
+        sys.exit(f"FAIL: -ENOENT must have an explicit already-absent diagnostic in {db_path}")
+    unexpected_error = stop_fn.find("else {", clear_pos)
+    if unexpected_error < 0 or unexpected_error >= guard_end:
+        sys.exit(f"FAIL: unexpected unregister errors must retain the registered flag in {db_path}")
+    error_open = stop_fn.find("{", unexpected_error)
+    error_end = stop_fn.find("}", error_open)
+    if error_end < 0 or registered_clear in stop_fn[error_open:error_end]:
+        sys.exit(f"FAIL: unexpected unregister errors must not clear the registered flag in {db_path}")
+    if "Could not unregister FIB rule notifier error:%d" not in stop_fn[error_open:error_end]:
+        sys.exit(f"FAIL: unexpected unregister errors lack a diagnostic in {db_path}")
 
     if cancel < guard_end:
         sys.exit(f"FAIL: cancel_work_sync() is conditional on successful registration in {db_path}")

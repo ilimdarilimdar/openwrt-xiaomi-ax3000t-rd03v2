@@ -223,10 +223,19 @@ diff --git a/ecm_db/ecm_db.c b/ecm_db/ecm_db.c
 +	WRITE_ONCE(ecm_db_fib_rule_ready, false);
 +	if (ecm_db_fib_rule_registered) {
 +		ret = unregister_fib_notifier(&init_net, &ecm_db_fib_rule_nb);
-+		if (ret) {
-+			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\n", ret);
-+		} else {
++		if (!ret || ret == -ENOENT) {
++			/*
++			 * atomic_notifier_chain_unregister() calls synchronize_rcu()
++			 * even when the notifier is already absent (-ENOENT).
++			 * In either case no callback remains registered.
++			 */
 +			ecm_db_fib_rule_registered = false;
++			if (ret == -ENOENT) {
++				DEBUG_ERROR("FIB rule notifier was already absent during unregister\n");
++			}
++		} else {
++			/* Keep the flag set for unexpected errors; teardown may need retry. */
++			DEBUG_ERROR("Could not unregister FIB rule notifier error:%d\n", ret);
 +		}
 +	}
 +	cancel_work_sync(&ecm_db_fib_rule_work);
