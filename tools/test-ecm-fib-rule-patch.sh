@@ -135,11 +135,8 @@ PY
 
 # The family-lock audit assumes no external IPsec/XFRM/KLIPS ECM notifier
 # subscriber. Both XFRM and KLIPS plugins are known to register through
-# ecm_notifier_register_connection_notify() in QSDK variants. The current
-# pinned ADCDS NSS feed (57c0fa18...) has no ipsecmgr/xfrm/klips KernelPackage
-# in qca-nss-clients/Makefile; its NSS_NLIPSEC_ENABLE derives from
-# NSS_DRV_IPSEC_ENABLE. Pin and metadata guards below make a feed change fail
-# closed so the subscriber audit must be repeated before IPsec can be enabled.
+# ecm_notifier_register_connection_notify() in QSDK variants. The exact
+# pinned NSS feed must therefore be checked together with final Kconfig.
 CONFIG_FILE="$TREE/.config"
 NSS_CLIENTS_MAKEFILE="$TREE/feeds/nss/qca-nss-clients/Makefile"
 NSS_DRV_MAKEFILE="$TREE/feeds/nss/qca-nss-drv/Makefile"
@@ -153,6 +150,11 @@ grep -qxF 'PKG_SOURCE_VERSION:=51be82d' "$NSS_CLIENTS_MAKEFILE" ||
   die "qca-nss-clients source pin changed; repeat the IPsec/XFRM/KLIPS notifier audit"
 if grep -Eiq '^[[:space:]]*define[[:space:]]+KernelPackage/[^[:space:]]*(ipsecmgr|ipsec|xfrm|klips)[^[:space:]]*' "$NSS_CLIENTS_MAKEFILE"; then
   die "pinned qca-nss-clients feed now defines an IPsec/XFRM/KLIPS package; repeat the notifier lock-order audit"
+fi
+if grep -Eiq '^[[:space:]]*define[[:space:]]+KernelPackage/[^[:space:]]*(ipsecmgr|ipsec|xfrm|klips)[^[:space:]]*' "$NSS_DRV_MAKEFILE"; then
+  die "pinned qca-nss-drv feed now defines an IPsec/XFRM/KLIPS package; repeat the notifier lock-order audit"
+fi
+
 IPSEC_CONFIG_RE='^(CONFIG_PACKAGE_kmod-ipsec|CONFIG_PACKAGE_kmod-ipt-ipsec|CONFIG_NSS_DRV_IPSEC_ENABLE|CONFIG_NSS_NLIPSEC_ENABLE|CONFIG_PACKAGE_kmod-qca-nss-drv-ipsecmgr|CONFIG_PACKAGE_kmod-qca-nss-drv-ipsecmgr-klips|CONFIG_PACKAGE_kmod-qca-nss-drv-ipsecmgr-xfrm)=(y|m)$'
 [[ -s "$CONFIG_FILE" ]] || die "prepared final Kconfig not found: $CONFIG_FILE"
 
@@ -180,6 +182,7 @@ done
 if grep -Eq "$IPSEC_CONFIG_RE" "$CONFIG_FILE"; then
   die "IPsec/XFRM/KLIPS selected: re-audit ECM external notifier callbacks and lock ordering before enabling it"
 fi
+
 
 # Validate patch envelope and every unified-diff hunk before downloading/applying source.
 python3 - "$PATCH_FILE" <<'PY'
