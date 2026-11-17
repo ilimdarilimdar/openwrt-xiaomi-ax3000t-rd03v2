@@ -108,7 +108,7 @@ jobs:
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           set +e
-          (printf 'upstream-failure-marker\\n'; exit 23) 2>&1 | tee "$tmp/pipeline.log" >/dev/null
+          (printf '%s\\n' 'upstream-failure-marker'; exit 23) 2>&1 | tee "$tmp/pipeline.log" >/dev/null
           rc=$?
           set -e
           if [[ "$rc" -ne 23 ]]; then
