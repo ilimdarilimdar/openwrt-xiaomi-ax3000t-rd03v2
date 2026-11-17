@@ -43,8 +43,10 @@ elif [ -e "$TREE/dl" ]; then
 	die 'preserving an existing dl directory; use the shared download cache explicitly'
 fi
 mkdir -p "$DLDIR"; ln -s "$DLDIR" "$TREE/dl"
-for i in 1 2 3; do (cd "$TREE" && make download -j"$JOBS" >"$TREE/download.log" 2>&1) && break; done ||
-	die "make download failed (see $TREE/download.log)"
+for i in 1 2 3; do
+	echo "=== make download attempt $i/3 ==="
+	(cd "$TREE" && make download -j"$JOBS" 2>&1 | tee "$TREE/download.log") && break
+done || die "make download failed (see $TREE/download.log)"
 # A rebuild leaves an earlier -wifi installer pair in place, and wifi-initramfs.sh refuses to
 # run over one, so a release would ship the old pair (an earlier build once did). It is
 # remade below from this build.
@@ -53,7 +55,8 @@ for f in "$T"/*-initramfs-uImage-wifi.itb "$T"/*-initramfs-factory-wifi.ubi; do
 	echo "removing the previous build's $(basename "$f")"; rm -f "$f"
 done
 start=$(date +%s)
-(cd "$TREE" && nice make -j"$JOBS" BUILD_LOG=1 >"$TREE/build.log" 2>&1) || die "make failed (see $TREE/build.log, logs/)"
+echo "=== full OpenWrt compile (JOBS=$JOBS) ==="
+(cd "$TREE" && nice make -j"$JOBS" BUILD_LOG=1 2>&1 | tee "$TREE/build.log") || die "make failed (see $TREE/build.log, logs/)"
 echo "build: $(( $(date +%s) - start )) s"
 
 # 9. the repository: packages of feeds outside the official ones land outside the target dir
@@ -61,11 +64,13 @@ echo "build: $(( $(date +%s) - start )) s"
 # The packages 95-rd03v2-apk-pins pins (his changes without a version bump) go in as well, so
 # the exact pinned versions stay installable from our repository.
 python3 "$V2/tools/copy-repo-packages.py" "$TREE"
-(cd "$TREE" && make package/index >"$TREE/index.log" 2>&1) || die "make package/index failed"
+echo "=== package repository index ==="
+(cd "$TREE" && make package/index 2>&1 | tee "$TREE/index.log") || die "make package/index failed"
 
 # 10. the beaconing -wifi installer pair, from this build (we hold the heavy-workload lock);
 # wifi-initramfs.sh takes 1 or 2 jobs, whatever the build used
-V2_HEAVY_LOCK_HELD=1 JOBS=$(( JOBS < 2 ? JOBS : 2 )) "$V2/tools/wifi-initramfs-v2.sh" "$TREE" >"$TREE/wifi-initramfs.log" 2>&1 ||
+echo "=== Wi-Fi initramfs installer build ==="
+V2_HEAVY_LOCK_HELD=1 JOBS=$(( JOBS < 2 ? JOBS : 2 )) "$V2/tools/wifi-initramfs-v2.sh" "$TREE" 2>&1 | tee "$TREE/wifi-initramfs.log" ||
 	die "the -wifi installer pass failed (see $TREE/wifi-initramfs.log)"
 
 # 11. check what we built
