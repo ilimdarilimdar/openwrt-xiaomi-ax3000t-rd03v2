@@ -6,26 +6,25 @@
 **Репозиторий:** `ilimdarilimdar/openwrt-xiaomi-ax3000t-rd03v2`
 **Рабочая ветка:** `work/rd03v2-dualwan-mwan3-baseline`.
 
-**Live refs:** branch HEAD `${S.head}`; code/test HEAD `${S.code}`. Two commits after code/test HEAD (`58332b37d5ce7acf81b11dbfd8ec537423fbd323` and `${S.head}`) are documentation-only.
-**Current source/test candidate:** Source implementation 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit 5b3328e23d36b2b1089e4b2342e0a5255578e022 (no test or firmware behavior change). Current patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; branch HEAD ffb68d29abd777bed44cb113887649fe88557698; the two commits after code/test HEAD (58332b37d5ce7acf81b11dbfd8ec537423fbd323 and ffb68d29abd777bed44cb113887649fe88557698) are documentation-only.. Gate-first callback and drain-loop implementation is committed but has not passed exact QSDK archive apply or C compilation.
+**Контрольная точка:** code/test HEAD: `5b3328e23d36b2b1089e4b2342e0a5255578e022`. Последующие изменения рабочей ветки после этой точки являются документационными и не меняют прошивочные исходники, конфигурацию, патчи или исполняемую логику тестов.
+**Current source/test candidate:** Source implementation 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit 5b3328e23d36b2b1089e4b2342e0a5255578e022 (no test or firmware behavior change). Current patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD `5b3328e23d36b2b1089e4b2342e0a5255578e022`. Последующие изменения рабочей ветки после этой точки затрагивали только документацию. Gate-first callback and drain-loop implementation is committed but has not passed exact QSDK archive apply or C compilation.
 **Устройство:** только Xiaomi AX3000T RD03v2 / Qualcomm IPQ5018. Не переносить выводы и образы на другие аппаратные ревизии.
 
-
-## Текущая контрольная точка — 2026-11-16
+## Текущая контрольная точка — 2026-11-17
 
 - Рабочая ветка: work/rd03v2-dualwan-mwan3-baseline.
-- Source implementation 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit 5b3328e23d36b2b1089e4b2342e0a5255578e022 (no test or firmware behavior change). Current patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; branch HEAD ffb68d29abd777bed44cb113887649fe88557698; the two commits after code/test HEAD (58332b37d5ce7acf81b11dbfd8ec537423fbd323 and ffb68d29abd777bed44cb113887649fe88557698) are documentation-only.
-- Both documentation commits after the code/test checkpoint leave firmware, configuration, patches and test logic unchanged.
+- Source implementation 16193bfb29eecca103a370270458a779403ac619; patch-envelope repair f9f33b314ef11ad42037ad81de18e05f6e0e11f3; functional test-harness commit 0ca5b790cded21107f4ca72b987d3129790a9b18; latest comment-only / CI-trigger commit 5b3328e23d36b2b1089e4b2342e0a5255578e022 (no test or firmware behavior change). Current patch blob 3dbe8c97bdab7ee7452fc49b4ae77580788ef659; current test-harness blob dbb7859aed90d1b125de28801dd44d6826d3a2fe. Code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; subsequent documentation-only branch revisions; the two commits after code/test HEAD (58332b37d5ce7acf81b11dbfd8ec537423fbd323 and ffb68d29abd777bed44cb113887649fe88557698) are documentation-only.
+- Последующие документационные изменения после code/test checkpoint не меняют прошивочные исходники, конфигурацию, патчи или исполняемую логику тестов.
 - Candidate 9002 закрывает per-family gate непосредственно в atomic callback на первом ADD/DEL событии, использует readiness barrier для initial FIB replay, drain-loop worker, RTNL-serialized final gate release и teardown cleanup.
 - Callback закрывает gate до публикации pending bit. Повторные события coalesce и не увеличивают temporary-stop counter повторно. Во время initial register_fib_notifier replay callback не queue-ит worker; после успешного return caller выставляет ready и ставит один worker.
 - Worker обрабатывает pending IPv4/IPv6 bits циклом и открывает gates только после пустого pending snapshot под per-net RTNL. Teardown disarm-ит queueing, unregister-ит notifier, drain/cancel-ит work и очищает остаточные gated/pending state.
 - Это source candidate, а не подтверждённое исправление: exact QSDK archive apply, полная отсортированная 32-patch queue, C compilation, fault injection, lockdep/KASAN и runtime stress после изменения не выполнялись. Порядок RTNL → ECM frontend spinlock ещё должен быть подтверждён lockdep.
 - Последний GitHub Actions run — #129, отменён до jobs. #127 прошёл Static/PREPARE_ONLY, но full-build прерван runner shutdown (exit 143). #124 — последняя сборка с образами; она собрала старую версию ECM, а final verify-v2 завершился FAIL.
-- Read-only GitHub API snapshot (2026-11-17): 129 Actions runs exist; #129 (SHA e398b3f598b6b4adcabd2e7d99fc5b2c7ce4991b) remains the latest and was cancelled before jobs. No run is associated with code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; combined commit-status results are empty for 5b3328e23d36b2b1089e4b2342e0a5255578e022 and branch HEAD ffb68d29abd777bed44cb113887649fe88557698. The [full-build] marker on the comment-only commit did not produce a visible #130 run. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but that state has not been rechecked in the UI. Manual dispatch remains untested. Workflow contains manual workflow_dispatch with `full_build=false/true`, but neither variant has run on the current code/test revision.
+- Read-only GitHub API snapshot (2026-11-17): 129 Actions runs exist; #129 (SHA e398b3f598b6b4adcabd2e7d99fc5b2c7ce4991b) remains the latest and was cancelled before jobs. No run is associated with code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; the combined commit-status list is empty for code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022. The [full-build] marker on the comment-only commit did not produce a visible #130 run. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but that state has not been rechecked in the UI. Manual dispatch remains untested. Workflow contains manual workflow_dispatch with `full_build=false/true`, but neither variant has run on the current code/test revision.
 - NOT TESTED: exact archive apply, 32-patch feed series после нового изменения, текущая C compilation, initial replay/retry, injected IPv4/IPv6/FIB registration failures, worker churn stress, module load/unload, firewall4/mwan3 failover, conntrack marks, NSS datapath, throughput/RTT/loss, game traffic, soak и recovery.
 - Основной домашний роутер остаётся на stock MiWiFi. CI-образы используют временный P-256 key и example.invalid; это не installable release и их нельзя прошивать.
 
-## Оценка зрелости проекта — 2026-11-16
+## Оценка зрелости проекта — 2026-11-17
 
 **Инженерный прогресс: 44%. Готовность к установке как пользовательского релиза: около 10%.**
 
@@ -42,7 +41,6 @@
 | **Итого** | **100%** |  | **44,3% (округлено до 44%)** |
 
 Унаследованная платформа уже имеет отдельные результаты upstream build/hardware validation. Эти результаты не засчитываются как проверка новых Dual-WAN/ECM изменений. Текущая gate-first/drain-loop версия patch 9002 новее исходников, собранных в CI #124, и пока не прошла повторный apply/compile/verify. Поэтому 44% означает завершённость инженерной работы, а не готовность безопасно прошивать устройство.
-
 
 ## 1. Краткий итог аудита
 
@@ -64,7 +62,7 @@
 - Производительность, задержка, потери и стабильность под нагрузкой на реальном RD03v2.
 - Готовый подписанный release/repository и проверенная процедура установки/отката именно этого экспериментального Dual-WAN baseline.
 
-**Критически важно:** CI #124 завершился FAIL на финальном verifier. CI #127 был прерван runner shutdown с кодом 143 до получения compile/final-verifier результата. CI #128/#129 отменены до создания jobs. Code/test HEAD `5b3328e23d36b2b1089e4b2342e0a5255578e022` и branch HEAD `ffb68d29abd777bed44cb113887649fe88557698` не имеют нового run/status; актуальная gate-first/drain-loop реализация не прошла full CI. Read-only GitHub API snapshot (2026-11-17): 129 Actions runs exist; #129 (SHA e398b3f598b6b4adcabd2e7d99fc5b2c7ce4991b) remains the latest and was cancelled before jobs. No run is associated with code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; combined commit-status results are empty for 5b3328e23d36b2b1089e4b2342e0a5255578e022 and branch HEAD ffb68d29abd777bed44cb113887649fe88557698. The [full-build] marker on the comment-only commit did not produce a visible #130 run. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but that state has not been rechecked in the UI. Manual dispatch remains untested. CI-образы используют временный P-256 ключ и `example.invalid`, не являются установочными релизами. Основной домашний роутер остаётся на stock MiWiFi.
+**Критически важно:** CI #124 завершился FAIL на финальном verifier. CI #127 был прерван runner shutdown с кодом 143 до получения compile/final-verifier результата. CI #128/#129 отменены до создания jobs. Code/test HEAD `5b3328e23d36b2b1089e4b2342e0a5255578e022` и branch HEAD `ffb68d29abd777bed44cb113887649fe88557698` не имеют нового run/status; актуальная gate-first/drain-loop реализация не прошла full CI. Read-only GitHub API snapshot (2026-11-17): 129 Actions runs exist; #129 (SHA e398b3f598b6b4adcabd2e7d99fc5b2c7ce4991b) remains the latest and was cancelled before jobs. No run is associated with code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; the combined commit-status list is empty for code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022. The [full-build] marker on the comment-only commit did not produce a visible #130 run. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but that state has not been rechecked in the UI. Manual dispatch remains untested. CI-образы используют временный P-256 ключ и `example.invalid`, не являются установочными релизами. Основной домашний роутер остаётся на stock MiWiFi.
 
 ## 2. CI: точное состояние и что запускать дальше
 
@@ -83,7 +81,7 @@
 
 **Приоритет:** P0 — блокирует любые заявления о завершённой сборке и переход к прошивке.
 
-**Текущий статус:** active patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` (implementation `16193bfb29eecca103a370270458a779403ac619`, envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`); current test harness blob `dbb7859aed90d1b125de28801dd44d6826d3a2fe` (functional commit `0ca5b790cded21107f4ca72b987d3129790a9b18`, latest comment-only / CI-trigger commit `5b3328e23d36b2b1089e4b2342e0a5255578e022`). Code/test HEAD `5b3328e23d36b2b1089e4b2342e0a5255578e022`, branch HEAD `ffb68d29abd777bed44cb113887649fe88557698`. Read-only GitHub API snapshot (2026-11-17): 129 Actions runs exist; #129 (SHA e398b3f598b6b4adcabd2e7d99fc5b2c7ce4991b) remains the latest and was cancelled before jobs. No run is associated with code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; combined commit-status results are empty for 5b3328e23d36b2b1089e4b2342e0a5255578e022 and branch HEAD ffb68d29abd777bed44cb113887649fe88557698. The [full-build] marker on the comment-only commit did not produce a visible #130 run. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but that state has not been rechecked in the UI. Manual dispatch remains untested.
+**Текущий статус:** active patch blob `3dbe8c97bdab7ee7452fc49b4ae77580788ef659` (implementation `16193bfb29eecca103a370270458a779403ac619`, envelope repair `f9f33b314ef11ad42037ad81de18e05f6e0e11f3`); current test harness blob `dbb7859aed90d1b125de28801dd44d6826d3a2fe` (functional commit `0ca5b790cded21107f4ca72b987d3129790a9b18`, latest comment-only / CI-trigger commit `5b3328e23d36b2b1089e4b2342e0a5255578e022`). Code/test HEAD `5b3328e23d36b2b1089e4b2342e0a5255578e022`; subsequent branch revisions are documentation-only. Read-only GitHub API snapshot (2026-11-17): 129 Actions runs exist; #129 (SHA e398b3f598b6b4adcabd2e7d99fc5b2c7ce4991b) remains the latest and was cancelled before jobs. No run is associated with code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022; the combined commit-status list is empty for code/test HEAD 5b3328e23d36b2b1089e4b2342e0a5255578e022. The [full-build] marker on the comment-only commit did not produce a visible #130 run. The API does not expose why no run was created. The last UI observation (2026-11-16) reported a usage-related pause, but that state has not been rechecked in the UI. Manual dispatch remains untested.
 
 Действия:
 1. Maintainer должен повторно включить Actions в UI репозитория. После этого запустить manual dispatch на точном branch ref: сначала `full_build=false`, затем `true`. Не создавать пустые или документационные коммиты ради запуска.
@@ -99,10 +97,9 @@
 
 Workflow уже обновлён: добавлен `workflow_dispatch` с boolean input `full_build`. Значение `false` (default) должно запускать только Static + PREPARE_ONLY; `true` — также full-build + `verify-v2`. Ручной запуск из любого ref, кроме `work/rd03v2-dualwan-mwan3-baseline`, отклоняется. Обычный push-trigger с `[full-build]` сохранён.
 
-**Ограничение на текущей проверке:** GitHub Actions page сообщает, что workflows на этом fork сейчас не запускаются из-за масштаба использования Actions. Нового run после #129 не видно; UI-проверка dispatch false/true поэтому пока не выполнена. Сначала maintainer должен повторно включить workflows на странице Actions репозитория.
+**Ограничение на текущей проверке (API snapshot 2026-11-17):** зарегистрировано 129 Actions runs; последний — #129, отменён до создания jobs. Запуск для code/test HEAD отсутствует, несмотря на `[full-build]` в commit message `5b3328e`; API не раскрывает причину. Последняя UI-проверка 2026-11-16 сообщала об ограничении использования Actions, но текущее состояние UI не перепроверено. Перед manual dispatch `full_build=false` и `true` maintainer должен проверить страницу Actions и repository/workflow settings.
 
 **Критерий закрытия:** после повторного включения Actions выполнить реальный manual dispatch с `full_build=false` и подтвердить, что full-build job пропущен; затем выполнить `true` и подтвердить full-build + final `verify-v2`. Сохранить run IDs и результаты. Существующие safeguards — ephemeral P-256 key, `example.invalid`, отсутствие публикации образов — должны остаться.
-
 
 ### CI-02 — Подтвердить исправленный watchdog
 
@@ -222,7 +219,6 @@ Pinned QSDK 14.0 инициализирует ECM DB до IPv4/IPv6 packet front
 **Критерий закрытия:** exact apply + full feed series + C compile PASS; source/fault tests PASS; lockdep/KASAN без ошибок; ни один family gate не открывается при pending events; module teardown не оставляет worker/gate reference.
 
 **Текущий статус:** patch/test source candidate committed; CI, compile, fault injection и hardware runtime — **NOT TESTED**. ECM-06 остаётся открытым.
-
 
 ## 4. Dual-WAN/mwan3: функции и ограничения
 
